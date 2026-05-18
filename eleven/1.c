@@ -45,6 +45,7 @@ int main(int argc, char **argv)
     printf("最大价格商品：\n");
     displayProducts(findMaxPriceProduct(dym_products, 4));
     free(dym_products);
+    dym_products = NULL;
 
     // 动态分配 calloc方法
     printf("----------------------------动态分配calloc方法----------------------------\n");
@@ -64,6 +65,7 @@ int main(int argc, char **argv)
     displayProducts(findMaxPriceProduct(dym_call_products, 4));
 
     free(dym_call_products);
+    dym_call_products = NULL;
 
     return 0;
 }
