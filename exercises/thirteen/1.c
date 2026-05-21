@@ -96,14 +96,15 @@ int sign_user()
     if (fprintf(fp, "%s %s", new_user.name, new_user.password) > 0)
     {
         printf("注册成功！");
+        fclose(fp);
         exit(0);
     }
     else
     {
+        fclose(fp);
         printf("写入失败请检查！");
     }
 
-    fclose(fp);
     return success;
 }
 
