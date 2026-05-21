@@ -20,4 +20,6 @@ int sign_user();
 
 void clear_buffer();
 
+void menu();
+
 #endif

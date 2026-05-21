@@ -4,6 +4,15 @@
 
 #include "test.h"
 
+void menu()
+{
+    printf("====================\n");
+    printf("1.        用户登录\n");
+    printf("2.        用户注册\n");
+    printf("3.        退出程序\n");
+    printf("====================\n");
+}
+
 void clear_buffer()
 {
     int c;
