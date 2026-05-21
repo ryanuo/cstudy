@@ -1,33 +1,90 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-int main()
+#include "test.h"
+
+void clear_buffer()
 {
-    FILE *fp;
-    int id;
-    float price;
-    char name[50];
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF)
+        ;
+}
 
-    // 写入数据
-    fp = fopen("product.txt", "w+");
-    if (fp == NULL)
+int login_user()
+{
+    user_t input_user, exit_user;
+    FILE *fp;
+
+    printf("请输入你要登录的账号密码(账号 密码)，使用空格隔开:\n");
+    scanf("%s %s", input_user.name, input_user.password);
+
+    if ((fp = fopen("user.dat", "r")) == NULL)
     {
-        printf("文件打开失败！\n");
-        return 1;
+        perror("fopen");
+        return error;
     }
 
-    fprintf(fp, "ID: %d, 价格: %.2f, 名称: %s\n", 1001, 5999.00, "苹果手机");
-
-    // 重置文件指针到开始
-    rewind(fp);
-
-    // 读取数据
-    fscanf(fp, "%d %f %s", &id, &price, name);
-
-    printf("读取到的商品信息：\n");
-    printf("ID: %d\n", id);
-    printf("价格: %.2f元\n", price);
-    printf("名称: %s\n", name);
+    int flag = 0;
+    while (fscanf(fp, "%s %s", exit_user.name, exit_user.password) != EOF)
+    {
+        if (strcmp(exit_user.name, input_user.name) == 0 && strcmp(exit_user.password, input_user.password) == 0)
+        {
+            flag = 1;
+            break;
+        }
+    }
 
     fclose(fp);
-    return 0;
+    if (flag)
+    {
+        printf("登录成功！！\n");
+        exit(0);
+    }
+    else
+    {
+        printf("登录失败：用户名或密码错误，请重试。\n");
+    }
+
+    return error;
+}
+
+int sign_user()
+{
+    user_t new_user, exit_user;
+    FILE *fp;
+
+    printf("请输入你要注册的账号密码(账号 密码)，使用空格隔开:\n");
+    scanf("%s %s", new_user.name, new_user.password);
+
+    if ((fp = fopen("user.dat", "a+")) == NULL)
+    {
+        printf("系统提示：用户文件不存在，请先注册。\n");
+        perror("fopen");
+        return error;
+    }
+
+    while (fscanf(fp, "%s %s", exit_user.name, exit_user.password) != EOF)
+    {
+        if (strcmp(new_user.name, exit_user.name) == 0)
+        {
+            fclose(fp);
+            printf("当前用户已存在，请重新注册！\n");
+            return error;
+        }
+    }
+
+    if (fprintf(fp, "\n%s %s", new_user.name, new_user.password) > 0)
+    {
+        printf("注册成功！");
+        fclose(fp);
+        exit(0);
+    }
+    else
+    {
+        fclose(fp);
+        printf("写入失败请检查！");
+    }
+
+    return success;
 }
