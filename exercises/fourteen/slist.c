@@ -92,19 +92,12 @@ int slist_insert(slist_t **head, slist_data_t target, slist_data_t data)
 
     slist_t *p = *head;
     while (p->next != NULL && p->next->data != target)
-    {
         p = p->next;
-    }
 
     if (p->next != NULL)
-    {
         pnew->next = p->next;
-        p->next = pnew;
-    }
-    else
-    {
-        p->next = pnew;
-    }
+
+    p->next = pnew;
 
     return 0;
 }
