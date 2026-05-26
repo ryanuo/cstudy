@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "slist.h"
 
@@ -147,4 +148,20 @@ int slist_destory(slist_t **head)
     *head = NULL;
 
     return 0;
+}
+
+int slist_search(slist_t *head, slist_data_t data)
+{
+    slist_t *p = head;
+
+    while (p)
+    {
+        if (memcmp(&p->data, &data, sizeof(slist_data_t)) == 0)
+        {
+            return 0;
+        }
+        p = p->next;
+    }
+
+    return -1;
 }

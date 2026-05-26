@@ -12,6 +12,8 @@ int slist_create(slist_t **, slist_data_t);
 int slist_addhead(slist_t **, slist_data_t);
 int slist_addtail(slist_t **, slist_data_t);
 int slist_insert(slist_t **, slist_data_t, slist_data_t);
+int slist_destory(slist_t **);
+int slist_search(slist_t *, slist_data_t);
 
 int slist_showall(const slist_t *);
 
