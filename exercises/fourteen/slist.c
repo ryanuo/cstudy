@@ -165,3 +165,20 @@ int slist_search(slist_t *head, slist_data_t data)
 
     return -1;
 }
+
+int slist_update(slist_t **head, slist_data_t target, slist_data_t data)
+{
+    slist_t *p = *head;
+
+    while (p)
+    {
+        if (memcmp(&p->data, &target, sizeof(slist_data_t)) == 0)
+        {
+            p->data = data;
+        }
+
+        p = p->next;
+    }
+
+    return -1;
+}
