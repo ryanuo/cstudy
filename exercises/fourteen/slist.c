@@ -150,20 +150,21 @@ int slist_destory(slist_t **head)
     return 0;
 }
 
-int slist_search(slist_t *head, slist_data_t data)
+slist_t *slist_search(const slist_t *head, slist_data_t data)
 {
-    slist_t *p = head;
+    const slist_t *p = head;
 
     while (p)
     {
         if (memcmp(&p->data, &data, sizeof(slist_data_t)) == 0)
         {
-            return 0;
+            printf("%d\n", p->data);
+            return (slist_t *)p;
         }
         p = p->next;
     }
 
-    return -1;
+    return NULL;
 }
 
 int slist_update(slist_t **head, slist_data_t target, slist_data_t data)

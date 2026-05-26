@@ -12,6 +12,7 @@ int main(int argc, char **argv)
         slist_addtail(&head, i);
     }
 
-    slist_showall(head);
+    slist_search(head, 2);
+
     return 0;
 }
