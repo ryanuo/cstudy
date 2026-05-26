@@ -2,7 +2,6 @@
 #include <stdio.h>
 
 #include "bus.h"
-#include "slist.h"
 
 int slist_addhead(slist_t **head, list_data_t data)
 {
