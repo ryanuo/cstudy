@@ -133,3 +133,18 @@ int slist_delete(slist_t **head, slist_data_t target)
 
     return -1;
 }
+
+int slist_destory(slist_t **head)
+{
+    slist_t *p = *head, *q;
+
+    while (p)
+    {
+        q = p;
+        p = p->next;
+        free(q);
+    }
+    *head = NULL;
+
+    return 0;
+}
