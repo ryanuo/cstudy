@@ -44,3 +44,47 @@ int dlist_insert(dlist_t **head, dlist_data_t target, dlist_data_t data)
 
     return 0;
 }
+
+int dlist_delete(dlist_t **head, dlist_data_t target)
+{
+    if (head == NULL || *head == NULL)
+    {
+        return -1;
+    }
+
+    if ((*head)->data == target)
+    {
+        dlist_t *temp = *head;
+        *head = (*head)->next;
+        if (*head != NULL)
+        {
+            (*head)->prev = NULL;
+        }
+
+        free(temp);
+        return 0;
+    }
+
+    dlist_t *p = *head;
+
+    while (p->next != NULL && p->next->data != target)
+    {
+        p = p->next;
+    }
+
+    if (p->next == NULL)
+    {
+        return -1;
+    }
+
+    dlist_t *temp = p->next;
+    p->next = temp->next;
+    if (temp->next != NULL)
+    {
+        temp->next->prev = p;
+    }
+
+    free(temp);
+
+    return 0;
+}
