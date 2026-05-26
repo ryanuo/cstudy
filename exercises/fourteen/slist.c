@@ -101,3 +101,35 @@ int slist_insert(slist_t **head, slist_data_t target, slist_data_t data)
 
     return 0;
 }
+
+int slist_delete(slist_t **head, slist_data_t target)
+{
+    if (head == NULL || *head == NULL)
+    {
+        return -1;
+    }
+
+    if ((*head)->data == target)
+    {
+        slist_t *temp = *head;
+        *head = (*head)->next;
+        free(temp);
+        return 0;
+    }
+
+    slist_t *p = *head;
+    while (p->next != NULL && p->next->data != target)
+    {
+        p = p->next;
+    }
+
+    if (p->next != NULL)
+    {
+        slist_t *temp = p->next;
+        p->next = p->next->next;
+        free(temp);
+        return 0;
+    }
+
+    return -1;
+}
