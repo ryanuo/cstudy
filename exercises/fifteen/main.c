@@ -25,11 +25,11 @@ int main(int argc, char **argv)
     // 保存
     save_busdata((base_node_t*) head);
 
-    // slist_t *head1 = NULL;
+    slist_t *head1 = NULL;
 
-    // read_del_sdata(&head1);
+    read_del_sdata(&head1);
 
-    // save_busdata((base_node_t*) head1);
+    save_busdata((base_node_t*) head1);
 
     return 0;
 }
