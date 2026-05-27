@@ -2,6 +2,7 @@
 #define __BUS_SERVICE_H__
 
 #include "generic_list.h"
+#include "bus.h"
 
 /*
  * 业务服务层
