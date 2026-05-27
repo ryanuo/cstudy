@@ -1,29 +1,17 @@
 #ifndef __BUS_H__
 #define __BUS_H__
 
+/*
+ * Bus 数据结构定义
+ * 仅定义数据结构，不包含业务逻辑
+ */
 
 typedef struct busLine
 {
-    char line_name[20];
-    char start_stat[50];
-    char end_stat[50];
-    float mileage;
+    char line_name[20];      /* 线路名称 */
+    char start_stat[50];     /* 起点 */
+    char end_stat[50];       /* 终点 */
+    float mileage;           /* 里程 */
 } bus_t;
 
-typedef bus_t list_data_t;
-#include "slist.h"
-#include "dlist.h"
-
-typedef struct BaseNode
-{
-    list_data_t data;
-    struct BaseNode *next;
-} base_node_t;
-
-
-int compare_bus(list_data_t a, list_data_t b);
-int save_busdata(const base_node_t *head);
-
-bus_t *find_min_data(slist_t *head);
-int read_del_sdata(slist_t **head);
 #endif

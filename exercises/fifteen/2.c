@@ -1,55 +1,35 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "generic_list.h"
 
-typedef struct SListNode
+/*
+ * 链表反转测试
+ * 使用通用链表接口测试整数数据
+ */
+
+/* 输出整数 */
+void print_int(const void *data)
 {
-    int data;
-    struct SListNode *next;
-} slist_t;
-
-int slist_addhead(slist_t **head, int data)
-{
-    slist_t *pnew = (slist_t *)malloc(sizeof(slist_t));
-
-    if (pnew == NULL)
-        return -1;
-
-    pnew->data = data;
-    pnew->next = *head;
-
-    *head = pnew;
-
-    return 0;
+    if (data == NULL)
+        return;
+    printf("%d ", *(int *)data);
 }
 
-int slist_showall(const slist_t *head)
-{
-    const slist_t *p = head;
-
-    while (p)
-    {
-        printf("%d ", p->data);
-        p = p->next;
-    }
-
-    printf("\n");
-    return 0;
-}
-
-void slist_reverse(slist_t **head)
+/* 反转链表 */
+void generic_slist_reverse(generic_list_t **head)
 {
     if (head == NULL || *head == NULL || (*head)->next == NULL)
     {
         return;
     }
 
-    slist_t *p = (*head)->next;
+    generic_list_t *p = (*head)->next;
 
     (*head)->next = NULL;
 
     while (p)
     {
-        slist_t *temp = p;
+        generic_list_t *temp = p;
 
         p = p->next;
 
@@ -58,19 +38,33 @@ void slist_reverse(slist_t **head)
         *head = temp;
     }
 }
+
 int main(int argc, char **argv)
 {
-    slist_t *head = NULL;
+    generic_list_t *head = NULL;
 
+    /* 添加 10 个整数到链表 */
     for (int i = 0; i < 10; i++)
     {
-        slist_addhead(&head, i * 100);
+        int value = i * 100;
+        slist_add_head(&head, &value, sizeof(int));
     }
 
-    slist_showall(head);
+    /* 反转前 */
+    printf("反转前: ");
+    slist_print(head, print_int);
+    printf("\n");
 
-    slist_reverse(&head);
+    /* 反转 */
+    generic_slist_reverse(&head);
 
-    slist_showall(head);
+    /* 反转后 */
+    printf("反转后: ");
+    slist_print(head, print_int);
+    printf("\n");
+
+    /* 清理资源 */
+    slist_destroy(&head, NULL);
+
     return 0;
 }
