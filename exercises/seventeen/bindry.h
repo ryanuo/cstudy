@@ -9,6 +9,7 @@ typedef struct BinaryTree
 } binary_t;
 
 int bindry_insert(binary_t **root, int data);
+void bindry_deltree(const binary_t **root,int data);
 void bindry_pretree(const binary_t *root);
 void bindry_midtree(const binary_t *root);
 void bindry_posttree(const binary_t *root);
