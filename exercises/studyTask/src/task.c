@@ -106,3 +106,11 @@ void task_search(task_t *head)
     else
         printf("未找到任务\n");
 }
+
+void task_list_completed(task_t *head)
+{
+    printf("以下任务已完成：\n");
+    list_find_cpd(head, 1);
+
+    printf("\033[32m--------------------------------------\033[0m\n");
+}

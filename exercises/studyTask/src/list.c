@@ -104,6 +104,25 @@ task_t *list_find_name(task_t *head, const char *name)
 }
 
 /**
+ * 根据完成情况查找
+ */
+task_t *list_find_cpd(task_t *head, complete_t cpd)
+{
+    while (head)
+    {
+        if (head->data.completed == cpd)
+        {
+            printf("%s\n", head->data.task_name);
+            return head;
+        }
+
+        head = head->next;
+    }
+
+    return NULL;
+}
+
+/**
  * 根据ID删除
  */
 int list_delete(task_t **head, const char *id)
