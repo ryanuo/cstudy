@@ -70,11 +70,29 @@ int list_insert_tail(task_t **head, const task_data_t *data)
 /**
  * 根据ID查找
  */
-task_t *list_find(task_t *head, const char *id)
+task_t *list_find_id(task_t *head, const char *id)
 {
     while (head)
     {
         if (strcmp(head->data.task_id, id) == 0)
+        {
+            return head;
+        }
+
+        head = head->next;
+    }
+
+    return NULL;
+}
+
+/**
+ * 根据名称查找
+ */
+task_t *list_find_name(task_t *head, const char *name)
+{
+    while (head)
+    {
+        if (strcmp(head->data.task_name, name) == 0)
         {
             return head;
         }

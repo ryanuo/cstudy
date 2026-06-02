@@ -49,3 +49,60 @@ void task_add(task_t **head)
 
     printf("添加成功！\n");
 }
+
+static void print_task(const task_t *res)
+{
+    printf("找到任务：\n");
+    printf("ID: %s\n", res->data.task_id);
+    printf("Name: %s\n", res->data.task_name);
+    printf("Priority: %d\n", res->data.task_priority);
+    printf("End: %s\n", time_to_str(res->data.task_end_time));
+    printf("Create: %s\n", time_to_str(res->data.task_create_time));
+    printf("Completed: %d\n", res->data.completed);
+}
+
+void task_search(task_t *head)
+{
+    char buf[64];
+    int val;
+
+    printf("请选择查询方式：1.ID  2.名称\n");
+
+    if (!fgets(buf, sizeof(buf), stdin))
+        return;
+
+    val = atoi(buf);
+
+    char search_str[64] = {0};
+
+    if (val == 1)
+    {
+        printf("请输入任务ID：");
+    }
+    else if (val == 2)
+    {
+        printf("请输入任务名称：");
+    }
+    else
+    {
+        printf("输入不合法！！！\n");
+        return;
+    }
+
+    if (!fgets(search_str, sizeof(search_str), stdin))
+        return;
+
+    trim_newline(search_str);
+
+    task_t *res = NULL;
+
+    if (val == 1)
+        res = list_find_id(head, search_str);
+    else
+        res = list_find_name(head, search_str);
+
+    if (res)
+        print_task(res);
+    else
+        printf("未找到任务\n");
+}

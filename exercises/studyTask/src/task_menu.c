@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include "task.h"
+#include "utils.h"
 
 void welcome(void)
 {
@@ -62,10 +63,15 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
             continue;
         }
 
+        clear_buffer();
+
         switch (selected_value)
         {
         case 1:
             task_add(task);
+            break;
+        case 5:
+            task_search(*task);
             break;
         case 0:
             callback(*task);

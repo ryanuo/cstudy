@@ -24,6 +24,13 @@ void timestamp_to_string(time_t ts, char *buf, int size)
              &info);
 }
 
+const char *time_to_str(time_t t)
+{
+    static char buf[64];
+    timestamp_to_string(t, buf, sizeof(buf));
+    return buf;
+}
+
 /*
     字符串 -> 时间戳
 */
@@ -57,7 +64,7 @@ void trim_newline(char *s)
 {
     int len = strlen(s);
     while (len > 0 &&
-          (s[len - 1] == '\n' || s[len - 1] == '\r'))
+           (s[len - 1] == '\n' || s[len - 1] == '\r'))
     {
         s[--len] = '\0';
     }

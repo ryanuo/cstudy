@@ -6,8 +6,7 @@
 void task_add(task_t **head);
 int task_remove(int task_id);
 int task_update(int task_id);
-int task_search(const char *keyword,
-                priority_t priority);
+void task_search(task_t *head);
 int task_complete(int task_id);
 int task_list_completed(void);
 int task_summary(void);

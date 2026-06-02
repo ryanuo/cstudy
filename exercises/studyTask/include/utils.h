@@ -9,6 +9,8 @@ void timestamp_to_string(time_t ts,
 
 time_t string_to_timestamp(const char *str);
 
+const char *time_to_str(time_t t);
+
 void clear_buffer();
 
 void trim_newline(char *s);

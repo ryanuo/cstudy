@@ -43,10 +43,6 @@ static int read_task(FILE *fp, task_data_t *data)
         return -1;
     }
 
-    // // 🔥 关键：清理换行 / 回车
-    // trim_newline(data->task_id);
-    // trim_newline(data->task_name);
-
     data->task_priority = (priority_t)priority;
     data->task_end_time = (time_t)end_time;
     data->task_create_time = (time_t)create_time;
