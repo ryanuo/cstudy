@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "task.h"
 #include "utils.h"
@@ -115,9 +116,68 @@ void task_list_completed(task_t *head)
     printf("\033[32m--------------------------------------\033[0m\n");
 }
 
+int task_update(task_t *head, const char *id, int opt)
+{
+    task_t *cur = head;
+    char buf[64];
+
+    while (cur)
+    {
+        if (strcmp(cur->data.task_id, id) == 0)
+        {
+            switch (opt)
+            {
+            case 1:
+                printf("输入新任务名称：");
+                fgets(cur->data.task_name, sizeof(cur->data.task_name), stdin);
+                trim_newline(cur->data.task_name);
+                break;
+
+            case 2:
+                printf("输入新优先级(1-3)：");
+                fgets(buf, sizeof(buf), stdin);
+                cur->data.task_priority = atoi(buf);
+                break;
+
+            case 3:
+                printf("输入完成状态(0未完成/1已完成)：");
+                fgets(buf, sizeof(buf), stdin);
+                cur->data.completed = (complete_t)atoi(buf);
+                break;
+
+            case 4:
+                printf("输入新的结束时间(时间戳)：");
+                fgets(buf, sizeof(buf), stdin);
+                cur->data.task_end_time = (time_t)atol(buf);
+                break;
+
+            default:
+                printf("无效操作\n");
+                return -1;
+            }
+
+            printf("更新成功！\n");
+            return 0;
+        }
+
+        cur = cur->next;
+    }
+
+    printf("未找到任务\n");
+    return -1;
+}
+
 void task_complete_mod(task_t **head)
 {
     printf("请输入要修改的任务ID\n");
+
+    char task_id[64] = {0};
+    if (!fgets(task_id, sizeof(task_id), stdin))
+        return;
+    
+    trim_newline(task_id);
+
+    task_update(*head, task_id, 3);
 }
 
 void task_summary(task_t *head)
