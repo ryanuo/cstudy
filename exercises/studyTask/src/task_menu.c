@@ -40,7 +40,7 @@ void menu()
     printf("\033[1;36m====== StudyTask 任务管理系统 ======\033[0m\n");
     printf("\033[32m 1.\033[0m 添加任务           \033[32m2.\033[0m 删除任务\n");
     printf("\033[32m 3.\033[0m 修改任务          \033[32m 4.\033[0m 查看所有任务\n");
-    printf("\033[32m 5.\033[0m 查找任务          \033[32m 6.\033[0m 标记完成\n");
+    printf("\033[32m 5.\033[0m 查找任务          \033[32m 6.\033[0m 修改完成状态\n");
     printf("\033[32m 7.\033[0m 查看已完成任务    \033[32m 8.\033[0m 撤销操作\n");
     printf("\033[32m 9.\033[0m 任务统计\n");
     printf("\033[1;36m====================================\033[0m\n");
@@ -70,11 +70,17 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
         case 1:
             task_add(task);
             break;
+        case 4:
+            query_all_task(*task);
+            break;
         case 5:
             task_search(*task);
             break;
         case 7:
             task_list_completed(*task);
+            break;
+        case 8:
+            task_complete_mod(task);
             break;
         case 9:
             task_summary(*task);

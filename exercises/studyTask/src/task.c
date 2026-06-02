@@ -52,13 +52,13 @@ void task_add(task_t **head)
 
 static void print_task(const task_t *res)
 {
-    printf("找到任务：\n");
-    printf("ID: %s\n", res->data.task_id);
-    printf("Name: %s\n", res->data.task_name);
-    printf("Priority: %d\n", res->data.task_priority);
-    printf("End: %s\n", time_to_str(res->data.task_end_time));
-    printf("Create: %s\n", time_to_str(res->data.task_create_time));
-    printf("Completed: %d\n", res->data.completed);
+    printf("%-10s %-20s %-8d %-20s %-20s %-10s\n",
+           res->data.task_id,
+           res->data.task_name,
+           res->data.task_priority,
+           time_to_str(res->data.task_end_time),
+           time_to_str(res->data.task_create_time),
+           res->data.completed == TASK_COMPLETED ? "已完成" : "进行中");
 }
 
 void task_search(task_t *head)
@@ -115,6 +115,11 @@ void task_list_completed(task_t *head)
     printf("\033[32m--------------------------------------\033[0m\n");
 }
 
+void task_complete_mod(task_t **head)
+{
+    printf("请输入要修改的任务ID\n");
+}
+
 void task_summary(task_t *head)
 {
     int total = 0;
@@ -145,4 +150,26 @@ void task_summary(task_t *head)
     printf("已完成数量 : %d\n", completed);
     printf("未完成数量 : %d\n", uncompleted);
     printf("==============================\n");
+}
+
+void query_all_task(task_t *head)
+{
+    if (head == NULL)
+    {
+        printf("暂无任务！\n");
+        return;
+    }
+
+    printf("\n");
+    printf("=============== 任务列表 ===============\n");
+
+    printf("%-10s %-20s %-8s %-20s %-20s %-8s\n",
+           "ID", "名称", "优先级", "结束时间", "创建时间", "状态");
+
+    printf("--------------------------------------------------------------------------------------\n");
+
+    for (task_t *cur = head; cur != NULL; cur = cur->next)
+        print_task(head);
+
+    printf("--------------------------------------------------------------------------------------\n");
 }
