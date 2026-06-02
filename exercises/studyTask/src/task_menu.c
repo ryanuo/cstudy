@@ -76,6 +76,9 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
         case 7:
             task_list_completed(*task);
             break;
+        case 9:
+            task_summary(*task);
+            break;
         case 0:
             callback(*task);
             system("clear");

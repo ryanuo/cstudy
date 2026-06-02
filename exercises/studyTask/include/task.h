@@ -9,6 +9,6 @@ int task_update(int task_id);
 void task_search(task_t *head);
 int task_complete(int task_id);
 void task_list_completed(task_t *head);
-int task_summary(void);
+void task_summary(task_t *head);
 
 #endif

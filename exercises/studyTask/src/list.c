@@ -113,7 +113,6 @@ task_t *list_find_cpd(task_t *head, complete_t cpd)
         if (head->data.completed == cpd)
         {
             printf("%s\n", head->data.task_name);
-            return head;
         }
 
         head = head->next;

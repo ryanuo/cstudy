@@ -114,3 +114,35 @@ void task_list_completed(task_t *head)
 
     printf("\033[32m--------------------------------------\033[0m\n");
 }
+
+void task_summary(task_t *head)
+{
+    int total = 0;
+    int completed = 0;
+    int uncompleted = 0;
+
+    task_t *cur = head;
+
+    while (cur)
+    {
+        total++;
+
+        if (cur->data.completed == TASK_COMPLETED)
+        {
+            completed++;
+        }
+        else
+        {
+            uncompleted++;
+        }
+
+        cur = cur->next;
+    }
+
+    printf("\n");
+    printf("========== 任务统计 ==========\n");
+    printf("总任务数   : %d\n", total);
+    printf("已完成数量 : %d\n", completed);
+    printf("未完成数量 : %d\n", uncompleted);
+    printf("==============================\n");
+}
