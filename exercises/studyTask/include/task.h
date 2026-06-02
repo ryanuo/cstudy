@@ -15,10 +15,12 @@ void task_search(task_t *head);
  * 4. 结束时间（格式：YYYY-MM—DD hh-mm-ss）
  */
 int task_update(task_t *head, const char *id, int opt);
-void task_complete_mod(task_t **head);
+void task_complete_mod(task_t *head);
 void task_list_completed(task_t *head);
 void task_summary(task_t *head);
 
 void query_all_task(task_t *head);
+
+void task_mod(task_t *head);
 
 #endif

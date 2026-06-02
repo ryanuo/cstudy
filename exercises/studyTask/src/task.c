@@ -167,17 +167,38 @@ int task_update(task_t *head, const char *id, int opt)
     return -1;
 }
 
-void task_complete_mod(task_t **head)
+void task_complete_mod(task_t *head)
 {
     printf("请输入要修改的任务ID\n");
 
     char task_id[64] = {0};
     if (!fgets(task_id, sizeof(task_id), stdin))
         return;
-    
+
     trim_newline(task_id);
 
-    task_update(*head, task_id, 3);
+    task_update(head, task_id, 3);
+}
+
+void task_mod(task_t *head)
+{
+    printf("请输入要修改的任务ID:\n");
+
+    char task_id[64] = {0};
+    if (!fgets(task_id, sizeof(task_id), stdin))
+        return;
+    trim_newline(task_id);
+
+    int opt;
+    char buf[64];
+
+    printf("1.修改名称\n2.修改优先级\n3.修改状态\n");
+    printf("请选择要修改的信息：");
+
+    fgets(buf, sizeof(buf), stdin);
+    opt = atoi(buf);
+
+    task_update(head, task_id, opt);
 }
 
 void task_summary(task_t *head)

@@ -70,6 +70,9 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
         case 1:
             task_add(task);
             break;
+        case 3:
+            task_mod(*task);
+            break;
         case 4:
             query_all_task(*task);
             break;
@@ -77,7 +80,7 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
             task_search(*task);
             break;
         case 6:
-            task_complete_mod(task);
+            task_complete_mod(*task);
             break;
         case 7:
             task_list_completed(*task);
