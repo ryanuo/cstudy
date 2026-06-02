@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "task.h"
+
 void welcome(void)
 {
     system("clear");
-    system("echo '\033[?25l'"); // 隐藏光标
+    system("echo '\033[?25l'");
 
     printf("\n\n");
 
@@ -26,12 +28,13 @@ void welcome(void)
 
     getchar();
 
-    system("echo '\033[?25h'"); // 显示光标
+    system("echo '\033[?25h'");
+
+    system("clear");
 }
 
 void menu()
 {
-    system("clear");
     printf("\n");
     printf("\033[1;36m====== StudyTask 任务管理系统 ======\033[0m\n");
     printf("\033[32m 1.\033[0m 添加任务           \033[32m2.\033[0m 删除任务\n");
@@ -43,4 +46,37 @@ void menu()
     printf("\033[1;31m 0. 退出系统\033[0m\n");
     printf("\033[33m--------------------------------------\033[0m\n");
     printf(" 请选择操作: ");
+}
+
+void menu_loop(task_t **task, int (*callback)(task_t *t))
+{
+    int selected_value;
+    while (1)
+    {
+        menu();
+
+        scanf("%d", &selected_value);
+        if (selected_value < 0 || selected_value > 9)
+        {
+            printf("您当前输入的格式有误需要重新选择，范围<0-9>\n");
+            continue;
+        }
+
+        switch (selected_value)
+        {
+        case 1:
+            task_add(task);
+            break;
+        case 0:
+            callback(*task);
+            system("clear");
+            printf("\n\n\n\n学习任务管理系统已退出！\n");
+            exit(0);
+            break;
+
+        default:
+            printf("无效菜单项！\n");
+            break;
+        }
+    }
 }
