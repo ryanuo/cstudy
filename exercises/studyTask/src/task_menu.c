@@ -70,6 +70,9 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
         case 1:
             task_add(task);
             break;
+        case 2:
+            task_remove(task);
+            break;
         case 3:
             task_mod(*task);
             break;

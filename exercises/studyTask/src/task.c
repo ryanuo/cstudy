@@ -254,3 +254,23 @@ void query_all_task(task_t *head)
 
     printf("--------------------------------------------------------------------------------------\n");
 }
+
+void task_remove(task_t **head)
+{
+    printf("请输入要删除的任务ID:\n");
+
+    char task_id[64] = {0};
+    if (!fgets(task_id, sizeof(task_id), stdin))
+        return;
+    trim_newline(task_id);
+
+    int res = list_delete(head, task_id);
+    if (res == 0)
+    {
+        printf("删除成功\n");
+    }
+    else
+    {
+        printf("删除失败\n");
+    }
+}

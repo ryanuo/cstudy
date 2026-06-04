@@ -4,7 +4,7 @@
 #include "common.h"
 
 void task_add(task_t **head);
-int task_remove(int task_id);
+void task_remove(task_t **head);
 void task_search(task_t *head);
 /**
  * 任务修改
