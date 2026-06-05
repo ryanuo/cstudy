@@ -95,7 +95,7 @@ int task_update(task_t *head, const char *id, int opt, stackc_t *stack)
                 break;
 
             case 2:
-                cur->data.task_priority = input_int(
+                cur->data.task_priority = (priority_t)input_int(
                     "请输入新优先级(1-3): ",
                     1,
                     3);
@@ -144,14 +144,12 @@ void task_mod(task_t *head, stackc_t *stack)
         return;
     trim_newline(task_id);
 
-    int opt;
-    char buf[64];
 
     printf("1.修改名称\n2.修改优先级\n3.修改状态\n");
-    printf("请选择要修改的信息：");
 
-    fgets(buf, sizeof(buf), stdin);
-    opt = atoi(buf);
+    int opt = input_int("请选择要修改的信息(1-3)： ",
+                    1,
+                    3);
 
     task_update(head, task_id, opt, stack);
 }
