@@ -53,21 +53,16 @@ void menu()
 void menu_loop(task_t **task, int (*callback)(task_t *t))
 {
     stackc_t *undo_stack = stack_create();
-    int selected_value;
     while (1)
     {
         menu();
 
-        scanf("%d", &selected_value);
-        if (selected_value < 0 || selected_value > 9)
-        {
-            printf("您当前输入的格式有误需要重新选择，范围<0-9>\n");
-            continue;
-        }
+        int opt = input_int(
+            "请选择功能(0-9): ",
+            0,
+            9);
 
-        clear_buffer();
-
-        switch (selected_value)
+        switch (opt)
         {
         case 1:
             task_add(task, undo_stack);

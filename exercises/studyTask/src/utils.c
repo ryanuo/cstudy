@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 /*
     时间戳 -> 字符串
@@ -67,5 +68,54 @@ void trim_newline(char *s)
            (s[len - 1] == '\n' || s[len - 1] == '\r'))
     {
         s[--len] = '\0';
+    }
+}
+
+int input_int(const char *prompt,
+              int min,
+              int max)
+{
+    char buf[64];
+
+    while (1)
+    {
+        if (prompt)
+        {
+            printf("%s", prompt);
+        }
+
+        if (fgets(buf, sizeof(buf), stdin) == NULL)
+        {
+            clearerr(stdin);
+            continue;
+        }
+
+        char *end;
+        long value = strtol(buf, &end, 10);
+
+        /* 没有读取到数字 */
+        if (end == buf)
+        {
+            printf("输入格式错误，请输入数字！\n");
+            continue;
+        }
+
+        /* 检查是否有多余字符 */
+        if (*end != '\n' && *end != '\0')
+        {
+            printf("输入格式错误，请输入整数！\n");
+            continue;
+        }
+
+        /* 范围校验 */
+        if (value < min || value > max)
+        {
+            printf("输入超出范围，请输入 [%d-%d] 之间的数字！\n",
+                   min,
+                   max);
+            continue;
+        }
+
+        return (int)value;
     }
 }

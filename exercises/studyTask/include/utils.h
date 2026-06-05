@@ -15,4 +15,8 @@ void clear_buffer();
 
 void trim_newline(char *s);
 
+int input_int(const char *prompt,
+              int min,
+              int max);
+
 #endif
