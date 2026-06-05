@@ -4,6 +4,7 @@
 
 #include "task.h"
 #include "utils.h"
+#include "stack.h"
 
 void welcome(void)
 {
@@ -51,6 +52,7 @@ void menu()
 
 void menu_loop(task_t **task, int (*callback)(task_t *t))
 {
+    stackc_t *undo_stack = stack_create();
     int selected_value;
     while (1)
     {
@@ -68,13 +70,13 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
         switch (selected_value)
         {
         case 1:
-            task_add(task);
+            task_add(task, undo_stack);
             break;
         case 2:
-            task_remove(task);
+            task_remove(task, undo_stack);
             break;
         case 3:
-            task_mod(*task);
+            task_mod(*task, undo_stack);
             break;
         case 4:
             query_all_task(*task);
@@ -83,16 +85,20 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
             task_search(*task);
             break;
         case 6:
-            task_complete_mod(*task);
+            task_complete_mod(*task, undo_stack);
             break;
         case 7:
             task_list_completed(*task);
+            break;
+        case 8:
+            undo_previous_operation(task, undo_stack);
             break;
         case 9:
             task_summary(*task);
             break;
         case 0:
             callback(*task);
+            stack_destroy(undo_stack);
             system("clear");
             printf("\n\n\n\n学习任务管理系统已退出！\n");
             exit(0);

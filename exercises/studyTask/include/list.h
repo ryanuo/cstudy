@@ -15,6 +15,10 @@ task_t *list_find_cpd(task_t *head, complete_t);
 
 int list_delete(task_t **head, const char *id);
 
+int list_insert_after(task_t **head,
+                      const char *prev_id,
+                      const task_data_t *data);
+
 void list_destroy(task_t **head);
 
 int list_size(task_t *head);

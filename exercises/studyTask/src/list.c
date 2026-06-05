@@ -204,3 +204,54 @@ int list_size(task_t *head)
 
     return count;
 }
+
+int list_insert_after(task_t **head,
+                      const char *prev_id,
+                      const task_data_t *data)
+{
+    if (!head || !data)
+    {
+        return -1;
+    }
+
+    task_t *node =
+        (task_t *)malloc(sizeof(task_t));
+
+    if (!node)
+    {
+        return -1;
+    }
+
+    memcpy(&node->data,
+           data,
+           sizeof(task_data_t));
+
+    node->next = NULL;
+
+    // 删除的是头节点
+    if (strlen(prev_id) == 0)
+    {
+        node->next = *head;
+        *head = node;
+        return 0;
+    }
+
+    task_t *cur = *head;
+
+    while (cur)
+    {
+        if (strcmp(cur->data.task_id,
+                   prev_id) == 0)
+        {
+            node->next = cur->next;
+            cur->next = node;
+            return 0;
+        }
+
+        cur = cur->next;
+    }
+
+    free(node);
+
+    return -1;
+}

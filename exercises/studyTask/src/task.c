@@ -5,6 +5,7 @@
 #include "task.h"
 #include "utils.h"
 #include "list.h"
+#include "stack.h"
 
 task_data_t build_task()
 {
@@ -31,12 +32,23 @@ task_data_t build_task()
     printf("请输入结束时间 (2026-06-02 12:00:00 / 直接回车=0): ");
     fgets(time_str, sizeof(time_str), stdin);
 
+    trim_newline(time_str);
+
+    if (strlen(time_str) == 0)
+    {
+        data.task_end_time = 0;
+    }
+    else
+    {
+        data.task_end_time = string_to_timestamp(time_str);
+    }
+
     data.completed = completed;
 
     return data;
 }
 
-void task_add(task_t **head)
+void task_add(task_t **head, stackc_t *stack)
 {
     task_data_t data;
 
@@ -46,6 +58,12 @@ void task_add(task_t **head)
     {
         printf("添加失败\n");
         return;
+    }
+
+    // 保存操作到栈
+    if (stack)
+    {
+        stack_push(stack, OP_ADD, &data, "");
     }
 
     printf("添加成功！\n");
@@ -116,15 +134,17 @@ void task_list_completed(task_t *head)
     printf("\033[32m--------------------------------------\033[0m\n");
 }
 
-int task_update(task_t *head, const char *id, int opt)
+int task_update(task_t *head, const char *id, int opt, stackc_t *stack)
 {
     task_t *cur = head;
+    task_data_t old_data;
     char buf[64];
 
     while (cur)
     {
         if (strcmp(cur->data.task_id, id) == 0)
         {
+            memcpy(&old_data, &cur->data, sizeof(task_data_t));
             switch (opt)
             {
             case 1:
@@ -157,6 +177,11 @@ int task_update(task_t *head, const char *id, int opt)
             }
 
             printf("更新成功！\n");
+            // 修改后保存到栈
+            if (stack)
+            {
+                stack_push(stack, OP_MODIFY, &old_data, "");
+            }
             return 0;
         }
 
@@ -167,7 +192,7 @@ int task_update(task_t *head, const char *id, int opt)
     return -1;
 }
 
-void task_complete_mod(task_t *head)
+void task_complete_mod(task_t *head, stackc_t *stack)
 {
     printf("请输入要修改的任务ID\n");
 
@@ -177,10 +202,10 @@ void task_complete_mod(task_t *head)
 
     trim_newline(task_id);
 
-    task_update(head, task_id, 3);
+    task_update(head, task_id, 3, stack);
 }
 
-void task_mod(task_t *head)
+void task_mod(task_t *head, stackc_t *stack)
 {
     printf("请输入要修改的任务ID:\n");
 
@@ -198,7 +223,7 @@ void task_mod(task_t *head)
     fgets(buf, sizeof(buf), stdin);
     opt = atoi(buf);
 
-    task_update(head, task_id, opt);
+    task_update(head, task_id, opt, stack);
 }
 
 void task_summary(task_t *head)
@@ -250,23 +275,72 @@ void query_all_task(task_t *head)
     printf("--------------------------------------------------------------------------------------\n");
 
     for (task_t *cur = head; cur != NULL; cur = cur->next)
-        print_task(head);
+        print_task(cur);
 
     printf("--------------------------------------------------------------------------------------\n");
 }
 
-void task_remove(task_t **head)
+void task_remove(task_t **head, stackc_t *stack)
 {
     printf("请输入要删除的任务ID:\n");
 
     char task_id[64] = {0};
-    if (!fgets(task_id, sizeof(task_id), stdin))
+
+    if (!fgets(task_id,
+               sizeof(task_id),
+               stdin))
+    {
         return;
+    }
+
     trim_newline(task_id);
 
-    int res = list_delete(head, task_id);
-    if (res == 0)
+    task_t *cur = *head;
+    task_t *prev = NULL;
+
+    task_data_t backup_data;
+
+    char prev_task_id[32] = {0};
+
+    while (cur)
     {
+        if (strcmp(cur->data.task_id,
+                   task_id) == 0)
+        {
+            memcpy(&backup_data,
+                   &cur->data,
+                   sizeof(task_data_t));
+
+            if (prev)
+            {
+                strcpy(prev_task_id,
+                       prev->data.task_id);
+            }
+
+            break;
+        }
+
+        prev = cur;
+        cur = cur->next;
+    }
+
+    if (!cur)
+    {
+        printf("任务不存在\n");
+        return;
+    }
+
+    if (list_delete(head, task_id) == 0)
+    {
+        if (stack)
+        {
+            stack_push(
+                stack,
+                OP_REMOVE,
+                &backup_data,
+                prev_task_id);
+        }
+
         printf("删除成功\n");
     }
     else
