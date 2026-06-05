@@ -5,6 +5,7 @@
 #include "task.h"
 #include "utils.h"
 #include "stack.h"
+#include "list.h"
 
 void welcome(void)
 {
@@ -93,6 +94,7 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
             break;
         case 0:
             callback(*task);
+            list_destroy(task);
             stack_destroy(undo_stack);
             system("clear");
             printf("\n\n\n\n学习任务管理系统已退出！\n");
