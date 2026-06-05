@@ -18,6 +18,27 @@ static void print_task(const task_t *res)
            res->data.completed == TASK_COMPLETED ? "已完成" : "进行中");
 }
 
+static void print_task_table_header(const char *title)
+{
+    printf("\033[31m====================================== %s =======================================\033[0m\n\n",
+           title);
+
+    printf("%-10s %-20s %-8s %-20s %-20s %-8s\n",
+           "ID",
+           "名称",
+           "优先级",
+           "结束时间",
+           "创建时间",
+           "状态");
+
+    printf("--------------------------------------------------------------------------------------\n");
+}
+
+static void print_task_table_footer(void)
+{
+    printf("--------------------------------------------------------------------------------------\n");
+}
+
 task_data_t build_task()
 {
     task_data_t data;
@@ -222,6 +243,33 @@ void task_remove(task_t **head, stackc_t *stack)
     }
 }
 
+/**
+ * 根据名称查找
+ */
+void task_search_name(task_t *head, const char *keyword)
+{
+    int found = 0;
+    print_task_table_header("搜索结果");
+
+    while (head)
+    {
+        if (strstr(head->data.task_name, keyword))
+        {
+            print_task(head);
+            found = 1;
+        }
+
+        head = head->next;
+    }
+
+    if (!found)
+    {
+        printf("未找到包含 \"%s\" 的任务\n", keyword);
+    }
+
+    print_task_table_footer();
+}
+
 void task_search(task_t *head)
 {
     char buf[64];
@@ -258,28 +306,29 @@ void task_search(task_t *head)
     task_t *res = NULL;
 
     if (val == 1)
+    {
         res = list_find_id(head, search_str);
-    else
-        res = list_find_name(head, search_str);
 
-    if (res)
-        print_task(res);
+        if (res)
+            print_task(res);
+        else
+            printf("未找到任务\n");
+    }
     else
-        printf("未找到任务\n");
+    {
+        task_search_name(head, search_str);
+    }
 }
 
 void task_list_completed(task_t *head)
 {
     printf("\n\n以下任务已完成：\n");
-    printf("\033[32m=============== 已完成的任务列表 ===============\033[0m\n");
 
-    printf("%-10s %-20s %-8s %-20s %-20s %-8s\n",
-           "ID", "名称", "优先级", "结束时间", "创建时间", "状态");
-    printf("--------------------------------------------------------------------------------------\n");
+    print_task_table_header("已完成的任务列表");
 
     list_find_cpd(head, 1, print_task);
 
-    printf("--------------------------------------------------------------------------------------\n");
+    print_task_table_footer();
 }
 
 void task_complete_mod(task_t *head, stackc_t *stack)
@@ -336,15 +385,11 @@ void query_all_task(task_t *head)
     }
 
     printf("\n");
-    printf("=============== 任务列表 ===============\n");
 
-    printf("%-10s %-20s %-8s %-20s %-20s %-8s\n",
-           "ID", "名称", "优先级", "结束时间", "创建时间", "状态");
-
-    printf("--------------------------------------------------------------------------------------\n");
+    print_task_table_header("所有任务列表");
 
     for (task_t *cur = head; cur != NULL; cur = cur->next)
         print_task(cur);
 
-    printf("--------------------------------------------------------------------------------------\n");
+    print_task_table_footer();
 }

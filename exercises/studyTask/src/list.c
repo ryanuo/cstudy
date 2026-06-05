@@ -86,24 +86,6 @@ task_t *list_find_id(task_t *head, const char *id)
 }
 
 /**
- * 根据名称查找
- */
-task_t *list_find_name(task_t *head, const char *name)
-{
-    while (head)
-    {
-        if (strcmp(head->data.task_name, name) == 0)
-        {
-            return head;
-        }
-
-        head = head->next;
-    }
-
-    return NULL;
-}
-
-/**
  * 根据完成情况查找
  */
 task_t *list_find_cpd(task_t *head, complete_t cpd, void (*callback)(const task_t *))

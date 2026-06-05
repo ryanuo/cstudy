@@ -5,6 +5,7 @@
 
 void task_add(task_t **head, stackc_t *stack);
 void task_remove(task_t **head, stackc_t *stack);
+void task_search_name(task_t *head, const char *keyword);
 void task_search(task_t *head);
 /**
  * 任务修改
