@@ -144,12 +144,11 @@ void task_mod(task_t *head, stackc_t *stack)
         return;
     trim_newline(task_id);
 
-
     printf("1.修改名称\n2.修改优先级\n3.修改状态\n");
 
     int opt = input_int("请选择要修改的信息(1-3)： ",
-                    1,
-                    3);
+                        1,
+                        3);
 
     task_update(head, task_id, opt, stack);
 }
@@ -271,10 +270,16 @@ void task_search(task_t *head)
 
 void task_list_completed(task_t *head)
 {
-    printf("以下任务已完成：\n");
-    list_find_cpd(head, 1);
+    printf("\n\n以下任务已完成：\n");
+    printf("\033[32m=============== 已完成的任务列表 ===============\033[0m\n");
 
-    printf("\033[32m--------------------------------------\033[0m\n");
+    printf("%-10s %-20s %-8s %-20s %-20s %-8s\n",
+           "ID", "名称", "优先级", "结束时间", "创建时间", "状态");
+    printf("--------------------------------------------------------------------------------------\n");
+
+    list_find_cpd(head, 1, print_task);
+
+    printf("--------------------------------------------------------------------------------------\n");
 }
 
 void task_complete_mod(task_t *head, stackc_t *stack)

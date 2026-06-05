@@ -11,7 +11,7 @@ int list_insert_tail(task_t **head, const task_data_t *data);
 
 task_t *list_find_id(task_t *head, const char *id);
 task_t *list_find_name(task_t *head, const char *name);
-task_t *list_find_cpd(task_t *head, complete_t);
+task_t *list_find_cpd(task_t *head, complete_t, void (*callback)(const task_t *));
 
 int list_delete(task_t **head, const char *id);
 

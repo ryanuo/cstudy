@@ -106,13 +106,13 @@ task_t *list_find_name(task_t *head, const char *name)
 /**
  * 根据完成情况查找
  */
-task_t *list_find_cpd(task_t *head, complete_t cpd)
+task_t *list_find_cpd(task_t *head, complete_t cpd, void (*callback)(const task_t *))
 {
     while (head)
     {
         if (head->data.completed == cpd)
         {
-            printf("%s\n", head->data.task_name);
+            callback(head);
         }
 
         head = head->next;
