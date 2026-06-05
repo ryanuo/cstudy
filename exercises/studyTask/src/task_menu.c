@@ -48,7 +48,32 @@ void menu()
     printf("\033[1;36m====================================\033[0m\n");
     printf("\033[1;31m 0. 退出系统\033[0m\n");
     printf("\033[33m--------------------------------------\033[0m\n");
-    printf(" 请选择操作: ");
+}
+
+void handle_navigation(task_t **task, stackc_t **undo_stack, int (*callback)(task_t *t))
+{
+    int nav_opt;
+    while (1)
+    {
+        printf("\n\n");
+        printf("✅ 操作已完成！\n");
+
+        nav_opt = input_int("是否返回主菜单？(1/0): ", 0, 1);
+
+        if (nav_opt == 0)
+        {
+            callback(*task);
+            list_destroy(task);
+            stack_destroy(*undo_stack);
+            printf("\n\n学习任务管理系统已安全退出！\n");
+            exit(0);
+        }
+        else if (nav_opt == 1)
+        {
+            system("clear");
+            return;
+        }
+    }
 }
 
 void menu_loop(task_t **task, int (*callback)(task_t *t))
@@ -96,14 +121,18 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
             callback(*task);
             list_destroy(task);
             stack_destroy(undo_stack);
-            system("clear");
-            printf("\n\n\n\n学习任务管理系统已退出！\n");
+            printf("\n\n学习任务管理系统已退出！\n");
             exit(0);
             break;
 
         default:
             printf("无效菜单项！\n");
             break;
+        }
+
+        if (opt >= 1 && opt <= 9)
+        {
+            handle_navigation(task, &undo_stack, callback);
         }
     }
 }
