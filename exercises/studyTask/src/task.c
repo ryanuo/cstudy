@@ -310,7 +310,11 @@ void task_search(task_t *head)
         res = list_find_id(head, search_str);
 
         if (res)
+        {
+            print_task_table_header("根据ID的搜索结果");
             print_task(res);
+            print_task_table_footer();
+        }
         else
             printf("未找到任务\n");
     }
