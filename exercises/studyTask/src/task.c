@@ -50,11 +50,11 @@ task_data_t build_task()
     printf("请输入任务名称: ");
     scanf("%63s", data.task_name);
 
+    clear_buffer();
+
     data.task_priority = input_int("请输入优先级(1-3): ", 1, 3);
 
     data.task_create_time = time(NULL);
-
-    clear_buffer();
 
     printf("请输入结束时间 (2026-06-02 12:00:00 / 直接回车=0): ");
     fgets(time_str, sizeof(time_str), stdin);
@@ -70,7 +70,7 @@ task_data_t build_task()
         data.task_end_time = string_to_timestamp(time_str);
     }
 
-    data.completed = input_int("是否完成(0:未完成 1:已完成): ", 0, 1);
+    data.completed = 0;
 
     return data;
 }
