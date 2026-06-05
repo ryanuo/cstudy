@@ -337,7 +337,7 @@ void task_list_completed(task_t *head)
 
 void task_complete_mod(task_t *head, stackc_t *stack)
 {
-    printf("请输入要修改的任务ID\n");
+    printf("请输入要修改的任务ID：\n");
 
     char task_id[64] = {0};
     if (!fgets(task_id, sizeof(task_id), stdin))
