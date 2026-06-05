@@ -1,7 +1,7 @@
 #ifndef __FILE_IO_H__
 #define __FILE_IO_H__
 
-#include "common.h"
+#include "typing.h"
 
 #define FILE_NAME "data/task.csv"
 

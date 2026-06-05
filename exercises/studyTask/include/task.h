@@ -1,7 +1,7 @@
 #ifndef __TASK_H_
 #define __TASK_H_
 
-#include "common.h"
+#include "typing.h"
 
 void task_add(task_t **head, stackc_t *stack);
 void task_remove(task_t **head, stackc_t *stack);

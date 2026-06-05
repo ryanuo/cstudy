@@ -1,7 +1,7 @@
 #ifndef __STACK_H_
 #define __STACK_H_
 
-#include "common.h"
+#include "typing.h"
 
 // 栈操作函数
 stackc_t *stack_create();

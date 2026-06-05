@@ -1,7 +1,7 @@
 #ifndef LIST_H
 #define LIST_H
 
-#include "common.h"
+#include "typing.h"
 
 task_t *list_create_node(const task_data_t *data);
 
