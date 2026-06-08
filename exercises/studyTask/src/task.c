@@ -63,7 +63,7 @@ task_data_t build_task()
 
     if (strlen(time_str) == 0)
     {
-        data.task_end_time = 0;
+        data.task_end_time = (time_t)(time(NULL) + 24 * 60 * 60);
     }
     else
     {
