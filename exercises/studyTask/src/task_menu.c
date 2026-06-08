@@ -127,8 +127,7 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
         {
             printf("\n\n");
             printf("✅ 操作已完成！\n");
-            int nav_opt = input_int("是否返回主菜单？(1/0): ", 0, 1);
-            handle_navigation(task, &undo_stack, callback, nav_opt);
+            handle_navigation(task, &undo_stack, callback, input_yes_no("是否返回主菜单？"));
         }
     }
 }

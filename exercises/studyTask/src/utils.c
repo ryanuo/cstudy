@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 /*
     时间戳 -> 字符串
@@ -118,4 +119,32 @@ int input_int(const char *prompt,
 
         return (int)value;
     }
+}
+
+/**
+ * @brief 提示用户输入 y/n，直接按回车默认为 'y'
+ * @param prompt 提示语字符串
+ * @return 1 表示 y/Y 或直接回车，0 表示 n/N 或其他输入
+ */
+int input_yes_no(const char *prompt)
+{
+    char buffer[10];
+    printf("%s (y/n, 回车默认y): ", prompt);
+
+    if (fgets(buffer, sizeof(buffer), stdin) != NULL)
+    {
+        // 如果用户直接按回车，buffer[0] 会是 '\n'，此时视为 'y'
+        if (buffer[0] == '\n')
+        {
+            return 1;
+        }
+
+        // 兼容大小写，将字符转为小写后判断
+        if (tolower(buffer[0]) == 'y')
+        {
+            return 1;
+        }
+    }
+
+    return 0;
 }

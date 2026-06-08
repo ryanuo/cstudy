@@ -19,4 +19,5 @@ int input_int(const char *prompt,
               int min,
               int max);
 
+int input_yes_no(const char *prompt);
 #endif
