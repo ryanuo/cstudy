@@ -180,7 +180,6 @@ int task_update(task_t *head, const char *id, int opt, stackc_t *stack)
                 printf("无效操作\n");
                 return -1;
             }
-            printf("\n\n");
             query_print("更新后的任务", cur, 32);
             printf("更新成功！\n");
             // 修改后保存到栈
