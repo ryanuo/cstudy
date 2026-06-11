@@ -14,17 +14,15 @@ char *reverse_data(char data[], int size)
 }
 
 // 递归翻转
-char *reverse_data_recursive(char data[], int size)
+void reverse_data_recursive(char data[], int size)
 {
-    if (size < 2)
-    {
-        return data;
-    }
+    if (size == 2)
+        return;
 
     char temp = data[0];
     data[0] = data[size - 1];
     data[size - 1] = temp;
-    return reverse_data_recursive(data + 1, size - 2);
+    reverse_data_recursive(data + 1, size - 2);
 }
 
 int main()
