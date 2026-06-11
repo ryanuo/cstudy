@@ -18,10 +18,13 @@ static void print_task(const task_t *res)
            res->data.completed == TASK_COMPLETED ? "已完成" : "进行中");
 }
 
-static void print_task_table_header(const char *title)
+static void print_task_table_header(const char *title, int color)
 {
-    printf("\033[31m====================================== %s =======================================\033[0m\n\n",
-           title);
+    printf("\n\n");
+    char buf[256];
+    sprintf(buf, "\033[%dm=================================== %s =====================================\033[0m\n\n",
+            color, title);
+    printf("%s", buf);
 
     printf("%-10s %-20s %-8s %-20s %-20s %-8s\n",
            "ID",
@@ -37,6 +40,13 @@ static void print_task_table_header(const char *title)
 static void print_task_table_footer(void)
 {
     printf("--------------------------------------------------------------------------------------\n");
+}
+
+void query_print(char *title, const task_t *res, int color)
+{
+    print_task_table_header(title, color);
+    print_task(res);
+    print_task_table_footer();
 }
 
 task_data_t build_task()
@@ -75,11 +85,41 @@ task_data_t build_task()
     return data;
 }
 
+/**
+ * @brief 检查任务ID是否存在
+ * @param head 链表头
+ * @param task_id 待检查ID
+ * @return 1 存在，0 不存在
+ */
+static int task_id_exists(task_t *head, char *task_id)
+{
+    task_t *cur = head;
+
+    while (cur)
+    {
+        if (strcmp(cur->data.task_id, task_id) == 0)
+        {
+            return 1;
+        }
+
+        cur = cur->next;
+    }
+
+    return 0;
+}
+
 void task_add(task_t **head, stackc_t *stack)
 {
     task_data_t data;
 
     data = build_task();
+
+    // 检查ID是否重复
+    if (task_id_exists(*head, data.task_id))
+    {
+        printf("任务ID [%s] 已存在，请重新输入！\n", data.task_id);
+        return;
+    }
 
     if (list_insert_tail(head, &data) != 0)
     {
@@ -106,6 +146,7 @@ int task_update(task_t *head, const char *id, int opt, stackc_t *stack)
     {
         if (strcmp(cur->data.task_id, id) == 0)
         {
+            query_print("要修改的任务", cur, 31);
             memcpy(&old_data, &cur->data, sizeof(task_data_t));
             switch (opt)
             {
@@ -139,7 +180,8 @@ int task_update(task_t *head, const char *id, int opt, stackc_t *stack)
                 printf("无效操作\n");
                 return -1;
             }
-
+            printf("\n\n");
+            query_print("更新后的任务", cur, 32);
             printf("更新成功！\n");
             // 修改后保存到栈
             if (stack)
@@ -249,7 +291,7 @@ void task_remove(task_t **head, stackc_t *stack)
 void task_search_name(task_t *head, const char *keyword)
 {
     int found = 0;
-    print_task_table_header("搜索结果");
+    print_task_table_header("搜索结果", 35);
 
     while (head)
     {
@@ -311,7 +353,7 @@ void task_search(task_t *head)
 
         if (res)
         {
-            print_task_table_header("根据ID的搜索结果");
+            print_task_table_header("根据ID的搜索结果", 33);
             print_task(res);
             print_task_table_footer();
         }
@@ -326,9 +368,7 @@ void task_search(task_t *head)
 
 void task_list_completed(task_t *head)
 {
-    printf("\n\n以下任务已完成：\n");
-
-    print_task_table_header("已完成的任务列表");
+    print_task_table_header("已完成的任务列表", 33);
 
     list_find_cpd(head, 1, print_task);
 
@@ -388,9 +428,7 @@ void query_all_task(task_t *head)
         return;
     }
 
-    printf("\n");
-
-    print_task_table_header("所有任务列表");
+    print_task_table_header("所有任务列表", 33);
 
     for (task_t *cur = head; cur != NULL; cur = cur->next)
         print_task(cur);

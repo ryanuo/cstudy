@@ -24,4 +24,18 @@ void query_all_task(task_t *head);
 
 void task_mod(task_t *head, stackc_t *stack);
 
+/**
+ *  | 代码   | 颜色     |
+    | ---- | ------ |
+    | `30` | 黑色     |
+    | `31` | 红色     |
+    | `32` | 绿色     |
+    | `33` | 黄色     |
+    | `34` | 蓝色     |
+    | `35` | 紫色（洋红） |
+    | `36` | 青色     |
+    | `37` | 白色     |
+ */
+void query_print(char *title, const task_t *res, int color);
+
 #endif
