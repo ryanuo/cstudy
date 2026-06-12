@@ -13,7 +13,7 @@ int main()
 
     task_load(&task);
 
-    menu_loop(&task, task_save);
+    menu_loop(&task);
 
     return 0;
 }

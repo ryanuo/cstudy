@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "stack.h"
 #include "list.h"
+#include "file.h"
 
 void welcome(void)
 {
@@ -51,14 +52,13 @@ void menu()
 
 static void handle_navigation(task_t **task,
                               stackc_t **undo_stack,
-                              int (*callback)(task_t *t),
                               int nav_opt)
 {
     while (1)
     {
         if (nav_opt == 0)
         {
-            callback(*task);
+            task_save(*task);
             list_destroy(task);
             stack_destroy(*undo_stack);
             printf("\n学习任务管理系统已安全退出！\n");
@@ -72,7 +72,7 @@ static void handle_navigation(task_t **task,
     }
 }
 
-void menu_loop(task_t **task, int (*callback)(task_t *t))
+void menu_loop(task_t **task)
 {
     stackc_t *undo_stack = stack_create();
     while (1)
@@ -114,7 +114,7 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
             task_summary(*task);
             break;
         case 0:
-            handle_navigation(task, &undo_stack, callback, 0);
+            handle_navigation(task, &undo_stack, 0);
             break;
 
         default:
@@ -126,7 +126,7 @@ void menu_loop(task_t **task, int (*callback)(task_t *t))
         {
             printf("\n\n");
             printf("✅ 操作已完成！\n");
-            handle_navigation(task, &undo_stack, callback, input_yes_no("是否返回主菜单？"));
+            handle_navigation(task, &undo_stack, input_yes_no("是否返回主菜单？"));
         }
     }
 }

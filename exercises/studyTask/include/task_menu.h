@@ -7,5 +7,5 @@ void welcome();
 
 void menu();
 
-void menu_loop(task_t **p, int (*callback)(task_t *task));
+void menu_loop(task_t **p);
 #endif
