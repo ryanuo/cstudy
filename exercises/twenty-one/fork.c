@@ -12,7 +12,8 @@ int main(int argc, char **argv)
     }
     else if (pid == 0)
     {
-        printf("this is child process\n");
+        printf("this is child process");
+        _exit(0);
     }
     else
     {
