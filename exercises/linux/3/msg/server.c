@@ -28,7 +28,10 @@ int main() {
 
         // 2. 构造回复消息，并发送给客户端 (类型2)
         msg.mtype = MSG_TYPE_SERVER_TO_CLIENT;
-        snprintf(msg.mtext, sizeof(msg.mtext), "Server received: %s", msg.mtext);
+        printf("[Server] 请输入回复: ");
+        fgets(msg.mtext, sizeof(msg.mtext), stdin);
+        msg.mtext[strcspn(msg.mtext, "\n")] = 0; // 去除换行符
+
         if (msgsnd(msgid, &msg, strlen(msg.mtext) + 1, 0) < 0) {
             perror("msgsnd");
             break;
