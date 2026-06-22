@@ -43,6 +43,7 @@ int main(int argc, char **argv)
     pid_t peer_pid = msg.sender_pid;
     printf("[A] Connected! Peer PID: %d\n", peer_pid);
 
+    int skill_flag = 0;
     while (1)
     {
         // 1. 从标准输入读取用户输入
@@ -61,6 +62,7 @@ int main(int argc, char **argv)
         if (strcmp(msg.text, "quit") == 0)
         {
             printf("[A] 退出...\n");
+            skill_flag = 0;
             break;
         }
 
@@ -71,12 +73,21 @@ int main(int argc, char **argv)
             break;
         }
         printf("[A] 收到 B 回复: %s\n", msg.text);
+
+        if (strcmp(msg.text, "quit") == 0)
+        {
+            printf("[A] 退出...\n");
+            skill_flag = 1;
+            break;
+        }
     }
 
-    msgctl(qid, IPC_RMID, NULL);
-    unlink(KEY_PATH);
-    kill(peer_pid, SIGUSR1);
-    printf("进程 B 已被杀死.\n");
+    if (skill_flag)
+    {
+        msgctl(qid, IPC_RMID, NULL);
+        kill(peer_pid, SIGUSR1);
+        printf("进程 B 已被杀死.\n");
+    }
 
     return 0;
 }

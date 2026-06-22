@@ -46,6 +46,7 @@ int main(int argc, char **argv)
     msg.sender_pid = my_pid;
     msgsnd(qid, &msg, MSG_TEXT_SIZE + sizeof(pid_t), 0);
 
+    int skill_flag = 0;
     while (1)
     {
         // 1. 阻塞等待接收来自A的消息 (类型1)
@@ -60,6 +61,7 @@ int main(int argc, char **argv)
         if (strcmp(msg.text, "quit") == 0)
         {
             printf("[B] 退出...\n");
+            skill_flag = 1;
             break;
         }
 
@@ -75,17 +77,20 @@ int main(int argc, char **argv)
             break;
         }
 
-        // 如果收到 "quit"，则退出循环
+        // 如果发送 "quit"，则退出循环
         if (strcmp(msg.text, "quit") == 0)
         {
             printf("[B] 退出...\n");
+            skill_flag = 0;
             break;
         }
     }
 
-    msgctl(qid, IPC_RMID, NULL);
-    unlink(KEY_PATH);
-    kill(peer_pid, SIGUSR1);
-    printf("进程 A 已被杀死.\n");
+    if (skill_flag)
+    {
+        msgctl(qid, IPC_RMID, NULL);
+        kill(peer_pid, SIGUSR1);
+        printf("进程 A 已被杀死.\n");
+    }
     return 0;
 }
