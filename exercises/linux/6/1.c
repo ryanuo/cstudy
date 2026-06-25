@@ -4,16 +4,25 @@
 
 pthread_mutex_t mutex;
 int g_var = 0;
+void cancel_thread()
+{
+    pthread_mutex_unlock(&mutex);
+}
 
 void *g_val_1(void *arg)
 {
     while (1)
     {
         pthread_mutex_lock(&mutex);
+
+        pthread_cleanup_push(cancel_thread, NULL);
+
         g_var = 1;
-        pthread_mutex_unlock(&mutex);
 
         usleep(100000);
+
+        pthread_mutex_unlock(&mutex);
+        pthread_cleanup_pop(0);
     }
 
     return NULL;
