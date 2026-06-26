@@ -5,7 +5,7 @@
 #define WINDOW_NUM 4
 
 static int tickets = 100;
-
+pthread_t tids[WINDOW_NUM];
 pthread_mutex_t mutex;
 
 void *sell_ticket(void *arg)
@@ -22,14 +22,28 @@ void *sell_ticket(void *arg)
             break;
         }
 
-        printf(
-            "窗口%d 卖出第 %d 张票，剩余 %d 张\n",
-            id,
-            tickets,
-            tickets - 1
-        );
+        printf("窗口%d 卖出第 %d 张票，剩余 %d 张\n",
+               id,
+               tickets,
+               tickets - 1);
 
         tickets--;
+
+        if (tickets == 0)
+        {
+            printf("\n窗口%d 卖出了最后一张票！\n", id);
+
+            for (int i = 0; i < WINDOW_NUM; i++)
+            {
+                if (!pthread_equal(pthread_self(), tids[i]))
+                {
+                    pthread_cancel(tids[i]);
+                }
+            }
+
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
 
         pthread_mutex_unlock(&mutex);
 
@@ -38,12 +52,11 @@ void *sell_ticket(void *arg)
 
     printf("窗口%d 下班\n", id);
 
-    return NULL;
+    pthread_exit(NULL);
 }
 
-int main()
+int main(void)
 {
-    pthread_t tids[WINDOW_NUM];
     int ids[WINDOW_NUM];
 
     pthread_mutex_init(&mutex, NULL);
@@ -52,12 +65,10 @@ int main()
     {
         ids[i] = i + 1;
 
-        pthread_create(
-            &tids[i],
-            NULL,
-            sell_ticket,
-            &ids[i]
-        );
+        pthread_create(&tids[i],
+                       NULL,
+                       sell_ticket,
+                       &ids[i]);
     }
 
     for (int i = 0; i < WINDOW_NUM; i++)
@@ -65,7 +76,7 @@ int main()
         pthread_join(tids[i], NULL);
     }
 
-    printf("\n100张票已全部售完\n");
+    printf("\n100张票已全部售完！\n");
 
     pthread_mutex_destroy(&mutex);
 
