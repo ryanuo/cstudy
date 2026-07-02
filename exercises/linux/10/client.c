@@ -2,7 +2,7 @@
 #include <net/if.h>
 #include <pthread.h>
 
-#define SERVER_IP "10.166.161.68"
+#define SERVER_IP "192.168.14.52"
 #define SERVER_PORT 3006
 
 #define GROUP_IP "224.0.2.100"
@@ -65,30 +65,36 @@ void init_group_socket()
     int reuse = 1;
     setsockopt(group_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
-    // ===== 1. 绑定组播端口（关键修复）=====
-    sin_t addr;
+#ifdef SO_REUSEPORT
+    setsockopt(group_sockfd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+#endif
+
+    struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
+
     addr.sin_family = AF_INET;
     addr.sin_port = htons(GROUP_PORT);
-    addr.sin_addr.s_addr = htonl(INADDR_ANY); // ✔ 必须 ANY
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(group_sockfd, (sa_t *)&addr, sizeof(addr)) < 0)
+    if (bind(group_sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
     {
         perror("bind failed");
     }
 
-    // ===== 2. 加入组播组 =====
     struct ip_mreq mreq;
-    mreq.imr_multiaddr.s_addr = inet_addr(GROUP_IP);
+    memset(&mreq, 0, sizeof(mreq));
 
-    // ✔ 推荐稳定写法（选一个）
+    mreq.imr_multiaddr.s_addr = inet_addr(GROUP_IP);
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
 
-    setsockopt(group_sockfd,
-               IPPROTO_IP,
-               IP_ADD_MEMBERSHIP,
-               &mreq,
-               sizeof(mreq));
+    if (setsockopt(group_sockfd,
+                   IPPROTO_IP,
+                   IP_ADD_MEMBERSHIP,
+                   &mreq,
+                   sizeof(mreq)) < 0)
+    {
+        perror("IP_ADD_MEMBERSHIP failed");
+    }
 }
 void send_msg(const char *msg)
 {

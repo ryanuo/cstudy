@@ -1,7 +1,7 @@
 #include "common.h"
 #include <net/if.h>
 
-#define SERVER_IP "10.166.161.68"
+#define SERVER_IP "192.168.14.52"
 #define SERVER_PORT 3006
 
 #define GROUP_IP "224.0.2.100"
