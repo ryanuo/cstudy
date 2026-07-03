@@ -1,0 +1,33 @@
+/*************************************************************************
+  > File Name:    main.c
+  > Author:       Terry Yu
+  > Description:
+  > Created Time: 2026-07-03 10:45:47
+ ************************************************************************/
+
+#include <stdio.h>
+#include "threadpool.h"
+
+void *Print(void *argp)
+{
+    printf("%d\n", (int)(long)argp);
+}
+
+int main(int argc, char const *argv[])
+{
+    threadpool_t pool;
+
+    if (-1 == threadpool_init(&pool, 10, 20))
+    {
+        fprintf(stderr, "threadpool init failure!\n");
+        return -1;
+    }
+
+    for (register int i = 0; i < 30; i++)
+        threadpool_addtask(&pool, Print,(void*)(long)(i+1));
+
+    sleep(2);
+
+    threadpool_destroy(&pool);
+    return 0;
+}

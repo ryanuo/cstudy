@@ -1,0 +1,256 @@
+
+🧨 地狱模式 I：pthread + 锁 + fork 终极爆炸
+
+❓ 1. fork 在多线程环境中发生什么？
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+
+void *worker(void *arg)
+{
+    pthread_mutex_lock(&m);
+    sleep(2);
+    pthread_mutex_unlock(&m);
+}
+
+int main()
+{
+    pthread_t t;
+    pthread_create(&t, NULL, worker, NULL);
+
+    sleep(1);
+    fork();
+
+    pthread_join(t, NULL);
+}
+
+💥 关键问题
+fork 只复制当前线程！
+子进程：
+● 没有 worker 线程
+● 但 mutex 状态被复制（可能是 locked）
+
+💣 结果
+可能出现：
+父进程卡死
+子进程卡死
+或者随机行为
+
+🔥 本质
+fork + mutex = 未定义系统级一致性问题
+
+🧨 地狱模式 II：条件变量“假唤醒地狱”
+
+❓ 2. 你以为安全，其实会炸
+pthread_mutex_lock(&m);
+
+while (!ready)
+{
+    pthread_cond_wait(&cond, &m);
+}
+
+printf("GO\n");
+
+pthread_mutex_unlock(&m);
+
+💥 面试陷阱
+如果你写：
+if (!ready)
+    pthread_cond_wait(...);
+👉 直接错
+
+💣 为什么 while 必须存在？
+因为：
+✔ 三种异常：
+1. spurious wakeup（假唤醒）
+2. signal 丢失
+3. 多线程竞争唤醒
+
+💥 结果
+if版本 → 乱执行 / 提前执行 / 崩溃
+while版本 → 正确
+
+🧨 地狱模式 III：生产者消费者极限死锁
+
+❓ 3. 经典错误版本
+pthread_mutex_lock(&m);
+
+while (queue_full)
+    pthread_cond_wait(&not_full, &m);
+
+push(item);
+
+pthread_cond_signal(&not_empty);
+
+pthread_mutex_unlock(&m);
+
+💥 你以为没问题？
+错。
+
+💣 隐藏死锁点
+如果写成：
+pthread_cond_signal(&not_empty);
+pthread_mutex_unlock(&m);
+👉 可能：
+● 消费者被唤醒
+● 但锁还没释放
+● 消费者继续睡
+● 生产者也卡住
+
+🔥 结论
+signal 顺序错误 = 隐形死锁
+
+🧨 地狱模式 IV：线程池“假安全”设计
+
+❓ 4. 看似正确线程池
+task_queue.push(task);
+
+pthread_cond_signal(&cond);
+worker：
+while (1)
+{
+    pthread_cond_wait(&cond, &m);
+    task = pop();
+    execute(task);
+}
+
+💥 三大坑
+
+❌ 坑1：丢任务
+signal 发生在 push 前
+👉 任务永远不会被执行
+
+❌ 坑2：惊群效应
+多个线程同时 wake
+👉 但只有一个 task
+
+❌ 坑3：退出条件缺失
+while (1)
+👉 程序无法优雅退出
+
+🔥 正确设计必须有：
+● stop flag
+● queue size check
+● broadcast instead of signal
+
+🧨 地狱模式 V：共享内存 + mutex = 错觉安全
+
+❓ 5. 你以为安全？
+shm->count++;
+加锁版本：
+pthread_mutex_lock(&m);
+shm->count++;
+pthread_mutex_unlock(&m);
+
+💥 真正问题
+如果 mutex 是：
+● 普通 pthread_mutex（进程内）
+● 或 fork 后使用
+👉 完全无效
+
+💣 结果
+多个进程同时写 → 数据仍然错
+
+🔥 正确方案
+必须：
+PTHREAD_PROCESS_SHARED mutex
+放在共享内存中
+
+🧨 地狱模式 VI：signal + multithread 黑洞
+
+❓ 6. signal handler 写 printf
+void handler(int sig)
+{
+    printf("SIG\n");
+}
+
+💥 面试官最爱问
+安全吗？
+
+💣 答案：绝对不安全
+因为：
+● printf 非 async-signal-safe
+● malloc 可能被打断
+● libc 状态不一致
+
+🔥 正确方式
+只能用：
+write(1, "SIG\n", 4);
+
+🧨 地狱模式 VII：read / write “半包问题”
+
+❓ 7. TCP / pipe 经典误区
+read(fd, buf, 1024);
+你以为：
+一定读满 1024
+
+💥 实际
+可能：
+1 byte
+10 bytes
+512 bytes
+
+💣 结论
+read/write 是“流”，不是“包”
+
+🧨 地狱模式 VIII：epoll 惊群 + ET模式陷阱
+
+❓ 8. ET模式写法错误
+while (1)
+{
+    epoll_wait(...)
+    read(fd, buf, 100);
+}
+
+💥 错误点
+没有读到 EAGAIN
+👉 事件不会再次触发
+
+💣 结果
+连接卡死
+
+🔥 正确：
+while (1)
+{
+    while (read(...) > 0);
+}
+
+🧨 地狱模式 IX：fork + exec + fd 泄漏
+
+❓ 9. 子进程文件描述符泄漏
+fork();
+exec("ls");
+
+💥 如果没 close-on-exec：
+● fd 全部继承
+● 资源泄漏
+● pipe 不关闭
+
+🔥 解决
+fcntl(fd, F_SETFD, FD_CLOEXEC);
+
+🧨 地狱模式 X：最恐怖综合题（终极）
+
+❓ 10. 输出是什么？
+pthread_mutex_t m;
+
+void *t1(void *arg)
+{
+    pthread_mutex_lock(&m);
+    fork();
+    printf("A\n");
+    pthread_mutex_unlock(&m);
+}
+
+💥 4个坑叠加：
+● fork 只复制线程
+● mutex 状态复制
+● printf 非原子
+● 未处理锁继承
+
+💣 结果：
+可能：
+A
+A
+卡死
+重复输出
+无输出
+

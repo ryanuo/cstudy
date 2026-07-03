@@ -76,3 +76,5 @@ PPC32e500v2*
 # DDS
 *.log.*
 *.tlog
+
+*.dSYM
