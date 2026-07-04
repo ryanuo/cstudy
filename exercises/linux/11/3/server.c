@@ -1,9 +1,10 @@
 #include "threadpool.h"
 #include "mysocket.h"
 #include <signal.h>
+#include <errno.h>
 
 user_list_t *head = NULL;
-int is_running = 1;
+volatile sig_atomic_t is_running = 1;
 
 void signal_handler(int sig)
 {
@@ -56,7 +57,6 @@ void *doService(void *argp)
     for (;;)
     {
         user_info_t user_info = {0};
-        // 必须循环接收，直到收满 sizeof(user_info_t) 字节
         ssize_t bytes_received = recv(sockc, &user_info, sizeof(user_info_t), 0);
 
         if (bytes_received == sizeof(user_info_t))
@@ -64,7 +64,7 @@ void *doService(void *argp)
             printf("收到用户名: %s\n", user_info.username);
         }
 
-        if (bytes_received == 0)
+        if (bytes_received <= 0)
         {
             printf("[%s:%d]已断开\n", inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
             break;
@@ -72,6 +72,8 @@ void *doService(void *argp)
 
         doResponce(&user_info, sockc);
     }
+
+    close(sockc);
     return NULL;
 }
 
@@ -83,7 +85,11 @@ int main(int argc, char const *argv[])
         return -1;
     }
 
-    signal(SIGINT, signal_handler);
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
 
     int sock_l = mysocket_init(argv[1], atoi(argv[2]));
     if (sock_l == -1)
@@ -102,17 +108,30 @@ int main(int argc, char const *argv[])
         close(sock_l);
         return -1;
     }
+
     while (is_running)
     {
         int sock_c = mysocket_accept(sock_l);
         if (sock_c == -1)
+        {
+            if (errno == EINTR)
+            {
+                break;
+            }
             continue;
+        }
         threadpool_addtask(&pool, doService, (void *)(long)sock_c);
     }
 
+    printf("\n正在关闭主监听套接字...\n");
+    close(sock_l);
+
+    printf("线程池正在销毁并等待任务结束...\n");
+    threadpool_destroy(&pool);
+
     printf("文件保存中...\n");
     userinfo_save(head);
-    threadpool_destroy(&pool);
-    close(sock_l);
+
+    printf("服务器已成功安全退出。\n");
     return 0;
 }
