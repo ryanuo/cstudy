@@ -32,7 +32,7 @@ static int read_userinfo(FILE *fp, user_info_t *data)
     int completed;
 
     if (fscanf(fp,
-               "%31[^,],%31[^,]\n",
+               " %31[^,],%31s",
                data->username,
                data->password) != 2)
     {

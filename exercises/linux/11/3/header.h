@@ -20,8 +20,8 @@ typedef struct sockaddr_in sin_t;
 typedef struct
 {
     int request; // 0:login, 1:register
-    char username[10];
-    char password[10];
+    char username[32];
+    char password[32];
 } user_info_t;
 
 typedef struct user_list
