@@ -11,39 +11,43 @@ void signal_handler(int sig)
     is_running = 0;
 }
 
+int send_response(int sockfd, const char *msg)
+{
+    if (!msg) return -1;
+    return send(sockfd, msg, strlen(msg), 0);
+}
+
 int doResponce(void *argp, int sockfd)
 {
     user_info_t user_info = *(user_info_t *)argp;
 
-    if (user_info.request == 0)
+    const char *resp = NULL;
+    int exists = (find(head, user_info) == 0);
+
+    switch (user_info.request)
     {
-        if (find(head, user_info) == 0)
-        {
-            char *resp = "登录成功";
-            ssize_t l = send(sockfd, resp, strlen(resp), 0);
-        }
-        else
-        {
-            char *resp = "用户不存在";
-            ssize_t l = send(sockfd, resp, strlen(resp), 0);
-        }
+        case 0: // 登录
+            resp = exists ? "登录成功" : "用户不存在";
+            break;
+
+        case 1: // 注册
+            if (exists)
+            {
+                resp = "用户已存在";
+            }
+            else
+            {
+                push_back(&head, user_info);
+                resp = "注册成功";
+            }
+            break;
+
+        default:
+            resp = "未知请求类型";
+            break;
     }
 
-    if (user_info.request == 1)
-    {
-        if (find(head, user_info) == 0)
-        {
-            char *resp = "用户已存在";
-            ssize_t l = send(sockfd, resp, strlen(resp), 0);
-        }
-        else
-        {
-            push_back(&head, user_info);
-            char *resp = "注册成功";
-            ssize_t l = send(sockfd, resp, strlen(resp), 0);
-        }
-    }
-    return 0;
+    return send_response(sockfd, resp);
 }
 
 void *doService(void *argp)

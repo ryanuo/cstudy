@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "compilerPath": "/usr/bin/clang",
+            "intelliSenseMode": "macos-clang-arm64",
+            "cStandard": "gnu99",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/opt/homebrew/opt/mysql-client/include"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/opt/homebrew/opt/mysql-client/include"
+                ]
+            }
+        }
+    ],
+    "version": 4
+}
