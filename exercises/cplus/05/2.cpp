@@ -8,5 +8,5 @@ int main()
     shared_ptr<int> p1(t);
 
     std::cout << t << std::endl;
-    std::cout << p1.get() << std::endl;
+    cout << p1.get() << std::endl;
 }
