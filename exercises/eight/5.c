@@ -27,7 +27,7 @@ void reverse_data_recursive(char data[], int size)
 
 int main()
 {
-    char str[] = "hello world";
+    char str[] = "hello1";
     char str2[] = "hello world";
 
     printf("翻转前: %s\n", str);
