@@ -48,7 +48,6 @@ x64
 
 # CMake
 build
-Makefile*
 CMakeCache.txt
 CMakeFiles
 cmake_install.cmake

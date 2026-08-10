@@ -9,7 +9,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# 指定本机 Qt 6.11.1 安装路径（按需改成你自己的路径）
+# Apple Silicon macOS Qt 6.11.1
 set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" "$ENV{HOME}/Qt/6.11.1/macos")
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
