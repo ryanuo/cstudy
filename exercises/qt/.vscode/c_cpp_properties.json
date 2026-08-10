@@ -1,0 +1,22 @@
+{
+  "configurations": [
+    {
+      "name": "macOS-Qt6",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${env:HOME}/Qt/6.11.1/macos/lib/QtCore.framework/Headers",
+        "${env:HOME}/Qt/6.11.1/macos/lib/QtGui.framework/Headers",
+        "${env:HOME}/Qt/6.11.1/macos/lib/QtWidgets.framework/Headers"
+      ],
+      "defines": [],
+      "macFrameworkPath": [
+        "${env:HOME}/Qt/6.11.1/macos/lib"
+      ],
+      "compilerPath": "/usr/bin/clang++",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "macos-clang-arm64"
+    }
+  ],
+  "version": 4
+}
