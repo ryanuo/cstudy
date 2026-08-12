@@ -33,6 +33,12 @@ foreach(EXDIR ${EXERCISE_DIRS})
     file(GLOB EX_SOURCES CONFIGURE_DEPENDS
          "${EXDIR}/*.cpp" "${EXDIR}/*.h")
 
+    # 跳过空目录(尚无源文件的练习不会导致构建失败)
+    if(NOT EX_SOURCES)
+        message(STATUS "跳过空练习目录: ${EXDIR} (无 .cpp/.h 源文件)")
+        continue()
+    endif()
+
     add_executable(${EXE_NAME} ${EX_SOURCES})
 
     # 产物输出到 lib/NN_name/
