@@ -1,0 +1,67 @@
+name: Build Windows Qt App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # 1. 拉取代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. 安装 Qt 5.12.6 + MinGW 7.3
+      - name: Setup Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 5.12.6
+          arch: win64_mingw73
+          cache: true
+
+      # 3. CMake 配置
+      - name: Configure CMake
+        shell: powershell
+        run: |
+          cmake `
+            -S exercises/qt/new-pro `
+            -B exercises/qt/new-pro/build `
+            -G "MinGW Makefiles" `
+            -DCMAKE_BUILD_TYPE=Release
+
+      # 4. 编译
+      - name: Build
+        shell: powershell
+        run: |
+          cmake `
+            --build exercises/qt/new-pro/build `
+            --config Release `
+            --parallel
+
+      # 5. Qt DLL 部署
+      - name: Deploy Qt
+        shell: powershell
+        run: |
+          windeployqt `
+            --release `
+            --no-translations `
+            exercises/qt/new-pro/build/new-pro.exe
+
+      # 6. 打包
+      - name: Package
+        shell: powershell
+        run: |
+          Compress-Archive `
+            -Path exercises/qt/new-pro/build/* `
+            -DestinationPath new-pro-windows.zip
+
+      # 7. 上传构建产物
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-pro-windows
+          path: new-pro-windows.zip

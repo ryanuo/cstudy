@@ -1,106 +1,72 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.19)
 
-project(qt_practice VERSION 0.1 LANGUAGES CXX)
+project(new-pro LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
-# Qt 6.11.1
-set(CMAKE_PREFIX_PATH
-    "${CMAKE_PREFIX_PATH}"
-    "$ENV{HOME}/Qt/6.11.1/macos"
+# =========================
+# Qt
+# =========================
+
+if(WIN32)
+    # Windows 使用 Qt 5.12
+    find_package(Qt5 5.12 REQUIRED COMPONENTS Core Widgets)
+
+    set(QT_CORE Qt5::Core)
+    set(QT_WIDGETS Qt5::Widgets)
+
+else()
+    # macOS 使用 Qt 6
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
+
+    set(QT_CORE Qt6::Core)
+    set(QT_WIDGETS Qt6::Widgets)
+endif()
+
+# =========================
+# Executable
+# =========================
+
+add_executable(new-pro
+    main.cpp
+    mainwindow.cpp
+    mainwindow.h
+    mainwindow.ui
+
+    logindialog.cpp
+    logindialog.h
+    logindialog.ui
+
+    pic.qrc
 )
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+# =========================
+# Qt Libraries
+# =========================
 
-# ============================================================
-# 动态扫描练习目录
-# ============================================================
-
-file(GLOB EXERCISE_DIRS
-    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-    CONFIGURE_DEPENDS
-    "[0-9][0-9]_*"
+target_link_libraries(new-pro
+    PRIVATE
+        ${QT_CORE}
+        ${QT_WIDGETS}
 )
 
-foreach(EXDIR ${EXERCISE_DIRS})
+# =========================
+# Platform settings
+# =========================
 
-    if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${EXDIR}")
-        continue()
-    endif()
-
-    # 01_hello -> hello
-    string(
-        REGEX REPLACE
-        "^[0-9][0-9]_"
-        ""
-        EXE_NAME
-        "${EXDIR}"
+if(WIN32)
+    set_target_properties(new-pro PROPERTIES
+        WIN32_EXECUTABLE TRUE
     )
+endif()
 
-    # 收集源文件
-    file(GLOB EX_SOURCES
-        CONFIGURE_DEPENDS
-        "${EXDIR}/*.cpp"
-        "${EXDIR}/*.h"
-        "${EXDIR}/*.hpp"
-        "${EXDIR}/*.qrc"
+if(APPLE)
+    set_target_properties(new-pro PROPERTIES
+        MACOSX_BUNDLE TRUE
     )
-
-    if(NOT EX_SOURCES)
-        message(
-            STATUS
-            "跳过空练习目录: ${EXDIR}"
-        )
-        continue()
-    endif()
-
-    # ========================================================
-    # 创建可执行程序
-    # ========================================================
-
-    add_executable(
-        ${EXE_NAME}
-        MACOSX_BUNDLE
-        ${EX_SOURCES}
-    )
-
-    # ========================================================
-    # Bundle 信息
-    # ========================================================
-
-    set_target_properties(
-        ${EXE_NAME}
-        PROPERTIES
-
-        MACOSX_BUNDLE_GUI_IDENTIFIER
-            "cc.ryanuo.qt.${EXE_NAME}"
-
-        MACOSX_BUNDLE_BUNDLE_NAME
-            "${EXE_NAME}"
-
-        MACOSX_BUNDLE_BUNDLE_VERSION
-            "${PROJECT_VERSION}"
-
-        MACOSX_BUNDLE_SHORT_VERSION_STRING
-            "${PROJECT_VERSION}"
-
-        RUNTIME_OUTPUT_DIRECTORY
-            "${CMAKE_SOURCE_DIR}/lib/${EXDIR}"
-    )
-
-    # ========================================================
-    # Qt
-    # ========================================================
-
-    target_link_libraries(
-        ${EXE_NAME}
-        PRIVATE
-        Qt6::Widgets
-    )
-
-endforeach()
+endif()
