@@ -412,4 +412,177 @@ jobs:
         with:
           name: new-pro-macos
           path: new-pro-macos.zip
+
+
+  # ============================================================
+  # Linux
+  # ============================================================
+  build-linux:
+
+    name: Linux / Qt 6.8.3 / GCC
+
+    runs-on: ubuntu-24.04
+
+    steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      # --------------------------------------------------------
+      # Install Qt
+      # --------------------------------------------------------
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: linux_gcc_64
+          install-deps: true
+          cache: true
+
+
+      # --------------------------------------------------------
+      # Check Environment
+      # --------------------------------------------------------
+      - name: Check Linux Environment
+        run: |
+          echo "========================================"
+          echo "Linux"
+          echo "========================================"
+
+          echo ""
+          echo "System:"
+          head -2 /etc/os-release
+
+          echo ""
+          echo "Architecture:"
+          uname -m
+
+          echo ""
+          echo "CMake:"
+          cmake --version
+
+          echo ""
+          echo "Compiler:"
+          gcc --version | head -1
+
+
+      # --------------------------------------------------------
+      # Configure
+      # --------------------------------------------------------
+      - name: Configure Linux
+        run: |
+          cmake \
+            -S exercises/qt/new-pro \
+            -B exercises/qt/new-pro/build \
+            -DCMAKE_BUILD_TYPE=Release
+
+
+      # --------------------------------------------------------
+      # Build
+      # --------------------------------------------------------
+      - name: Build Linux
+        run: |
+          cmake \
+            --build exercises/qt/new-pro/build \
+            --parallel
+
+
+      # --------------------------------------------------------
+      # Check output
+      # --------------------------------------------------------
+      - name: Check Linux Executable
+        run: |
+          EXE="exercises/qt/new-pro/build/new-pro"
+
+          if [ ! -x "$EXE" ]; then
+            echo "ERROR: Executable not found:"
+            echo "$EXE"
+            find exercises/qt/new-pro/build \
+              -maxdepth 2 \
+              -print
+            exit 1
+          fi
+
+          echo "Executable found:"
+          echo "$EXE"
+          file "$EXE"
+
+
+      # --------------------------------------------------------
+      # Deploy Qt (拷贝运行库 + 插件 + 修正 rpath)
+      # --------------------------------------------------------
+      - name: Deploy Qt Linux
+        run: |
+          EXE="exercises/qt/new-pro/build/new-pro"
+          DIST="exercises/qt/new-pro/dist"
+          QT_PREFIX=$(qmake -query QT_INSTALL_PREFIX)
+
+          echo "========================================"
+          echo "Copy executable and Qt libraries"
+          echo "========================================"
+
+          rm -rf "$DIST"
+          mkdir -p "$DIST/lib" "$DIST/plugins"
+
+          cp "$EXE" "$DIST/"
+
+          # Qt 运行库
+          ldd "$EXE" \
+            | grep -oE '/[^ ]*libQt6[^ ]*' \
+            | sort -u \
+            | while read -r lib; do
+                cp "$lib" "$DIST/lib/"
+                echo "copied: $lib"
+              done
+
+          # ICU 库(部分发行版不预装)
+          ldd "$EXE" \
+            | grep -oE '/[^ ]*libicu[^ ]*' \
+            | sort -u \
+            | while read -r lib; do
+                cp "$lib" "$DIST/lib/"
+              done
+
+          # Qt 插件: 平台 / 图片 / SQLite 驱动
+          cp -r "$QT_PREFIX/plugins/platforms" "$DIST/plugins/"
+          cp -r "$QT_PREFIX/plugins/imageformats" "$DIST/plugins/"
+          cp -r "$QT_PREFIX/plugins/sqldrivers" "$DIST/plugins/"
+
+          # 修正 rpath: 可执行文件 -> lib/, 插件 -> 上级 lib/
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq patchelf
+          patchelf --set-rpath '$ORIGIN/lib' "$DIST/new-pro"
+          find "$DIST/plugins" -name '*.so' \
+            -exec patchelf --set-rpath '$ORIGIN/../../lib' {} \;
+
+          echo ""
+          echo "Deploy output:"
+          find "$DIST" -maxdepth 3 -print
+
+
+      # --------------------------------------------------------
+      # Package
+      # --------------------------------------------------------
+      - name: Package Linux
+        run: |
+          cd exercises/qt/new-pro/dist
+          rm -f ../../../../new-pro-linux.zip
+          zip -r ../../../../new-pro-linux.zip .
+          echo ""
+          echo "Package created:"
+          echo "new-pro-linux.zip"
+
+
+      # --------------------------------------------------------
+      # Upload Artifact
+      # --------------------------------------------------------
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-pro-linux
+          path: new-pro-linux.zip
           if-no-files-found: error
