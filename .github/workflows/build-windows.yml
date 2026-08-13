@@ -1,10 +1,6 @@
 name: Build Qt Application
 
 on:
-  push:
-    branches:
-      - main
-
   workflow_dispatch:
 
 permissions:
@@ -24,16 +20,16 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------------
+      # ========================================================
       # Checkout
-      # --------------------------------------------------------
+      # ========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
 
-      # --------------------------------------------------------
+      # ========================================================
       # Install Qt
-      # --------------------------------------------------------
+      # ========================================================
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -42,38 +38,58 @@ jobs:
           cache: true
 
 
-      # --------------------------------------------------------
-      # Show Environment
-      # --------------------------------------------------------
-      - name: Show Environment
+      # ========================================================
+      # Check Environment
+      # ========================================================
+      - name: Check Windows Environment
         shell: powershell
         run: |
-          Write-Host "Qt installation:"
-          Write-Host $env:Qt6_DIR
+          Write-Host "========================================"
+          Write-Host "Windows"
+          Write-Host "========================================"
 
+          Write-Host ""
           Write-Host "CMake:"
           cmake --version
 
-          Write-Host "Compiler:"
-          cl
+          Write-Host ""
+          Write-Host "Visual Studio:"
+          
+          $vsPath = & "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe" `
+            -latest `
+            -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+
+          if (-not $vsPath) {
+            Write-Error "Visual Studio 2022 with MSVC was not found."
+            exit 1
+          }
+
+          Write-Host $vsPath
+
+          Write-Host ""
+          Write-Host "Qt6_DIR:"
+          Write-Host $env:Qt6_DIR
 
 
-      # --------------------------------------------------------
-      # Configure
-      # --------------------------------------------------------
-      - name: Configure CMake
+      # ========================================================
+      # Configure CMake
+      # ========================================================
+      - name: Configure Windows
         shell: powershell
         run: |
           cmake `
             -S exercises/qt/new-pro `
             -B exercises/qt/new-pro/build `
-            -DCMAKE_BUILD_TYPE=Release
+            -G "Visual Studio 17 2022" `
+            -A x64
 
 
-      # --------------------------------------------------------
+      # ========================================================
       # Build
-      # --------------------------------------------------------
-      - name: Build
+      # ========================================================
+      - name: Build Windows
         shell: powershell
         run: |
           cmake `
@@ -82,52 +98,109 @@ jobs:
             --parallel
 
 
-      # --------------------------------------------------------
-      # Install + Deploy
-      # --------------------------------------------------------
-      - name: Install
+      # ========================================================
+      # Prepare Dist
+      # ========================================================
+      - name: Prepare Windows Dist
         shell: powershell
         run: |
-          cmake `
-            --install exercises/qt/new-pro/build `
-            --config Release `
-            --prefix exercises/qt/new-pro/dist
+          $dist = "exercises/qt/new-pro/dist"
+
+          if (Test-Path $dist) {
+            Remove-Item `
+              -Path $dist `
+              -Recurse `
+              -Force
+          }
+
+          New-Item `
+            -ItemType Directory `
+            -Force `
+            -Path $dist | Out-Null
 
 
-      # --------------------------------------------------------
-      # Check Output
-      # --------------------------------------------------------
-      - name: List Windows Files
+      # ========================================================
+      # Deploy Qt
+      # ========================================================
+      - name: Deploy Qt Windows
         shell: powershell
         run: |
+          $exe = "exercises/qt/new-pro/build/Release/new-pro.exe"
+          $dist = "exercises/qt/new-pro/dist"
+
+          if (-not (Test-Path $exe)) {
+            Write-Error "Executable not found:"
+            Write-Error $exe
+            exit 1
+          }
+
+          Write-Host "Copy executable:"
+          Write-Host $exe
+
+          Copy-Item `
+            -Path $exe `
+            -Destination $dist
+
+          Write-Host ""
+          Write-Host "Running windeployqt..."
+
+          windeployqt `
+            --release `
+            --compiler-runtime `
+            --no-translations `
+            "$dist/new-pro.exe"
+
+
+      # ========================================================
+      # Check Windows Output
+      # ========================================================
+      - name: Check Windows Output
+        shell: powershell
+        run: |
+          $dist = "exercises/qt/new-pro/dist"
+
+          Write-Host "========================================"
+          Write-Host "Windows Output"
+          Write-Host "========================================"
+
           Get-ChildItem `
-            -Path exercises/qt/new-pro/dist `
+            -Path $dist `
             -Recurse
 
 
-      # --------------------------------------------------------
-      # Package
-      # --------------------------------------------------------
+      # ========================================================
+      # Package Windows
+      # ========================================================
       - name: Package Windows
         shell: powershell
         run: |
-          if (Test-Path new-pro-windows-x64.zip) {
-            Remove-Item new-pro-windows-x64.zip
+          $zip = "new-pro-windows-x64.zip"
+
+          if (Test-Path $zip) {
+            Remove-Item `
+              -Path $zip `
+              -Force
           }
 
           Compress-Archive `
-            -Path exercises/qt/new-pro/dist/* `
-            -DestinationPath new-pro-windows-x64.zip
+            -Path "exercises/qt/new-pro/dist/*" `
+            -DestinationPath $zip
+
+          Write-Host ""
+          Write-Host "Package created:"
+          Write-Host $zip
 
 
-      # --------------------------------------------------------
-      # Upload Artifact
-      # --------------------------------------------------------
+      # ========================================================
+      # Upload Windows Artifact
+      # ========================================================
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: new-pro-windows-x64
           path: new-pro-windows-x64.zip
+          if-no-files-found: error
+
 
 
   # ============================================================
@@ -141,16 +214,16 @@ jobs:
 
     steps:
 
-      # --------------------------------------------------------
+      # ========================================================
       # Checkout
-      # --------------------------------------------------------
+      # ========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
 
-      # --------------------------------------------------------
+      # ========================================================
       # Install Qt
-      # --------------------------------------------------------
+      # ========================================================
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -159,28 +232,36 @@ jobs:
           cache: true
 
 
-      # --------------------------------------------------------
-      # Show Environment
-      # --------------------------------------------------------
-      - name: Show Environment
+      # ========================================================
+      # Check Environment
+      # ========================================================
+      - name: Check macOS Environment
         run: |
-          echo "macOS:"
+          echo "========================================"
+          echo "macOS"
+          echo "========================================"
+
+          echo ""
+          echo "System:"
           sw_vers
 
-          echo "CMake:"
-          cmake --version
-
+          echo ""
           echo "Architecture:"
           uname -m
 
+          echo ""
+          echo "CMake:"
+          cmake --version
+
+          echo ""
           echo "Qt:"
           qmake --version
 
 
-      # --------------------------------------------------------
-      # Configure
-      # --------------------------------------------------------
-      - name: Configure CMake
+      # ========================================================
+      # Configure CMake
+      # ========================================================
+      - name: Configure macOS
         run: |
           cmake \
             -S exercises/qt/new-pro \
@@ -189,10 +270,10 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
 
 
-      # --------------------------------------------------------
+      # ========================================================
       # Build
-      # --------------------------------------------------------
-      - name: Build
+      # ========================================================
+      - name: Build macOS
         run: |
           cmake \
             --build exercises/qt/new-pro/build \
@@ -200,65 +281,125 @@ jobs:
             --parallel
 
 
-      # --------------------------------------------------------
-      # Install + Deploy
-      # --------------------------------------------------------
-      - name: Install
-        run: |
-          cmake \
-            --install exercises/qt/new-pro/build \
-            --config Release \
-            --prefix exercises/qt/new-pro/dist
-
-
-      # --------------------------------------------------------
-      # Check Output
-      # --------------------------------------------------------
-      - name: List macOS Files
-        run: |
-          find exercises/qt/new-pro/dist \
-            -maxdepth 5 \
-            -print
-
-
-      # --------------------------------------------------------
-      # Check App
-      # --------------------------------------------------------
+      # ========================================================
+      # Check APP
+      # ========================================================
       - name: Check macOS Application
         run: |
-          APP="exercises/qt/new-pro/dist/new-pro.app"
+          APP="exercises/qt/new-pro/build/new-pro.app"
 
           if [ ! -d "$APP" ]; then
-            echo "ERROR: new-pro.app not found"
+            echo "ERROR: Application not found:"
+            echo "$APP"
+
+            echo ""
+            echo "Build directory:"
+            find exercises/qt/new-pro/build \
+              -maxdepth 3 \
+              -print
+
             exit 1
           fi
 
           echo "Application found:"
-          ls -la "$APP"
+          echo "$APP"
 
-          echo ""
+
+      # ========================================================
+      # Deploy Qt
+      # ========================================================
+      - name: Deploy Qt macOS
+        run: |
+          APP="exercises/qt/new-pro/build/new-pro.app"
+
+          echo "========================================"
+          echo "Running macdeployqt"
+          echo "========================================"
+
+          macdeployqt "$APP"
+
+
+      # ========================================================
+      # Check macOS Output
+      # ========================================================
+      - name: Check macOS Output
+        run: |
+          APP="exercises/qt/new-pro/build/new-pro.app"
+
+          echo "========================================"
+          echo "Application Contents"
+          echo "========================================"
+
+          find "$APP" \
+            -maxdepth 5 \
+            -print
+
+
+      # ========================================================
+      # Check Executable
+      # ========================================================
+      - name: Check macOS Executable
+        run: |
+          APP="exercises/qt/new-pro/build/new-pro.app"
+          EXEC="$APP/Contents/MacOS/new-pro"
+
+          if [ ! -f "$EXEC" ]; then
+            echo "ERROR: Executable not found:"
+            echo "$EXEC"
+            exit 1
+          fi
+
           echo "Executable:"
-          ls -la "$APP/Contents/MacOS/"
+          file "$EXEC"
 
 
-      # --------------------------------------------------------
-      # Package
-      # --------------------------------------------------------
+      # ========================================================
+      # Check Frameworks
+      # ========================================================
+      - name: Check macOS Frameworks
+        run: |
+          APP="exercises/qt/new-pro/build/new-pro.app"
+
+          echo "========================================"
+          echo "Frameworks"
+          echo "========================================"
+
+          if [ -d "$APP/Contents/Frameworks" ]; then
+            find "$APP/Contents/Frameworks" \
+              -maxdepth 2 \
+              -print
+          else
+            echo "No Frameworks directory found."
+          fi
+
+
+      # ========================================================
+      # Package macOS
+      # ========================================================
       - name: Package macOS
         run: |
-          cd exercises/qt/new-pro/dist
+          APP="exercises/qt/new-pro/build/new-pro.app"
+
+          cd exercises/qt/new-pro/build
+
+          rm -f ../../../../new-pro-macos.zip
 
           zip \
             -r \
             ../../../../new-pro-macos.zip \
             new-pro.app
 
+          echo ""
+          echo "Package created:"
+          echo "new-pro-macos.zip"
 
-      # --------------------------------------------------------
-      # Upload Artifact
-      # --------------------------------------------------------
+
+      # ========================================================
+      # Upload macOS Artifact
+      # ========================================================
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: new-pro-macos
           path: new-pro-macos.zip
+          if-no-files-found: error
