@@ -9,42 +9,98 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Apple Silicon macOS Qt 6.11.1
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" "$ENV{HOME}/Qt/6.11.1/macos")
+# Qt 6.11.1
+set(CMAKE_PREFIX_PATH
+    "${CMAKE_PREFIX_PATH}"
+    "$ENV{HOME}/Qt/6.11.1/macos"
+)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-# -- 唯一 CMakeLists：动态扫描编号练习目录，为每个目录生成一个可执行目标
-# 目录约定: NN_name/  (NN 为两位数字编号)
-#   目标名/可执行名 = 目录名下划线后部分 (01_hello -> hello)
-#   产物输出到 lib/NN_name/hello
-file(GLOB EXERCISE_DIRS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-     CONFIGURE_DEPENDS "[0-9][0-9]_*")
+# ============================================================
+# 动态扫描练习目录
+# ============================================================
+
+file(GLOB EXERCISE_DIRS
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    CONFIGURE_DEPENDS
+    "[0-9][0-9]_*"
+)
 
 foreach(EXDIR ${EXERCISE_DIRS})
+
     if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${EXDIR}")
         continue()
     endif()
 
-    # 目标名取目录名下划线后部分, 如 01_hello -> hello
-    string(REGEX REPLACE "^[0-9][0-9]_" "" EXE_NAME "${EXDIR}")
+    # 01_hello -> hello
+    string(
+        REGEX REPLACE
+        "^[0-9][0-9]_"
+        ""
+        EXE_NAME
+        "${EXDIR}"
+    )
 
-    # 收集该目录下所有源文件(含 .h 供 AUTOMOC 处理 Q_OBJECT)
-    file(GLOB EX_SOURCES CONFIGURE_DEPENDS
-         "${EXDIR}/*.cpp" "${EXDIR}/*.h")
+    # 收集源文件
+    file(GLOB EX_SOURCES
+        CONFIGURE_DEPENDS
+        "${EXDIR}/*.cpp"
+        "${EXDIR}/*.h"
+        "${EXDIR}/*.hpp"
+        "${EXDIR}/*.qrc"
+    )
 
-    # 跳过空目录(尚无源文件的练习不会导致构建失败)
     if(NOT EX_SOURCES)
-        message(STATUS "跳过空练习目录: ${EXDIR} (无 .cpp/.h 源文件)")
+        message(
+            STATUS
+            "跳过空练习目录: ${EXDIR}"
+        )
         continue()
     endif()
 
-    add_executable(${EXE_NAME} ${EX_SOURCES})
+    # ========================================================
+    # 创建可执行程序
+    # ========================================================
 
-    # 产物输出到 lib/NN_name/
-    set_target_properties(${EXE_NAME} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib/${EXDIR}"
+    add_executable(
+        ${EXE_NAME}
+        MACOSX_BUNDLE
+        ${EX_SOURCES}
     )
 
-    target_link_libraries(${EXE_NAME} PRIVATE Qt6::Widgets)
+    # ========================================================
+    # Bundle 信息
+    # ========================================================
+
+    set_target_properties(
+        ${EXE_NAME}
+        PROPERTIES
+
+        MACOSX_BUNDLE_GUI_IDENTIFIER
+            "cc.ryanuo.qt.${EXE_NAME}"
+
+        MACOSX_BUNDLE_BUNDLE_NAME
+            "${EXE_NAME}"
+
+        MACOSX_BUNDLE_BUNDLE_VERSION
+            "${PROJECT_VERSION}"
+
+        MACOSX_BUNDLE_SHORT_VERSION_STRING
+            "${PROJECT_VERSION}"
+
+        RUNTIME_OUTPUT_DIRECTORY
+            "${CMAKE_SOURCE_DIR}/lib/${EXDIR}"
+    )
+
+    # ========================================================
+    # Qt
+    # ========================================================
+
+    target_link_libraries(
+        ${EXE_NAME}
+        PRIVATE
+        Qt6::Widgets
+    )
+
 endforeach()

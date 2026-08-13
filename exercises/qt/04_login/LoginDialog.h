@@ -27,6 +27,7 @@ private:
     QCheckBox *m_showPassCheck;
     QPushButton *m_loginBtn;
     QPushButton *m_quitBtn;
+    QLabel *m_avatarLabel;
     QLabel *m_hintLabel;
 };
 

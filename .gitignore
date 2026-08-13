@@ -77,3 +77,4 @@ PPC32e500v2*
 *.tlog
 
 *.dSYM
+package

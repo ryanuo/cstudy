@@ -1,24 +1,62 @@
 #include "LoginDialog.h"
 
 #include <QCheckBox>
+#include <QCoreApplication>
+#include <QFile>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPixmap>
 #include <QPushButton>
 #include <QVBoxLayout>
 
 namespace
 {
-// 模拟校验用的默认账号
-const QString kDefaultUser = QStringLiteral("admin");
-const QString kDefaultPass = QStringLiteral("123456");
+    // 模拟校验用的默认账号
+    const QString kDefaultUser = QStringLiteral("admin");
+    const QString kDefaultPass = QStringLiteral("123456");
+
+    // 头像图片文件名 (04_login/images/ 目录下)
+    const QString kAvatarLogin = QStringLiteral("login.png");    // 登录前
+    const QString kAvatarLogged = QStringLiteral("logined.jpg"); // 登录成功后
+
+    // 按运行场景尝试候选路径, 返回第一个存在的
+    QString resolveImagePath(const QString &fileName)
+    {
+        const QStringList candidates = {
+            QCoreApplication::applicationDirPath() + QStringLiteral("/../../04_login/images/") + fileName,
+            QStringLiteral("04_login/images/") + fileName,
+            QStringLiteral("images/") + fileName,
+        };
+        for (const QString &candidate : candidates)
+        {
+            if (QFile::exists(candidate))
+            {
+                return candidate;
+            }
+        }
+        return {};
+    }
 } // namespace
 
 LoginDialog::LoginDialog(QWidget *parent)
     : QDialog(parent)
 {
     setWindowTitle(QStringLiteral("用户登录"));
-    resize(360, 250);
+    resize(360, 360);
+
+    // ---- 头像(登录前用户图, 登录成功后切换) ----
+    m_avatarLabel = new QLabel(this);
+    m_avatarLabel->setAlignment(Qt::AlignCenter);
+    m_avatarLabel->setFixedSize(96, 96);
+    m_avatarLabel->setPixmap(QPixmap(resolveImagePath(kAvatarLogin)).scaled(m_avatarLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+
+    // 头像行: 左右加弹簧实现水平居中
+    auto *avatarRow = new QHBoxLayout;
+    avatarRow->addStretch();
+    avatarRow->addWidget(m_avatarLabel);
+    avatarRow->addStretch();
+
     // ---- 表单行样式 ----
     const QString labelStyle =
         "QLabel { font-size: 14px; color: #555; }";
@@ -95,6 +133,7 @@ LoginDialog::LoginDialog(QWidget *parent)
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(20, 20, 20, 20);
     mainLayout->setSpacing(12);
+    mainLayout->addLayout(avatarRow); // 登录框上方(头像水平居中)
     mainLayout->addLayout(userRow);
     mainLayout->addLayout(passRow);
     mainLayout->addWidget(m_showPassCheck);
@@ -122,6 +161,8 @@ void LoginDialog::onLogin()
     if (user == kDefaultUser && pass == kDefaultPass)
     {
         setHint(QStringLiteral("登录成功"), true);
+        // 登录成功切换头像
+        m_avatarLabel->setPixmap(QPixmap(resolveImagePath(kAvatarLogged)).scaled(m_avatarLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     }
     else
     {
