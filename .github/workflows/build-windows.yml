@@ -7,14 +7,129 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  build-macos:
-    runs-on: macos-latest
+
+  # ============================================================
+  # Windows
+  # ============================================================
+  build-windows:
+
+    name: Windows / Qt 6.11.1 / MSVC 2022
+
+    runs-on: windows-2022
 
     steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
+
+      # --------------------------------------------------------
+      # Install Qt
+      # --------------------------------------------------------
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.11.1
+          arch: win64_msvc2022_64
+          cache: true
+
+
+      # --------------------------------------------------------
+      # Configure
+      # --------------------------------------------------------
+      - name: Configure CMake
+        shell: powershell
+        run: |
+          cmake `
+            -S exercises/qt/new-pro `
+            -B exercises/qt/new-pro/build `
+            -DCMAKE_BUILD_TYPE=Release
+
+
+      # --------------------------------------------------------
+      # Build
+      # --------------------------------------------------------
+      - name: Build
+        shell: powershell
+        run: |
+          cmake `
+            --build exercises/qt/new-pro/build `
+            --config Release `
+            --parallel
+
+
+      # --------------------------------------------------------
+      # Install + Deploy
+      # --------------------------------------------------------
+      - name: Install
+        shell: powershell
+        run: |
+          cmake `
+            --install exercises/qt/new-pro/build `
+            --config Release `
+            --prefix exercises/qt/new-pro/dist
+
+
+      # --------------------------------------------------------
+      # Check output
+      # --------------------------------------------------------
+      - name: List Windows files
+        shell: powershell
+        run: |
+          Get-ChildItem `
+            -Path exercises/qt/new-pro/dist `
+            -Recurse
+
+
+      # --------------------------------------------------------
+      # Package
+      # --------------------------------------------------------
+      - name: Package Windows
+        shell: powershell
+        run: |
+          Compress-Archive `
+            -Path exercises/qt/new-pro/dist/* `
+            -DestinationPath new-pro-windows-x64.zip
+
+
+      # --------------------------------------------------------
+      # Upload Artifact
+      # --------------------------------------------------------
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-pro-windows-x64
+          path: new-pro-windows-x64.zip
+
+
+  # ============================================================
+  # macOS
+  # ============================================================
+  build-macos:
+
+    name: macOS / Qt 6.11.1 / Clang
+
+    runs-on: macos-latest
+
+    steps:
+
+      # --------------------------------------------------------
+      # Checkout
+      # --------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      # --------------------------------------------------------
+      # Install Qt
+      # --------------------------------------------------------
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
@@ -22,13 +137,21 @@ jobs:
           arch: clang_64
           cache: true
 
-      - name: Configure
+
+      # --------------------------------------------------------
+      # Configure
+      # --------------------------------------------------------
+      - name: Configure CMake
         run: |
           cmake \
             -S exercises/qt/new-pro \
             -B exercises/qt/new-pro/build \
             -DCMAKE_BUILD_TYPE=Release
 
+
+      # --------------------------------------------------------
+      # Build
+      # --------------------------------------------------------
       - name: Build
         run: |
           cmake \
@@ -36,18 +159,39 @@ jobs:
             --config Release \
             --parallel
 
-      - name: Deploy
-        run: |
-          macdeployqt \
-            exercises/qt/new-pro/build/new-pro.app \
-            -always-overwrite
 
-      - name: Package
+      # --------------------------------------------------------
+      # Install + Deploy
+      # --------------------------------------------------------
+      - name: Install
         run: |
-          cd exercises/qt/new-pro/build
-          zip -r ../../../../new-pro-macos.zip new-pro.app
+          cmake \
+            --install exercises/qt/new-pro/build \
+            --config Release \
+            --prefix exercises/qt/new-pro/dist
 
-      - name: Upload
+
+      # --------------------------------------------------------
+      # Check output
+      # --------------------------------------------------------
+      - name: List macOS files
+        run: |
+          find exercises/qt/new-pro/dist -maxdepth 5 -print
+
+
+      # --------------------------------------------------------
+      # Package
+      # --------------------------------------------------------
+      - name: Package macOS
+        run: |
+          cd exercises/qt/new-pro/dist
+          zip -r ../../../../new-pro-macos.zip .
+
+
+      # --------------------------------------------------------
+      # Upload Artifact
+      # --------------------------------------------------------
+      - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: new-pro-macos
