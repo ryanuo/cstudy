@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
 
+
 jobs:
 
   # ============================================================
@@ -17,7 +18,7 @@ jobs:
   # ============================================================
   build-windows:
 
-    name: Windows / Qt 6.11.1 / MSVC 2022
+    name: Windows / Qt 6.8.3 / MSVC 2022
 
     runs-on: windows-2022
 
@@ -36,9 +37,25 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.11.1
+          version: 6.8.3
           arch: win64_msvc2022_64
           cache: true
+
+
+      # --------------------------------------------------------
+      # Show Environment
+      # --------------------------------------------------------
+      - name: Show Environment
+        shell: powershell
+        run: |
+          Write-Host "Qt installation:"
+          Write-Host $env:Qt6_DIR
+
+          Write-Host "CMake:"
+          cmake --version
+
+          Write-Host "Compiler:"
+          cl
 
 
       # --------------------------------------------------------
@@ -78,9 +95,9 @@ jobs:
 
 
       # --------------------------------------------------------
-      # Check output
+      # Check Output
       # --------------------------------------------------------
-      - name: List Windows files
+      - name: List Windows Files
         shell: powershell
         run: |
           Get-ChildItem `
@@ -94,6 +111,10 @@ jobs:
       - name: Package Windows
         shell: powershell
         run: |
+          if (Test-Path new-pro-windows-x64.zip) {
+            Remove-Item new-pro-windows-x64.zip
+          }
+
           Compress-Archive `
             -Path exercises/qt/new-pro/dist/* `
             -DestinationPath new-pro-windows-x64.zip
@@ -114,9 +135,9 @@ jobs:
   # ============================================================
   build-macos:
 
-    name: macOS / Qt 6.11.1 / Clang
+    name: macOS 15 / Qt 6.8.3 / Clang
 
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
 
@@ -133,9 +154,27 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.11.1
+          version: 6.8.3
           arch: clang_64
           cache: true
+
+
+      # --------------------------------------------------------
+      # Show Environment
+      # --------------------------------------------------------
+      - name: Show Environment
+        run: |
+          echo "macOS:"
+          sw_vers
+
+          echo "CMake:"
+          cmake --version
+
+          echo "Architecture:"
+          uname -m
+
+          echo "Qt:"
+          qmake --version
 
 
       # --------------------------------------------------------
@@ -146,7 +185,8 @@ jobs:
           cmake \
             -S exercises/qt/new-pro \
             -B exercises/qt/new-pro/build \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
 
 
       # --------------------------------------------------------
@@ -172,11 +212,33 @@ jobs:
 
 
       # --------------------------------------------------------
-      # Check output
+      # Check Output
       # --------------------------------------------------------
-      - name: List macOS files
+      - name: List macOS Files
         run: |
-          find exercises/qt/new-pro/dist -maxdepth 5 -print
+          find exercises/qt/new-pro/dist \
+            -maxdepth 5 \
+            -print
+
+
+      # --------------------------------------------------------
+      # Check App
+      # --------------------------------------------------------
+      - name: Check macOS Application
+        run: |
+          APP="exercises/qt/new-pro/dist/new-pro.app"
+
+          if [ ! -d "$APP" ]; then
+            echo "ERROR: new-pro.app not found"
+            exit 1
+          fi
+
+          echo "Application found:"
+          ls -la "$APP"
+
+          echo ""
+          echo "Executable:"
+          ls -la "$APP/Contents/MacOS/"
 
 
       # --------------------------------------------------------
@@ -185,7 +247,11 @@ jobs:
       - name: Package macOS
         run: |
           cd exercises/qt/new-pro/dist
-          zip -r ../../../../new-pro-macos.zip .
+
+          zip \
+            -r \
+            ../../../../new-pro-macos.zip \
+            new-pro.app
 
 
       # --------------------------------------------------------
