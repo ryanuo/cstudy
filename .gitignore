@@ -78,4 +78,4 @@ PPC32e500v2*
 
 *.dSYM
 package
-.DS_Store
+*.DS_Store
