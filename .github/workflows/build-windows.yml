@@ -55,7 +55,17 @@ jobs:
           Write-Host ""
           Write-Host "Visual Studio:"
           
-          $vsPath = & "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe" `
+          # vswhere 实际位于 (x86) 目录, 回退到 64 位路径
+          $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vsWhere)) {
+            $vsWhere = "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
+          }
+          if (-not (Test-Path $vsWhere)) {
+            Write-Error "vswhere.exe was not found."
+            exit 1
+          }
+
+          $vsPath = & $vsWhere `
             -latest `
             -products * `
             -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
