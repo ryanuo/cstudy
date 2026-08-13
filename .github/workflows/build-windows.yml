@@ -1,39 +1,39 @@
-name: Build Windows Qt App
+name: Build Qt Application
 
 on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 jobs:
+
+  # =========================
+  # Windows
+  # =========================
   build-windows:
     runs-on: windows-latest
 
     steps:
-      # 1. 拉取代码
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. 安装 Qt 5.12.6 + MinGW 7.3
-      - name: Setup Qt
+      - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 5.12.6
-          arch: win64_mingw73
+          version: 6.5.3
+          arch: win64_msvc2019_64
           cache: true
 
-      # 3. CMake 配置
-      - name: Configure CMake
+      - name: Configure
         shell: powershell
         run: |
           cmake `
             -S exercises/qt/new-pro `
             -B exercises/qt/new-pro/build `
-            -G "MinGW Makefiles" `
             -DCMAKE_BUILD_TYPE=Release
 
-      # 4. 编译
       - name: Build
         shell: powershell
         run: |
@@ -42,7 +42,6 @@ jobs:
             --config Release `
             --parallel
 
-      # 5. Qt DLL 部署
       - name: Deploy Qt
         shell: powershell
         run: |
@@ -51,7 +50,6 @@ jobs:
             --no-translations `
             exercises/qt/new-pro/build/new-pro.exe
 
-      # 6. 打包
       - name: Package
         shell: powershell
         run: |
@@ -59,9 +57,57 @@ jobs:
             -Path exercises/qt/new-pro/build/* `
             -DestinationPath new-pro-windows.zip
 
-      # 7. 上传构建产物
-      - name: Upload Artifact
+      - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: new-pro-windows
           path: new-pro-windows.zip
+
+
+  # =========================
+  # macOS
+  # =========================
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.5.3
+          arch: clang_64
+          cache: true
+
+      - name: Configure
+        run: |
+          cmake \
+            -S exercises/qt/new-pro \
+            -B exercises/qt/new-pro/build \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake \
+            --build exercises/qt/new-pro/build \
+            --config Release \
+            --parallel
+
+      - name: Deploy Qt
+        run: |
+          macdeployqt \
+            exercises/qt/new-pro/build/new-pro.app \
+            -qmldir=exercises/qt/new-pro
+
+      - name: Package
+        run: |
+          cd exercises/qt/new-pro/build
+          zip -r ../../../../new-pro-macos.zip new-pro.app
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-pro-macos
+          path: new-pro-macos.zip
