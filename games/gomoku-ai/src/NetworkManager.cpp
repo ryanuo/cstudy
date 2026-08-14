@@ -131,9 +131,38 @@ void NetworkManager::broadcastHello()
         return;
     }
     const QByteArray datagram = "GOMOKU1|HELLO|" + m_passwordHash + "|" + m_nonce;
-    // 广播 + 本机回环（双保险）
+
+    // 1) 全局广播 + 本机回环（同机双开配对）
     m_udp->writeDatagram(datagram, QHostAddress::Broadcast, kUdpPort);
     m_udp->writeDatagram(datagram, QHostAddress::LocalHost, kUdpPort);
+
+    // 2) 每个活动 IPv4 网卡的子网定向广播（如 192.168.14.255），
+    //    部分系统/路由器对 255.255.255.255 不友好，定向广播发现率更高
+    const QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
+    for (const QNetworkInterface& iface : interfaces)
+    {
+        if (!(iface.flags() & QNetworkInterface::IsUp))
+        {
+            continue;
+        }
+        if (iface.flags() & QNetworkInterface::IsLoopBack)
+        {
+            continue; // 回环已单独发送
+        }
+        const QList<QNetworkAddressEntry> entries = iface.addressEntries();
+        for (const QNetworkAddressEntry& entry : entries)
+        {
+            const QHostAddress ip = entry.ip();
+            const QHostAddress mask = entry.netmask();
+            if (ip.protocol() != QAbstractSocket::IPv4Protocol || mask.isNull())
+            {
+                continue;
+            }
+            const quint32 broadcast = (ip.toIPv4Address() & mask.toIPv4Address())
+                                      | (~mask.toIPv4Address());
+            m_udp->writeDatagram(datagram, QHostAddress(broadcast), kUdpPort);
+        }
+    }
 }
 
 void NetworkManager::onUdpReadyRead()
