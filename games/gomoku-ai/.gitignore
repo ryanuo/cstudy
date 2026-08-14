@@ -9,7 +9,3 @@ install_manifest.txt
 *.user
 *.pro.user*
 .DS_Store
-
-# cstudy 根 .gitignore 忽略了所有 tests/ 目录，本项目需要提交联机自测，重新包含
-!tests/
-!tests/**

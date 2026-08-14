@@ -35,7 +35,7 @@ set_target_properties(gomoku-ai PROPERTIES
 enable_testing()
 
 add_executable(gomoku_net_test
-    tests/net_test.cpp
+    qtests/net_test.cpp
     src/NetworkManager.cpp
     src/NetworkManager.h
 )
