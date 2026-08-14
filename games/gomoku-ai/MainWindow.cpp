@@ -1,0 +1,324 @@
+#include "MainWindow.h"
+
+#include <QAudioOutput>
+#include <QCloseEvent>
+#include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMediaPlayer>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QSoundEffect>
+#include <QStatusBar>
+#include <QVBoxLayout>
+
+#include "BoardWidget.h"
+#include "NetworkManager.h"
+
+namespace {
+
+const int kGradeSize = 13;
+const int kMarginX = 29;
+const int kMarginY = 29;
+const float kChessSize = 45.0f;
+
+} // namespace
+
+MainWindow::MainWindow(QWidget* parent)
+    : QMainWindow(parent)
+{
+    setWindowTitle(QStringLiteral("五子棋 · 局域网对战"));
+
+    // 棋盘模型 + 绘制组件
+    m_chess = new Chess(kGradeSize, kMarginX, kMarginY, kChessSize);
+    m_board = new BoardWidget(this);
+    m_board->setChess(m_chess);
+    connect(m_board, &BoardWidget::cellClicked, this, &MainWindow::onCellClicked);
+
+    // 顶部按钮区（重要入口置顶）
+    m_connectBtn = new QPushButton(QStringLiteral("联机对战"), this);
+    m_newGameBtn = new QPushButton(QStringLiteral("新游戏"), this);
+    m_disconnectBtn = new QPushButton(QStringLiteral("断开"), this);
+    m_newGameBtn->setEnabled(false);
+    m_disconnectBtn->setEnabled(false);
+    connect(m_connectBtn, &QPushButton::clicked, this, &MainWindow::onConnectClicked);
+    connect(m_newGameBtn, &QPushButton::clicked, this, &MainWindow::onNewGameClicked);
+    connect(m_disconnectBtn, &QPushButton::clicked, this, &MainWindow::onDisconnectClicked);
+
+    auto* topBar = new QHBoxLayout;
+    topBar->addWidget(m_connectBtn);
+    topBar->addWidget(m_newGameBtn);
+    topBar->addWidget(m_disconnectBtn);
+    topBar->addStretch();
+
+    auto* central = new QWidget(this);
+    auto* layout = new QVBoxLayout(central);
+    layout->addLayout(topBar);
+    layout->addWidget(m_board, 0, Qt::AlignHCenter);
+    layout->setContentsMargins(8, 8, 8, 8);
+    setCentralWidget(central);
+
+    statusBar()->showMessage(QStringLiteral("未连接 · 点击「联机对战」输入密码配对"));
+
+    // 联机
+    m_network = new NetworkManager(this);
+    connect(m_network, &NetworkManager::statusChanged, this, &MainWindow::onStatusChanged);
+    connect(m_network, &NetworkManager::connected, this, &MainWindow::onConnected);
+    connect(m_network, &NetworkManager::moveReceived, this, &MainWindow::onMoveReceived);
+    connect(m_network, &NetworkManager::restartReceived, this, &MainWindow::onRestartReceived);
+    connect(m_network, &NetworkManager::disconnected, this, &MainWindow::onDisconnected);
+
+    // 音效：WAV 用 QSoundEffect，MP3 用 QMediaPlayer
+    m_startSound = new QSoundEffect(this);
+    m_startSound->setSource(QUrl(QStringLiteral("qrc:/res/start.wav")));
+    m_downSound = new QSoundEffect(this);
+    m_downSound->setSource(QUrl(QStringLiteral("qrc:/res/down.wav")));
+
+    m_bgPlayer = new QMediaPlayer(this);
+    m_bgAudio = new QAudioOutput(this);
+    m_bgAudio->setVolume(0.5f);
+    m_bgPlayer->setAudioOutput(m_bgAudio);
+    m_bgPlayer->setSource(QUrl(QStringLiteral("qrc:/res/bg.mp3")));
+    m_bgPlayer->setLoops(QMediaPlayer::Infinite);
+
+    m_sfxPlayer = new QMediaPlayer(this);
+    m_sfxAudio = new QAudioOutput(this);
+    m_sfxAudio->setVolume(0.8f);
+    m_sfxPlayer->setAudioOutput(m_sfxAudio);
+
+    resize(640, 700);
+}
+
+MainWindow::~MainWindow() = default;
+
+void MainWindow::startOnline(const QString& password)
+{
+    const QString trimmed = password.trimmed();
+    if (trimmed.isEmpty())
+    {
+        setStatus(QStringLiteral("密码不能为空"));
+        return;
+    }
+    m_connectBtn->setEnabled(false);
+    m_network->start(trimmed);
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    m_network->stop();
+    event->accept();
+}
+
+void MainWindow::onConnectClicked()
+{
+    bool ok = false;
+    const QString password = QInputDialog::getText(
+        this,
+        QStringLiteral("联机对战"),
+        QStringLiteral("输入房间密码\n与局域网内输入相同密码的玩家自动配对"),
+        QLineEdit::Password,
+        QString(),
+        &ok);
+    if (ok)
+    {
+        startOnline(password);
+    }
+}
+
+void MainWindow::onNewGameClicked()
+{
+    resetBoard();
+    if (m_connected)
+    {
+        m_network->sendRestart();
+    }
+}
+
+void MainWindow::onDisconnectClicked()
+{
+    m_network->stop();
+}
+
+void MainWindow::onCellClicked(int row, int col)
+{
+    if (!m_connected)
+    {
+        setStatus(QStringLiteral("未连接 · 请先点击「联机对战」输入密码配对"));
+        return;
+    }
+    if (m_gameOver)
+    {
+        return;
+    }
+    if (!myTurn())
+    {
+        setStatus(QStringLiteral("等待对方落子…"));
+        return;
+    }
+    if (m_chess->getChessData(row, col) != 0)
+    {
+        return; // 已有棋子
+    }
+
+    ChessPos pos(row, col);
+    m_chess->chessDown(&pos, m_myKind);
+    m_board->repaintBoard();
+    m_downSound->play();
+    m_network->sendMove(row, col);
+    checkGameEnd(m_myKind);
+}
+
+void MainWindow::onConnected(bool isHost)
+{
+    m_connected = true;
+    m_gameOver = false;
+    m_myKind = isHost ? CHESS_BLACK : CHESS_WHITE;
+
+    m_connectBtn->setEnabled(false);
+    m_newGameBtn->setEnabled(true);
+    m_disconnectBtn->setEnabled(true);
+
+    resetBoard();
+    m_bgPlayer->play();
+    m_startSound->play();
+    setStatus(isHost ? QStringLiteral("已连接 · 你执黑（先手），请落子")
+                     : QStringLiteral("已连接 · 你执白（后手），等待对方落子"));
+}
+
+void MainWindow::onMoveReceived(int row, int col)
+{
+    if (!m_connected || m_gameOver)
+    {
+        return;
+    }
+    if (m_chess->getChessData(row, col) != 0)
+    {
+        return; // 已占
+    }
+
+    ChessPos pos(row, col);
+    m_chess->chessDown(&pos, opponentKind());
+    m_board->repaintBoard();
+    m_downSound->play();
+    checkGameEnd(opponentKind());
+}
+
+void MainWindow::onRestartReceived()
+{
+    resetBoard();
+    setStatus(m_myKind == CHESS_BLACK ? QStringLiteral("新的一局 · 你执黑（先手），请落子")
+                                      : QStringLiteral("新的一局 · 你执白（后手），等待对方落子"));
+}
+
+void MainWindow::onDisconnected()
+{
+    m_connected = false;
+    m_gameOver = false;
+
+    m_connectBtn->setEnabled(true);
+    m_newGameBtn->setEnabled(false);
+    m_disconnectBtn->setEnabled(false);
+
+    m_bgPlayer->stop();
+    resetBoard();
+    setStatus(QStringLiteral("连接已断开"));
+}
+
+void MainWindow::onStatusChanged(const QString& text)
+{
+    setStatus(text);
+}
+
+void MainWindow::resetBoard()
+{
+    m_gameOver = false;
+    m_chess->init();
+    m_board->repaintBoard();
+}
+
+void MainWindow::checkGameEnd(chess_kind_t lastKind)
+{
+    if (m_chess->checkOver())
+    {
+        m_gameOver = true;
+        const bool iWin = (lastKind == m_myKind);
+        playSfx(iWin ? QStringLiteral("qrc:/res/win.mp3") : QStringLiteral("qrc:/res/lose.mp3"));
+
+        QMessageBox box(this);
+        box.setWindowTitle(QStringLiteral("对局结束"));
+        box.setIconPixmap(QPixmap(iWin ? QStringLiteral(":/res/win.jpg") : QStringLiteral(":/res/lose.jpg")));
+        box.setText(iWin ? QStringLiteral("你赢了！") : QStringLiteral("你输了！"));
+        QPushButton* again = box.addButton(QStringLiteral("再来一局"), QMessageBox::AcceptRole);
+        box.addButton(QStringLiteral("退出"), QMessageBox::RejectRole);
+        box.exec();
+
+        if (box.clickedButton() == again)
+        {
+            onNewGameClicked();
+        }
+        else
+        {
+            m_network->stop();
+            close();
+        }
+        return;
+    }
+
+    // 棋盘下满未分胜负 -> 平局
+    bool full = true;
+    const int size = m_chess->getGradeSize();
+    for (int r = 0; r < size && full; r++)
+    {
+        for (int c = 0; c < size; c++)
+        {
+            if (m_chess->getChessData(r, c) == 0)
+            {
+                full = false;
+                break;
+            }
+        }
+    }
+    if (full)
+    {
+        m_gameOver = true;
+        QMessageBox box(this);
+        box.setWindowTitle(QStringLiteral("对局结束"));
+        box.setIcon(QMessageBox::Information);
+        box.setText(QStringLiteral("平局！"));
+        QPushButton* again = box.addButton(QStringLiteral("再来一局"), QMessageBox::AcceptRole);
+        box.addButton(QStringLiteral("退出"), QMessageBox::RejectRole);
+        box.exec();
+
+        if (box.clickedButton() == again)
+        {
+            onNewGameClicked();
+        }
+        else
+        {
+            m_network->stop();
+            close();
+        }
+    }
+}
+
+void MainWindow::playSfx(const QString& qrcPath)
+{
+    m_sfxPlayer->stop();
+    m_sfxPlayer->setSource(QUrl(qrcPath));
+    m_sfxPlayer->play();
+}
+
+void MainWindow::setStatus(const QString& text)
+{
+    statusBar()->showMessage(text);
+}
+
+bool MainWindow::myTurn() const
+{
+    return m_chess->isBlackTurn() == (m_myKind == CHESS_BLACK);
+}
+
+chess_kind_t MainWindow::opponentKind() const
+{
+    return (m_myKind == CHESS_BLACK) ? CHESS_WHITE : CHESS_BLACK;
+}

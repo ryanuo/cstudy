@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/res">
+        <file alias="board.jpg">res/21.jpg</file>
+        <file alias="black.png">res/black.png</file>
+        <file alias="white.png">res/white.png</file>
+        <file alias="start.wav">res/start.WAV</file>
+        <file alias="down.wav">res/down7.wav</file>
+        <file alias="bg.mp3">res/bg.mp3</file>
+        <file alias="win.mp3">res/不错.mp3</file>
+        <file alias="lose.mp3">res/失败.mp3</file>
+        <file alias="win.jpg">res/胜利.jpg</file>
+        <file alias="lose.jpg">res/失败.jpg</file>
+    </qresource>
+</RCC>
