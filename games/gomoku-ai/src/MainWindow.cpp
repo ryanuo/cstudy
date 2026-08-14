@@ -2,12 +2,15 @@
 
 #include <QAudioOutput>
 #include <QCloseEvent>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMediaPlayer>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSettings>
 #include <QSoundEffect>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -39,26 +42,39 @@ MainWindow::MainWindow(QWidget* parent)
     m_connectBtn = new QPushButton(QStringLiteral("联机对战"), this);
     m_newGameBtn = new QPushButton(QStringLiteral("新游戏"), this);
     m_undoBtn = new QPushButton(QStringLiteral("悔棋"), this);
+    m_surrenderBtn = new QPushButton(QStringLiteral("认输"), this);
     m_disconnectBtn = new QPushButton(QStringLiteral("断开"), this);
     m_newGameBtn->setEnabled(false);
     m_undoBtn->setEnabled(false);
+    m_surrenderBtn->setEnabled(false);
     m_disconnectBtn->setEnabled(false);
     connect(m_connectBtn, &QPushButton::clicked, this, &MainWindow::onConnectClicked);
     connect(m_newGameBtn, &QPushButton::clicked, this, &MainWindow::onNewGameClicked);
     connect(m_undoBtn, &QPushButton::clicked, this, &MainWindow::onUndoClicked);
+    connect(m_surrenderBtn, &QPushButton::clicked, this, &MainWindow::onSurrenderClicked);
     connect(m_disconnectBtn, &QPushButton::clicked, this, &MainWindow::onDisconnectClicked);
+
+    // 换肤（内置皮肤 + 从图片选择）
+    auto* skinMenu = new QMenu(this);
+    skinMenu->addAction(QStringLiteral("默认（木色棋盘）"), this,
+                        [this] { applySkin(QStringLiteral(":/res/board.jpg")); });
+    skinMenu->addAction(QStringLiteral("从图片选择…"), this, [this] { chooseSkinFile(); });
+    m_skinBtn = new QPushButton(QStringLiteral("换肤"), this);
+    m_skinBtn->setMenu(skinMenu);
 
     auto* topBar = new QHBoxLayout;
     topBar->addWidget(m_connectBtn);
     topBar->addWidget(m_newGameBtn);
     topBar->addWidget(m_undoBtn);
+    topBar->addWidget(m_surrenderBtn);
+    topBar->addWidget(m_skinBtn);
     topBar->addWidget(m_disconnectBtn);
     topBar->addStretch();
 
     auto* central = new QWidget(this);
     auto* layout = new QVBoxLayout(central);
     layout->addLayout(topBar);
-    layout->addWidget(m_board, 0, Qt::AlignHCenter);
+    layout->addWidget(m_board);  // 拉伸填满，窗口缩放时棋盘等比跟随
     layout->setContentsMargins(8, 8, 8, 8);
     setCentralWidget(central);
 
@@ -74,7 +90,16 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_network, &NetworkManager::undoRequested, this, &MainWindow::onUndoRequested);
     connect(m_network, &NetworkManager::undoAccepted, this, &MainWindow::onUndoAccepted);
     connect(m_network, &NetworkManager::undoRejected, this, &MainWindow::onUndoRejected);
+    connect(m_network, &NetworkManager::surrendered, this, &MainWindow::onSurrendered);
     connect(m_network, &NetworkManager::disconnected, this, &MainWindow::onDisconnected);
+
+    // 恢复上次换肤
+    QSettings settings;
+    const QString skin = settings.value(QStringLiteral("skin")).toString();
+    if (!skin.isEmpty())
+    {
+        m_board->setBackground(skin);
+    }
 
     // 音效：WAV 用 QSoundEffect，MP3 用 QMediaPlayer
     m_startSound = new QSoundEffect(this);
@@ -144,7 +169,40 @@ void MainWindow::onNewGameClicked()
 
 void MainWindow::onDisconnectClicked()
 {
-    m_network->stop();
+    if (!m_connected)
+    {
+        return;
+    }
+    // 断开 = 认输，弹确认防止误点
+    const auto reply = QMessageBox::question(
+        this, QStringLiteral("断开连接"),
+        QStringLiteral("断开连接将视为认输，确定吗？"),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (reply == QMessageBox::Yes)
+    {
+        m_localDisconnect = true;
+        m_network->stop();
+    }
+}
+
+void MainWindow::onSurrenderClicked()
+{
+    if (!m_connected || m_gameOver)
+    {
+        return;
+    }
+    const auto reply = QMessageBox::question(
+        this, QStringLiteral("认输"),
+        QStringLiteral("确定认输吗？"),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (reply != QMessageBox::Yes)
+    {
+        return;
+    }
+    m_localDisconnect = true;
+    m_network->sendSurrender();
+    m_network->stop();  // 认输后断开
+    setStatus(QStringLiteral("你认输了"));
 }
 
 void MainWindow::onCellClicked(int row, int col)
@@ -182,6 +240,7 @@ void MainWindow::onConnected(bool isHost)
     m_gameOver = false;
     m_myKind = isHost ? CHESS_BLACK : CHESS_WHITE;
     m_undoPending = false;
+    m_localDisconnect = false;
 
     setConnectedUi(true);
 
@@ -223,15 +282,30 @@ void MainWindow::onRestartReceived()
 
 void MainWindow::onDisconnected()
 {
+    // 对局中且非本地主动断开 → 对方认输（QUIT 或掉线）
+    const bool inGame = m_chess->moveCount() > 0;
+    const bool opponentLeft = inGame && !m_localDisconnect;
     m_connected = false;
     m_gameOver = false;
     m_undoPending = false;
+    m_localDisconnect = false;
 
     setConnectedUi(false);
     m_bgPlayer->stop();
     resetBoard();
     setWindowTitle(QStringLiteral("五子棋 · 局域网对战"));
-    setStatus(QStringLiteral("连接已断开"));
+
+    if (opponentLeft)
+    {
+        playSfx(QStringLiteral("qrc:/res/win.mp3"));
+        QMessageBox box(this);
+        box.setWindowTitle(QStringLiteral("对局结束"));
+        box.setIconPixmap(QPixmap(QStringLiteral(":/res/win.jpg")));
+        box.setText(QStringLiteral("对方已断开连接，视为认输，你获胜！"));
+        box.addButton(QStringLiteral("确定"), QMessageBox::AcceptRole);
+        box.exec();
+    }
+    setStatus(opponentLeft ? QStringLiteral("对方已断开（视为认输），你获胜") : QStringLiteral("连接已断开"));
 }
 
 void MainWindow::onSearchFailed(const QString& reason)
@@ -306,6 +380,39 @@ void MainWindow::doUndo()
     if (m_chess->undoLast())
     {
         m_board->repaintBoard();
+    }
+}
+
+void MainWindow::onSurrendered()
+{
+    // 对方认输：我方获胜
+    playSfx(QStringLiteral("qrc:/res/win.mp3"));
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("对局结束"));
+    box.setIconPixmap(QPixmap(QStringLiteral(":/res/win.jpg")));
+    box.setText(QStringLiteral("对方认输了，你获胜！"));
+    box.addButton(QStringLiteral("确定"), QMessageBox::AcceptRole);
+    box.exec();
+
+    m_network->stop();
+}
+
+void MainWindow::applySkin(const QString& imagePath)
+{
+    m_board->setBackground(imagePath);
+    QSettings settings;
+    settings.setValue(QStringLiteral("skin"), imagePath);
+    setStatus(QStringLiteral("已更换背景"));
+}
+
+void MainWindow::chooseSkinFile()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this, QStringLiteral("选择棋盘背景图"), QString(),
+        QStringLiteral("图片 (*.jpg *.jpeg *.png *.bmp)"));
+    if (!path.isEmpty())
+    {
+        applySkin(path);
     }
 }
 
@@ -398,6 +505,7 @@ void MainWindow::setConnectedUi(bool connected)
     m_connectBtn->setEnabled(!connected);
     m_newGameBtn->setEnabled(connected);
     m_undoBtn->setEnabled(connected);
+    m_surrenderBtn->setEnabled(connected);
     m_disconnectBtn->setEnabled(connected);
 }
 

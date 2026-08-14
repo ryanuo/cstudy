@@ -41,6 +41,7 @@ public:
     void sendRestart();
     void sendUndo();       // 发送悔棋请求（对方确认后双方撤回最后一手）
     void sendUndoReply(bool accept);
+    void sendSurrender();  // 认输（对局结束，随后断开）
 
 signals:
     void statusChanged(const QString& text);
@@ -51,6 +52,7 @@ signals:
     void undoRequested();             // 对方请求悔棋
     void undoAccepted();              // 对方同意悔棋（双方撤回最后一手）
     void undoRejected();              // 对方拒绝悔棋
+    void surrendered();               // 对方认输
     void disconnected();
 
 private slots:
@@ -77,6 +79,7 @@ private:
     QTcpSocket* m_tcp = nullptr;
     QTimer* m_broadcastTimer = nullptr;
     QTimer* m_pairTimeout = nullptr;
+    QTimer* m_countdownTimer = nullptr;  // 配对阶段每秒刷新剩余秒数
     QTimer* m_retryTimer = nullptr;
     int m_retryCount = 0;
 

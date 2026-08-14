@@ -6,6 +6,7 @@
 #include "Chess.h"
 
 // 棋盘绘制组件：底图 + 黑白棋子，鼠标点击换算格点
+// 支持等比缩放（窗口拉大时棋盘跟随放大）与换肤（自定义背景图）
 class BoardWidget : public QWidget
 {
     Q_OBJECT
@@ -16,6 +17,12 @@ public:
     void setChess(Chess* chess) { m_chess = chess; }
     void repaintBoard() { update(); }
 
+    // 换肤：设置背景图（任意尺寸，绘制时等比缩放铺满），qrc 路径或本地文件
+    void setBackground(const QString& imagePath);
+
+    // 逻辑棋盘尺寸（600x600 逻辑坐标，实际渲染按 scale 缩放）
+    static constexpr int kLogicSize = 600;
+
 signals:
     void cellClicked(int row, int col);
 
@@ -24,6 +31,9 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
 
 private:
+    // 当前缩放系数 = min(宽,高)/600，绘制与鼠标换算共用
+    float scaleFactor() const;
+
     Chess* m_chess = nullptr;
     QPixmap m_boardBg;
     QPixmap m_blackPiece;

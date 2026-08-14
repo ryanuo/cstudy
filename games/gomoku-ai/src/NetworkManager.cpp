@@ -101,11 +101,35 @@ void NetworkManager::start(const QString& password)
     connect(m_pairTimeout, &QTimer::timeout, this, [this] {
         if (!m_connected)
         {
+            m_countdownTimer->stop();
             emit searchFailed(QStringLiteral("配对超时，请确认双方输入相同密码并处于同一局域网"));
             cleanup();
         }
     });
     m_pairTimeout->start(30000);
+
+    // 配对阶段每秒刷新剩余秒数（连接成功后停止）
+    m_countdownTimer = new QTimer(this);
+    m_countdownTimer->setInterval(1000);
+    connect(m_countdownTimer, &QTimer::timeout, this, [this] {
+        const int remaining = m_pairTimeout->remainingTime();
+        if (remaining <= 0 || m_connected)
+        {
+            return;
+        }
+        const int secs = (remaining + 999) / 1000;
+        if (m_connecting)
+        {
+            emit statusChanged(m_isHost
+                                   ? QStringLiteral("已找到对手，等待对方连接…（剩余 %1s）").arg(secs)
+                                   : QStringLiteral("已找到对手，正在连接…（剩余 %1s）").arg(secs));
+        }
+        else
+        {
+            emit statusChanged(QStringLiteral("正在搜索同密码对手…（剩余 %1s）").arg(secs));
+        }
+    });
+    m_countdownTimer->start();
 
     m_retryTimer = new QTimer(this);
     m_retryTimer->setSingleShot(true);
@@ -359,6 +383,10 @@ void NetworkManager::handleLine(const QByteArray& line)
     {
         emit undoRejected();
     }
+    else if (parts[0] == "SURRENDER" && m_connected)
+    {
+        emit surrendered();
+    }
     else if (parts[0] == "QUIT")
     {
         cleanup(); // 对端退出
@@ -376,6 +404,7 @@ void NetworkManager::checkHandshake()
     {
         m_connected = true;
         m_pairTimeout->stop();
+        m_countdownTimer->stop();
         emit statusChanged(m_isHost ? QStringLiteral("已连接 · 你执黑（先手）")
                                     : QStringLiteral("已连接 · 你执白（后手）"));
         emit connected(m_isHost);
@@ -419,6 +448,14 @@ void NetworkManager::sendUndoReply(bool accept)
     if (m_connected)
     {
         sendLine(accept ? "UNDO_OK" : "UNDO_NO");
+    }
+}
+
+void NetworkManager::sendSurrender()
+{
+    if (m_connected)
+    {
+        sendLine("SURRENDER");
     }
 }
 
@@ -508,6 +545,12 @@ void NetworkManager::cleanup()
         m_pairTimeout->stop();
         m_pairTimeout->deleteLater();
         m_pairTimeout = nullptr;
+    }
+    if (m_countdownTimer)
+    {
+        m_countdownTimer->stop();
+        m_countdownTimer->deleteLater();
+        m_countdownTimer = nullptr;
     }
     if (m_retryTimer)
     {

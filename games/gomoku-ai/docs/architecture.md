@@ -32,7 +32,7 @@ flowchart TB
             BW2 -. 加载资源 .-> RES2
         end
         UDP["UDP 45231<br/>广播发现<br/>全局255.255.255.255 + 回环 + 子网定向广播(192.168.14.255)"]
-        TCP["TCP 45232<br/>对局传输<br/>HELLO / MOVE / RESTART / UNDO / UNDO_OK / UNDO_NO / QUIT"]
+        TCP["TCP 45232<br/>对局传输<br/>HELLO / MOVE / RESTART / UNDO / UNDO_OK / UNDO_NO / SURRENDER / QUIT"]
         NM1 <--> UDP
         NM2 <--> UDP
         NM1 <--> TCP
@@ -64,6 +64,8 @@ sequenceDiagram
     B->>A: MOVE 6 7（白落子）
     A->>B: UNDO（悔棋请求）
     B->>A: UNDO_OK（同意，双方撤回最后一手）
+    A->>B: SURRENDER（认输，对局结束并断开）
+    Note over A,B: 对局中断开 = 对方认输（弹框确认，你获胜）
     A->>B: RESTART（再来一局，双方重置）
     A->>B: QUIT（退出联机）
 ```
@@ -77,4 +79,8 @@ sequenceDiagram
 | 同机双开 | UDP `ShareAddress` 共享绑定 + TCP 绑定竞争（先绑定者执黑），不依赖 UDP 回环投递 |
 | 跨设备发现 | 三路广播：全局 255.255.255.255 + 本机回环 + 每个活动网卡的子网定向广播（如 192.168.14.255） |
 | 悔棋 | 请求-确认制：UNDO → 对方弹窗 → UNDO_OK 双方撤回最后一手（Chess 落子历史栈） |
+| 认输/断开 | SURRENDER 协议；对局中断开视为对方认输（弹框确认获胜）；本地断开需确认 |
+| 配对倒计时 | 搜索/连接阶段状态栏每秒显示剩余秒数（30s 搜索 / 10s 配对） |
+| 换肤 | 菜单选择内置皮肤或本地图片（QSettings 持久化），背景任意尺寸等比铺满 |
+| 等比缩放 | 窗口缩放时棋盘 QPainter scale 变换等比跟随（逻辑 600×600，鼠标坐标反算） |
 | 容错 | 配对超时/失败后恢复「联机对战」按钮可重试；对端退出/掉线自动清理 |

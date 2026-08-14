@@ -148,6 +148,25 @@ int main(int argc, char* argv[])
     }
     std::printf("PASS: 悔棋协议往返 (UNDO/UNDO_OK/UNDO_NO) 正常\n");
 
+    // 3.6 认输协议
+    bool bGotSurrender = false;
+    bool aGotSurrender = false;
+    QObject::connect(&a, &NetworkManager::surrendered, [&] { aGotSurrender = true; });
+    QObject::connect(&b, &NetworkManager::surrendered, [&] { bGotSurrender = true; });
+    a.sendSurrender();
+    if (!waitUntil([&] { return bGotSurrender; }))
+    {
+        std::printf("FAIL: SURRENDER 未到达 B\n");
+        return 1;
+    }
+    b.sendSurrender();
+    if (!waitUntil([&] { return aGotSurrender; }))
+    {
+        std::printf("FAIL: SURRENDER 未到达 A\n");
+        return 1;
+    }
+    std::printf("PASS: 认输协议往返 (SURRENDER) 正常\n");
+
     // 4. 断开后对端收到 disconnected
     bool bGotDisconnect = false;
     QObject::connect(&b, &NetworkManager::disconnected, [&] { bGotDisconnect = true; });

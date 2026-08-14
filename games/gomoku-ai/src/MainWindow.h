@@ -30,6 +30,7 @@ private slots:
     void onNewGameClicked();
     void onDisconnectClicked();
     void onUndoClicked();
+    void onSurrenderClicked();
     void onCellClicked(int row, int col);
     void onConnected(bool isHost);
     void onMoveReceived(int row, int col);
@@ -40,6 +41,7 @@ private slots:
     void onUndoRequested();
     void onUndoAccepted();
     void onUndoRejected();
+    void onSurrendered();
 
 private:
     void resetBoard();
@@ -48,6 +50,8 @@ private:
     void setStatus(const QString& text);
     void setConnectedUi(bool connected);
     void doUndo();
+    void applySkin(const QString& imagePath);   // 换肤（qrc 路径或本地文件）
+    void chooseSkinFile();
     bool myTurn() const;
     chess_kind_t opponentKind() const;
 
@@ -57,8 +61,11 @@ private:
     QPushButton* m_connectBtn = nullptr;
     QPushButton* m_newGameBtn = nullptr;
     QPushButton* m_undoBtn = nullptr;
+    QPushButton* m_surrenderBtn = nullptr;
+    QPushButton* m_skinBtn = nullptr;
     QPushButton* m_disconnectBtn = nullptr;
     bool m_undoPending = false;  // 已发悔棋请求，等待对方回复
+    bool m_localDisconnect = false;  // 本次断开是否本地主动（主动断开不弹"对方认输"）
 
     chess_kind_t m_myKind = CHESS_BLACK;
     bool m_connected = false;
