@@ -373,20 +373,18 @@ jobs:
       # ========================================================
       - name: Package macOS
         run: |
-          APP="games/gomoku-ai/build/gomoku-ai.app"
-
           cd games/gomoku-ai/build
 
-          rm -f ../../../../gomoku-ai-macos.zip
+          rm -f "$GITHUB_WORKSPACE/gomoku-ai-macos.zip"
 
           zip \
             -r \
-            ../../../../gomoku-ai-macos.zip \
+            "$GITHUB_WORKSPACE/gomoku-ai-macos.zip" \
             gomoku-ai.app
 
           echo ""
           echo "Package created:"
-          echo "gomoku-ai-macos.zip"
+          echo "$GITHUB_WORKSPACE/gomoku-ai-macos.zip"
 
 
       # ========================================================
@@ -573,11 +571,11 @@ jobs:
       - name: Package Linux
         run: |
           cd games/gomoku-ai/dist
-          rm -f ../../../../gomoku-ai-linux.zip
-          zip -r ../../../../gomoku-ai-linux.zip .
+          rm -f "$GITHUB_WORKSPACE/gomoku-ai-linux.zip"
+          zip -r "$GITHUB_WORKSPACE/gomoku-ai-linux.zip" .
           echo ""
           echo "Package created:"
-          echo "gomoku-ai-linux.zip"
+          echo "$GITHUB_WORKSPACE/gomoku-ai-linux.zip"
 
 
       # --------------------------------------------------------
