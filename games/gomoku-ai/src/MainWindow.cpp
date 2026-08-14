@@ -20,10 +20,11 @@
 
 namespace {
 
-const int kGradeSize = 13;
-const int kMarginX = 29;
-const int kMarginY = 29;
-const float kChessSize = 45.0f;
+// 19×19 棋盘（新棋盘底图实测：上边距68 左边距72 格距25.3，600×600）
+const int kGradeSize = 19;
+const int kMarginX = 72;
+const int kMarginY = 68;
+const float kChessSize = 25.3f;
 
 } // namespace
 
@@ -54,10 +55,17 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_surrenderBtn, &QPushButton::clicked, this, &MainWindow::onSurrenderClicked);
     connect(m_disconnectBtn, &QPushButton::clicked, this, &MainWindow::onDisconnectClicked);
 
-    // 换肤（内置皮肤 + 从图片选择）
+    // 换肤（内置 4 款棋盘 + 从图片选择）
     auto* skinMenu = new QMenu(this);
-    skinMenu->addAction(QStringLiteral("默认（木色棋盘）"), this,
-                        [this] { applySkin(QStringLiteral(":/res/board.jpg")); });
+    skinMenu->addAction(QStringLiteral("米白色棋盘"), this,
+                        [this] { applySkin(QStringLiteral(":/res/board_1_cream.png")); });
+    skinMenu->addAction(QStringLiteral("翡翠绿棋盘"), this,
+                        [this] { applySkin(QStringLiteral(":/res/board_2_mint.png")); });
+    skinMenu->addAction(QStringLiteral("浅橙色棋盘"), this,
+                        [this] { applySkin(QStringLiteral(":/res/board_3_peach.png")); });
+    skinMenu->addAction(QStringLiteral("木质棋盘"), this,
+                        [this] { applySkin(QStringLiteral(":/res/board_4_wood.png")); });
+    skinMenu->addSeparator();
     skinMenu->addAction(QStringLiteral("从图片选择…"), this, [this] { chooseSkinFile(); });
     m_skinBtn = new QPushButton(QStringLiteral("换肤"), this);
     m_skinBtn->setMenu(skinMenu);
@@ -93,13 +101,11 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_network, &NetworkManager::surrendered, this, &MainWindow::onSurrendered);
     connect(m_network, &NetworkManager::disconnected, this, &MainWindow::onDisconnected);
 
-    // 恢复上次换肤
+    // 恢复上次换肤（默认米白色棋盘）
     QSettings settings;
-    const QString skin = settings.value(QStringLiteral("skin")).toString();
-    if (!skin.isEmpty())
-    {
-        m_board->setBackground(skin);
-    }
+    const QString skin = settings.value(QStringLiteral("skin"),
+                                        QStringLiteral(":/res/board_1_cream.png")).toString();
+    m_board->setBackground(skin);
 
     // 音效：WAV 用 QSoundEffect，MP3 用 QMediaPlayer
     m_startSound = new QSoundEffect(this);
