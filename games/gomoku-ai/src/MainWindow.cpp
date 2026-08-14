@@ -166,6 +166,25 @@ void MainWindow::onConnectClicked()
 
 void MainWindow::onNewGameClicked()
 {
+    // 对局进行中（已落子且未分胜负）：点「新游戏」视为认输
+    if (m_connected && m_chess->moveCount() > 0 && !m_gameOver)
+    {
+        const auto reply = QMessageBox::question(
+            this, QStringLiteral("新游戏"),
+            QStringLiteral("对局已开始，点击「新游戏」将视为认输，确定吗？"),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (reply != QMessageBox::Yes)
+        {
+            return;
+        }
+        m_localDisconnect = true;
+        m_network->sendSurrender();
+        m_network->stop();
+        setStatus(QStringLiteral("你认输了"));
+        return;
+    }
+
+    // 未开局 / 对局已结束：正常重开
     resetBoard();
     if (m_connected)
     {
