@@ -12,15 +12,15 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Network Multimedia)
 qt_standard_project_setup()
 
 add_executable(gomoku-ai
-    main.cpp
-    MainWindow.cpp
-    MainWindow.h
-    BoardWidget.cpp
-    BoardWidget.h
-    NetworkManager.cpp
-    NetworkManager.h
-    Chess.cpp
-    Chess.h
+    src/main.cpp
+    src/MainWindow.cpp
+    src/MainWindow.h
+    src/BoardWidget.cpp
+    src/BoardWidget.h
+    src/NetworkManager.cpp
+    src/NetworkManager.h
+    src/Chess.cpp
+    src/Chess.h
     resources.qrc
 )
 
@@ -36,8 +36,8 @@ enable_testing()
 
 add_executable(gomoku_net_test
     tests/net_test.cpp
-    NetworkManager.cpp
-    NetworkManager.h
+    src/NetworkManager.cpp
+    src/NetworkManager.h
 )
 
 target_link_libraries(gomoku_net_test PRIVATE Qt6::Network)
