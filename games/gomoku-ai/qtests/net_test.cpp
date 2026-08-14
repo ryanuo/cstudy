@@ -76,7 +76,15 @@ int main(int argc, char* argv[])
         std::printf("FAIL: 角色协商错误，双方角色相同\n");
         return 1;
     }
-    std::printf("PASS: 同密码配对成功 (A isHost=%d, B isHost=%d)\n", a.isHost(), b.isHost());
+    if (a.peerAddress().isNull() || b.peerAddress().isNull())
+    {
+        std::printf("FAIL: 对手 IP 不可见\n");
+        return 1;
+    }
+    std::printf("PASS: 同密码配对成功 (A isHost=%d, B isHost=%d), 对手 IP 可见 (A->%s, B->%s)\n",
+                a.isHost(), b.isHost(),
+                a.peerAddress().toString().toUtf8().constData(),
+                b.peerAddress().toString().toUtf8().constData());
 
     // 2. MOVE 双向往返
     a.sendMove(5, 5);
@@ -101,6 +109,44 @@ int main(int argc, char* argv[])
         return 1;
     }
     std::printf("PASS: RESTART 通知正常\n");
+
+    // 3.5 悔棋协议往返 (UNDO / UNDO_OK / UNDO_NO)
+    bool aGotUndo = false;
+    bool bGotUndo = false;
+    bool aGotUndoOk = false;
+    bool bGotUndoOk = false;
+    bool bGotUndoNo = false;
+    QObject::connect(&a, &NetworkManager::undoRequested, [&] { aGotUndo = true; });
+    QObject::connect(&b, &NetworkManager::undoRequested, [&] { bGotUndo = true; });
+    QObject::connect(&a, &NetworkManager::undoAccepted, [&] { aGotUndoOk = true; });
+    QObject::connect(&b, &NetworkManager::undoAccepted, [&] { bGotUndoOk = true; });
+    QObject::connect(&b, &NetworkManager::undoRejected, [&] { bGotUndoNo = true; });
+
+    a.sendUndo();
+    if (!waitUntil([&] { return bGotUndo; }))
+    {
+        std::printf("FAIL: UNDO 请求未到达 B\n");
+        return 1;
+    }
+    b.sendUndoReply(true);
+    if (!waitUntil([&] { return aGotUndoOk; }))
+    {
+        std::printf("FAIL: UNDO_OK 未到达 A\n");
+        return 1;
+    }
+    b.sendUndo();
+    if (!waitUntil([&] { return aGotUndo; }))
+    {
+        std::printf("FAIL: UNDO 请求未到达 A\n");
+        return 1;
+    }
+    a.sendUndoReply(false);
+    if (!waitUntil([&] { return bGotUndoNo; }))
+    {
+        std::printf("FAIL: UNDO_NO 未到达 B\n");
+        return 1;
+    }
+    std::printf("PASS: 悔棋协议往返 (UNDO/UNDO_OK/UNDO_NO) 正常\n");
 
     // 4. 断开后对端收到 disconnected
     bool bGotDisconnect = false;

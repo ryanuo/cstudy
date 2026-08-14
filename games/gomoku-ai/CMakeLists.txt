@@ -43,3 +43,13 @@ add_executable(gomoku_net_test
 target_link_libraries(gomoku_net_test PRIVATE Qt6::Network)
 
 add_test(NAME net_test COMMAND gomoku_net_test)
+
+add_executable(gomoku_chess_test
+    qtests/chess_test.cpp
+    src/Chess.cpp
+    src/Chess.h
+)
+
+target_include_directories(gomoku_chess_test PRIVATE src)
+
+add_test(NAME chess_test COMMAND gomoku_chess_test)

@@ -38,16 +38,20 @@ MainWindow::MainWindow(QWidget* parent)
     // 顶部按钮区（重要入口置顶）
     m_connectBtn = new QPushButton(QStringLiteral("联机对战"), this);
     m_newGameBtn = new QPushButton(QStringLiteral("新游戏"), this);
+    m_undoBtn = new QPushButton(QStringLiteral("悔棋"), this);
     m_disconnectBtn = new QPushButton(QStringLiteral("断开"), this);
     m_newGameBtn->setEnabled(false);
+    m_undoBtn->setEnabled(false);
     m_disconnectBtn->setEnabled(false);
     connect(m_connectBtn, &QPushButton::clicked, this, &MainWindow::onConnectClicked);
     connect(m_newGameBtn, &QPushButton::clicked, this, &MainWindow::onNewGameClicked);
+    connect(m_undoBtn, &QPushButton::clicked, this, &MainWindow::onUndoClicked);
     connect(m_disconnectBtn, &QPushButton::clicked, this, &MainWindow::onDisconnectClicked);
 
     auto* topBar = new QHBoxLayout;
     topBar->addWidget(m_connectBtn);
     topBar->addWidget(m_newGameBtn);
+    topBar->addWidget(m_undoBtn);
     topBar->addWidget(m_disconnectBtn);
     topBar->addStretch();
 
@@ -64,8 +68,12 @@ MainWindow::MainWindow(QWidget* parent)
     m_network = new NetworkManager(this);
     connect(m_network, &NetworkManager::statusChanged, this, &MainWindow::onStatusChanged);
     connect(m_network, &NetworkManager::connected, this, &MainWindow::onConnected);
+    connect(m_network, &NetworkManager::searchFailed, this, &MainWindow::onSearchFailed);
     connect(m_network, &NetworkManager::moveReceived, this, &MainWindow::onMoveReceived);
     connect(m_network, &NetworkManager::restartReceived, this, &MainWindow::onRestartReceived);
+    connect(m_network, &NetworkManager::undoRequested, this, &MainWindow::onUndoRequested);
+    connect(m_network, &NetworkManager::undoAccepted, this, &MainWindow::onUndoAccepted);
+    connect(m_network, &NetworkManager::undoRejected, this, &MainWindow::onUndoRejected);
     connect(m_network, &NetworkManager::disconnected, this, &MainWindow::onDisconnected);
 
     // 音效：WAV 用 QSoundEffect，MP3 用 QMediaPlayer
@@ -173,16 +181,19 @@ void MainWindow::onConnected(bool isHost)
     m_connected = true;
     m_gameOver = false;
     m_myKind = isHost ? CHESS_BLACK : CHESS_WHITE;
+    m_undoPending = false;
 
-    m_connectBtn->setEnabled(false);
-    m_newGameBtn->setEnabled(true);
-    m_disconnectBtn->setEnabled(true);
+    setConnectedUi(true);
 
     resetBoard();
     m_bgPlayer->play();
     m_startSound->play();
-    setStatus(isHost ? QStringLiteral("已连接 · 你执黑（先手），请落子")
-                     : QStringLiteral("已连接 · 你执白（后手），等待对方落子"));
+
+    // 状态栏显示执子 + 对手 IP
+    const QString peerIp = m_network->peerAddress().toString();
+    setStatus(isHost ? QStringLiteral("已连接 · 你执黑（先手） · 对手 IP: ") + peerIp
+                     : QStringLiteral("已连接 · 你执白（后手） · 对手 IP: ") + peerIp);
+    setWindowTitle(QStringLiteral("五子棋 · 局域网对战 - 对手 ") + peerIp);
 }
 
 void MainWindow::onMoveReceived(int row, int col)
@@ -214,14 +225,88 @@ void MainWindow::onDisconnected()
 {
     m_connected = false;
     m_gameOver = false;
+    m_undoPending = false;
 
-    m_connectBtn->setEnabled(true);
-    m_newGameBtn->setEnabled(false);
-    m_disconnectBtn->setEnabled(false);
-
+    setConnectedUi(false);
     m_bgPlayer->stop();
     resetBoard();
+    setWindowTitle(QStringLiteral("五子棋 · 局域网对战"));
     setStatus(QStringLiteral("连接已断开"));
+}
+
+void MainWindow::onSearchFailed(const QString& reason)
+{
+    // 配对失败/中断：恢复「联机对战」按钮，允许重新尝试
+    setConnectedUi(false);
+    setStatus(reason);
+}
+
+void MainWindow::onUndoClicked()
+{
+    if (!m_connected || m_gameOver)
+    {
+        return;
+    }
+    if (m_undoPending)
+    {
+        setStatus(QStringLiteral("已发送悔棋请求，等待对方回复…"));
+        return;
+    }
+    if (m_chess->moveCount() == 0)
+    {
+        setStatus(QStringLiteral("还没有落子，无法悔棋"));
+        return;
+    }
+    m_undoPending = true;
+    m_network->sendUndo();
+    setStatus(QStringLiteral("已发送悔棋请求，等待对方回复…"));
+}
+
+void MainWindow::onUndoRequested()
+{
+    if (!m_connected || m_gameOver)
+    {
+        return;
+    }
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("悔棋"));
+    box.setText(QStringLiteral("对方请求悔棋（撤回最后一手），是否同意？"));
+    QPushButton* acceptBtn = box.addButton(QStringLiteral("同意"), QMessageBox::AcceptRole);
+    box.addButton(QStringLiteral("拒绝"), QMessageBox::RejectRole);
+    box.exec();
+
+    const bool accept = (box.clickedButton() == acceptBtn);
+    m_network->sendUndoReply(accept);
+    if (accept)
+    {
+        doUndo();
+        setStatus(QStringLiteral("已同意悔棋"));
+    }
+    else
+    {
+        setStatus(QStringLiteral("已拒绝悔棋"));
+    }
+}
+
+void MainWindow::onUndoAccepted()
+{
+    m_undoPending = false;
+    doUndo();
+    setStatus(QStringLiteral("对方同意悔棋"));
+}
+
+void MainWindow::onUndoRejected()
+{
+    m_undoPending = false;
+    setStatus(QStringLiteral("对方拒绝了悔棋"));
+}
+
+void MainWindow::doUndo()
+{
+    if (m_chess->undoLast())
+    {
+        m_board->repaintBoard();
+    }
 }
 
 void MainWindow::onStatusChanged(const QString& text)
@@ -306,6 +391,14 @@ void MainWindow::playSfx(const QString& qrcPath)
     m_sfxPlayer->stop();
     m_sfxPlayer->setSource(QUrl(qrcPath));
     m_sfxPlayer->play();
+}
+
+void MainWindow::setConnectedUi(bool connected)
+{
+    m_connectBtn->setEnabled(!connected);
+    m_newGameBtn->setEnabled(connected);
+    m_undoBtn->setEnabled(connected);
+    m_disconnectBtn->setEnabled(connected);
 }
 
 void MainWindow::setStatus(const QString& text)

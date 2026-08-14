@@ -39,12 +39,18 @@ public:
 
     void sendMove(int row, int col);
     void sendRestart();
+    void sendUndo();       // 发送悔棋请求（对方确认后双方撤回最后一手）
+    void sendUndoReply(bool accept);
 
 signals:
     void statusChanged(const QString& text);
     void connected(bool isHost);      // 配对成功；isHost=true 执黑先手
+    void searchFailed(const QString& reason);  // 配对失败/中断（UI 应恢复可重试）
     void moveReceived(int row, int col);
     void restartReceived();
+    void undoRequested();             // 对方请求悔棋
+    void undoAccepted();              // 对方同意悔棋（双方撤回最后一手）
+    void undoRejected();              // 对方拒绝悔棋
     void disconnected();
 
 private slots:

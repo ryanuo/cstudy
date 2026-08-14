@@ -60,7 +60,7 @@ void NetworkManager::start(const QString& password)
     if (!m_udp->bind(QHostAddress::AnyIPv4, kUdpPort,
                      QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint))
     {
-        emit statusChanged(QStringLiteral("UDP 绑定失败：") + m_udp->errorString());
+        emit searchFailed(QStringLiteral("UDP 绑定失败：") + m_udp->errorString());
         cleanup();
         return;
     }
@@ -101,7 +101,7 @@ void NetworkManager::start(const QString& password)
     connect(m_pairTimeout, &QTimer::timeout, this, [this] {
         if (!m_connected)
         {
-            emit statusChanged(QStringLiteral("配对超时，请确认双方输入相同密码并处于同一局域网"));
+            emit searchFailed(QStringLiteral("配对超时，请确认双方输入相同密码并处于同一局域网"));
             cleanup();
         }
     });
@@ -298,7 +298,7 @@ void NetworkManager::handleLine(const QByteArray& line)
         }
         else
         {
-            emit statusChanged(QStringLiteral("密码校验失败，已断开连接"));
+            emit searchFailed(QStringLiteral("密码校验失败，已断开连接"));
             sendLine("ERR");
             m_tcp->disconnectFromHost();
         }
@@ -318,13 +318,25 @@ void NetworkManager::handleLine(const QByteArray& line)
     {
         emit restartReceived();
     }
+    else if (parts[0] == "UNDO" && m_connected)
+    {
+        emit undoRequested();
+    }
+    else if (parts[0] == "UNDO_OK" && m_connected)
+    {
+        emit undoAccepted();
+    }
+    else if (parts[0] == "UNDO_NO" && m_connected)
+    {
+        emit undoRejected();
+    }
     else if (parts[0] == "QUIT")
     {
         cleanup(); // 对端退出
     }
     else if (parts[0] == "ERR")
     {
-        emit statusChanged(QStringLiteral("密码校验失败，已断开连接"));
+        emit searchFailed(QStringLiteral("密码校验失败，已断开连接"));
         cleanup();
     }
 }
@@ -365,6 +377,22 @@ void NetworkManager::sendRestart()
     }
 }
 
+void NetworkManager::sendUndo()
+{
+    if (m_connected)
+    {
+        sendLine("UNDO");
+    }
+}
+
+void NetworkManager::sendUndoReply(bool accept)
+{
+    if (m_connected)
+    {
+        sendLine(accept ? "UNDO_OK" : "UNDO_NO");
+    }
+}
+
 void NetworkManager::onTcpDisconnected()
 {
     if (m_connecting || m_connected)
@@ -400,7 +428,7 @@ void NetworkManager::onTcpError(QAbstractSocket::SocketError /*error*/)
     }
     else
     {
-        emit statusChanged(QStringLiteral("连接失败，请重试"));
+        emit searchFailed(QStringLiteral("连接失败，请重试"));
         cleanup();
     }
 }

@@ -29,18 +29,25 @@ private slots:
     void onConnectClicked();
     void onNewGameClicked();
     void onDisconnectClicked();
+    void onUndoClicked();
     void onCellClicked(int row, int col);
     void onConnected(bool isHost);
     void onMoveReceived(int row, int col);
     void onRestartReceived();
+    void onSearchFailed(const QString& reason);
     void onDisconnected();
     void onStatusChanged(const QString& text);
+    void onUndoRequested();
+    void onUndoAccepted();
+    void onUndoRejected();
 
 private:
     void resetBoard();
     void checkGameEnd(chess_kind_t lastKind);
     void playSfx(const QString& qrcPath);
     void setStatus(const QString& text);
+    void setConnectedUi(bool connected);
+    void doUndo();
     bool myTurn() const;
     chess_kind_t opponentKind() const;
 
@@ -49,7 +56,9 @@ private:
     NetworkManager* m_network = nullptr;
     QPushButton* m_connectBtn = nullptr;
     QPushButton* m_newGameBtn = nullptr;
+    QPushButton* m_undoBtn = nullptr;
     QPushButton* m_disconnectBtn = nullptr;
+    bool m_undoPending = false;  // 已发悔棋请求，等待对方回复
 
     chess_kind_t m_myKind = CHESS_BLACK;
     bool m_connected = false;

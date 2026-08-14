@@ -30,6 +30,7 @@ void Chess::init()
             chessMap[i][j] = 0;
         }
     }
+    moveHistory.clear();
     playerFlag = true; // 黑方先行
 }
 
@@ -112,6 +113,24 @@ void Chess::chessDown(ChessPos* pos, chess_kind_t kind)
     chessMap[pos->row][pos->col] = kind;
     // 黑方落子后轮到白方；白方落子后轮到黑方
     playerFlag = (kind == CHESS_WHITE);
+    moveHistory.push_back({pos->row, pos->col, kind});
+}
+
+bool Chess::undoLast()
+{
+    if (moveHistory.empty())
+    {
+        return false;
+    }
+    const MoveRec m = moveHistory.back();
+    moveHistory.pop_back();
+    chessMap[m.row][m.col] = 0;
+    // lastPos 回到再前一手（空盘时置无效，checkWin 依赖 lastPos，悔棋后不会立即判胜）
+    lastPos = moveHistory.empty() ? ChessPos(-1, -1)
+                                  : ChessPos(moveHistory.back().row, moveHistory.back().col);
+    // 回合恢复：撤回黑子 → 轮黑；撤回白子 → 轮白
+    playerFlag = (m.kind == CHESS_BLACK);
+    return true;
 }
 
 int Chess::getChessData(int row, int col) const

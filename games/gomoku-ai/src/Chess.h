@@ -30,8 +30,16 @@ public:
     int getChessData(int row, int col) const;
     bool checkOver();                                     // 是否分出胜负（依据最后一手）
     bool isBlackTurn() const { return playerFlag; }       // true=轮到黑方
+    bool undoLast();                                      // 撤回最后一手（悔棋），返回是否成功
+    int moveCount() const { return static_cast<int>(moveHistory.size()); }
 
 private:
+    struct MoveRec {
+        int row;
+        int col;
+        chess_kind_t kind;
+    };
+
     bool checkWin();
 
     int gradeSize;
@@ -40,6 +48,7 @@ private:
     float chessSize;
 
     std::vector<std::vector<int>> chessMap;
+    std::vector<MoveRec> moveHistory;  // 落子历史（悔棋用）
     bool playerFlag;
     ChessPos lastPos;
 };
