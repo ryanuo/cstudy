@@ -553,6 +553,19 @@ jobs:
             cp -r "$QT_PREFIX/plugins/audio" "$DIST/plugins/"
           fi
 
+          # 插件依赖库 (libjpeg/libpng/libav* 等, 目标机可能缺失):
+          # 排除 glibc/gcc 运行时核心, 其余全部拷入 dist/lib
+          # (插件 rpath 已指向 $ORIGIN/../../lib, 可从此目录加载)
+          for so in $(find "$DIST/plugins" -name '*.so'); do
+            ldd "$so" \
+              | grep -oE '/[^ ]*\.so(\.[0-9]+)*' \
+              | grep -vE '/(libc|libm|libgcc_s|libstdc\+\+|ld-linux[^ ]*|libpthread|libdl|librt)\.so(\.|$)' \
+              | sort -u \
+              | while read -r lib; do
+                  cp -n "$lib" "$DIST/lib/" 2>/dev/null || true
+                done
+          done
+
           # 修正 rpath: 可执行文件 -> lib/, 插件 -> 上级 lib/
           sudo apt-get update -qq
           sudo apt-get install -y -qq patchelf
