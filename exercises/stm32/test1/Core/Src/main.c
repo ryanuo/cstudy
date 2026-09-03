@@ -120,7 +120,7 @@ int main(void)
       Fan_Forward_Reverse();
       break;
     case 4:
-      Buzzer_PlayQiFengLe();
+      Buzzer_Play(2);
       break;
     case 5:
       LED_Toggle(0);

@@ -121,8 +121,30 @@ static const MusicNote_t song_qifengle[] = {
     {NOTE_M6, 1}, {NOTE_H1, 1}, {NOTE_H1, 4},
 };
 
-void Buzzer_PlayQiFengLe(void)
-{
-    uint16_t len = sizeof(song_qifengle) / sizeof(song_qifengle[0]);
-    Buzzer_PlayMusic(song_qifengle, len, 500);
+static const MusicNote_t song_qinghuaci[] = {
+    /* 天青色等烟雨 而我在等你 */
+    {NOTE_M4, 4}, {NOTE_M5, 4}, {NOTE_M6, 4}, {NOTE_M5, 4}, {NOTE_M4, 4}, {NOTE_M4, 8}, {NOTE_REST, 2},
+    {NOTE_M1, 4}, {NOTE_M2, 4}, {NOTE_M4, 4}, {NOTE_M4, 4}, {NOTE_M1, 12}, {NOTE_REST, 4},
+    /* 炊烟袅袅升起 隔江千万里 */
+    {NOTE_M4, 4}, {NOTE_M5, 4}, {NOTE_M6, 4}, {NOTE_M5, 4}, {NOTE_M4, 4}, {NOTE_M4, 4},
+    {NOTE_M5, 4}, {NOTE_M4, 2}, {NOTE_M2, 2}, {NOTE_M1, 4}, {NOTE_M2, 12}, {NOTE_REST, 4},
+    /* 在瓶底书汉隶 仿前朝的飘逸 */
+    {NOTE_M4, 4}, {NOTE_M5, 4}, {NOTE_M6, 4}, {NOTE_M5, 4}, {NOTE_M4, 4}, {NOTE_M4, 8}, {NOTE_REST, 2},
+    {NOTE_M1, 4}, {NOTE_M2, 4}, {NOTE_M4, 4}, {NOTE_M4, 4}, {NOTE_M1, 12}, {NOTE_REST, 4},
+    /* 就当我为遇见你伏笔 */
+    {NOTE_M4, 4}, {NOTE_M5, 4}, {NOTE_M4, 4}, {NOTE_M2, 4}, {NOTE_M1, 4}, {NOTE_M2, 4},
+    {NOTE_M1, 4}, {NOTE_L6, 8}, {NOTE_M1, 16},
+};
+
+void Buzzer_Play(uint8_t song_id) {
+    switch (song_id) {
+        case 1:
+            Buzzer_PlayMusic(song_qifengle, sizeof(song_qifengle) / sizeof(song_qifengle[0]), 500);
+            break;
+        case 2:
+            Buzzer_PlayMusic(song_qinghuaci, sizeof(song_qinghuaci) / sizeof(song_qinghuaci[0]), 500);
+            break;
+        default:
+            break;
+    }
 }

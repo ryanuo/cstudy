@@ -39,6 +39,6 @@ void Buzzer_Stop(void);
 void Buzzer_PlayNote(uint16_t freq, uint16_t duration);
 void Buzzer_PlayMusic(const MusicNote_t *music, uint16_t length, uint16_t beat_ms);
 
-void Buzzer_PlayQiFengLe(void);
+void Buzzer_Play(uint8_t song_id);
 
 #endif
