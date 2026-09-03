@@ -36,6 +36,7 @@ typedef struct {
 
 void Buzzer_Init(void);
 void Buzzer_Stop(void);
+void Buzzer_Start(void);
 void Buzzer_PlayNote(uint16_t freq, uint16_t duration);
 void Buzzer_PlayMusic(const MusicNote_t *music, uint16_t length, uint16_t beat_ms);
 

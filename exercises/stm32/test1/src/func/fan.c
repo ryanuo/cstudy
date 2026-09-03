@@ -1,5 +1,6 @@
 #include "fan.h"
 #include "stm32f1xx_hal.h"
+#include "light.h"
 
 #define FAN_IA_PIN GPIO_PIN_13
 #define FAN_IB_PIN GPIO_PIN_12
@@ -14,7 +15,7 @@ void Fan_Init(void)
     gpio.Pull = GPIO_NOPULL;
     gpio.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(FAN_PORT, &gpio);
-    HAL_GPIO_WritePin(FAN_PORT, FAN_IA_PIN, GPIO_PIN_SET);   // IA = HIGH
+    HAL_GPIO_WritePin(FAN_PORT, FAN_IA_PIN, GPIO_PIN_RESET);   // IA = LOW
     HAL_GPIO_WritePin(FAN_PORT, FAN_IB_PIN, GPIO_PIN_RESET); // IB = LOW
 }
 
@@ -39,10 +40,21 @@ void Fan_Stop(void)
 void Fan_Forward_Reverse(void)
 {
     Fan_Forward();
-    HAL_Delay(2000);  // 正转运行 2 秒
+    HAL_Delay(2000);
     Fan_Stop();
-    HAL_Delay(500);   // 停机缓冲 0.5 秒，避免机械剧烈反冲和反电动势冲击芯片
+    HAL_Delay(500);
     Fan_Reverse();
-    HAL_Delay(2000);  // 反转运行 2 秒
+    HAL_Delay(2000);
     Fan_Stop();
+}
+
+/* 光控风扇：光照强时转，光照弱时停 */
+void Fan_LightControl(void)
+{
+    uint16_t light = Light_GetValue();
+    if (light < THRESHOLD_DARK) {
+        Fan_Forward();   // 天亮 → 转
+    } else {
+        Fan_Stop();      // 天黑 → 停
+    }
 }

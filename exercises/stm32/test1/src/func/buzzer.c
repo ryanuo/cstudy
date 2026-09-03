@@ -19,6 +19,10 @@ void Buzzer_Stop(void) {
     HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
 }
 
+void Buzzer_Start(void) {
+    HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
+}
+
 /* 播放一个音符 */
 void Buzzer_PlayNote(uint16_t freq, uint16_t duration) {
     if (freq == NOTE_REST) {

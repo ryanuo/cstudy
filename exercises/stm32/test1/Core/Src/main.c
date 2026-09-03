@@ -26,6 +26,7 @@
 #include "buzzer.h"
 #include "led.h"
 #include "key.h"
+#include "light.h"
 
 /* USER CODE END Includes */
 
@@ -92,17 +93,32 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
+  /* ============================================================
+   * 引脚占用说明
+   * ============================================================
+   * PA1  - 蜂鸣器（低电平触发）
+   * PA10 - LED（低电平点亮）
+   * PB1  - 按键1（接正电源，按下=HIGH）
+   * PB8  - OLED SCL（软件I2C）
+   * PB9  - OLED SDA（软件I2C）
+   * PB11 - 按键2（接正电源，按下=HIGH）
+   * PB12 - 风扇 INB（L9110H）
+   * PB13 - 风扇 IA（L9110H）
+   * PC13 - 贴片灯（低电平点亮）
+   * ============================================================
+   */
   Fan_Init();
   Buzzer_Init();
   LED_Init();
   OLED_Init();
   OLED_ShowMode(1);
   Key_Init();
+  Light_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int mode = 4;
+  int mode = 6;
   while (1)
   {
     /* USER CODE END WHILE */
@@ -111,22 +127,28 @@ int main(void)
     switch (mode)
     {
     case 1:
-      Fan_Forward();
+      Fan_Forward(); // 正转
       break;
     case 2:
-      Fan_Reverse();
+      Fan_Reverse(); // 反转
       break;
     case 3:
-      Fan_Forward_Reverse();
+      Fan_Forward_Reverse();  // 正反转
       break;
     case 4:
-      Buzzer_Play(2);
+      Buzzer_Play(1); // 播放音乐
       break;
     case 5:
-      LED_Toggle(0);
+      LED_Toggle(0); // 闪烁
       break;
     case 6:
-      Key_led_toggle_init();
+      Key_led_toggle_init(); // 按键灯
+      break;
+    case 7:
+      Light_AutoLED(); // 亮度
+      break;
+    case 8:
+      Fan_LightControl(); // 风扇亮度控制
       break;
     default:
       break;
