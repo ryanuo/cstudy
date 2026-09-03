@@ -96,6 +96,7 @@ int main(void)
   /* ============================================================
    * 引脚占用说明
    * ============================================================
+   * PA0  - 光敏传感器 - Do
    * PA1  - 蜂鸣器（低电平触发）
    * PA10 - LED（低电平点亮）
    * PB1  - 按键1（接正电源，按下=HIGH）
@@ -111,49 +112,63 @@ int main(void)
   Buzzer_Init();
   LED_Init();
   OLED_Init();
-  OLED_ShowMode(1);
+  OLED_Clear();
+  OLED_Update();
   Key_Init();
   Light_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int mode = 6;
+  int mode = 8;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    OLED_Clear();
+    OLED_ShowString(0, 0, "Mode:", OLED_8X16);
+    OLED_ShowNum(40, 0, mode, 1, OLED_8X16);
     switch (mode)
     {
     case 1:
-      Fan_Forward(); // 正转
+      OLED_ShowString(0, 16, "Fan Forward", OLED_8X16);
+      Fan_Forward();
       break;
     case 2:
-      Fan_Reverse(); // 反转
+      OLED_ShowString(0, 16, "Fan Reverse", OLED_8X16);
+      Fan_Reverse();
       break;
     case 3:
-      Fan_Forward_Reverse();  // 正反转
+      OLED_ShowString(0, 16, "Fan Fwd-Rev", OLED_8X16);
+      Fan_Forward_Reverse();
       break;
     case 4:
-      Buzzer_Play(1); // 播放音乐
+      OLED_ShowString(0, 16, "Music", OLED_8X16);
+      Buzzer_Play(1);
       break;
     case 5:
-      LED_Toggle(0); // 闪烁
+      OLED_ShowString(0, 16, "LED Blink", OLED_8X16);
+      LED_Toggle(0);
       break;
     case 6:
-      Key_led_toggle_init(); // 按键灯
+      OLED_ShowString(0, 16, "Light Auto", OLED_8X16);
+      Light_AutoLED();
       break;
     case 7:
-      Light_AutoLED(); // 亮度
+      OLED_ShowString(0, 16, "Fan Light", OLED_8X16);
+      Fan_LightControl();
       break;
     case 8:
-      Fan_LightControl(); // 风扇亮度控制
+      OLED_ShowString(0, 16, "Light:", OLED_8X16);
+      OLED_ShowNum(56, 16, Light_GetValue(), 4, OLED_8X16);
       break;
     default:
+      OLED_ShowString(0, 16, "Key Toggle", OLED_8X16);
+      Key_led_toggle_init();
       break;
     }
-    OLED_ShowMode(mode);
+    OLED_Update();
 
     // mode = (mode % 6) + 1;
   }
