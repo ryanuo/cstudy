@@ -1,0 +1,53 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug (OpenOCD)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/test1.elf",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/opt/homebrew/bin/arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "setupCommands": [
+                {
+                    "text": "target extended-remote :3333",
+                    "description": "Connect to OpenOCD"
+                },
+                {
+                    "text": "monitor reset halt",
+                    "description": "Reset and halt target"
+                },
+                {
+                    "text": "load",
+                    "description": "Load firmware"
+                },
+                {
+                    "text": "monitor reset init",
+                    "description": "Reset and initialize"
+                },
+                {
+                    "text": "break main",
+                    "description": "Set breakpoint at main"
+                },
+                {
+                    "text": "continue",
+                    "description": "Continue execution"
+                }
+            ],
+            "svdFile": "",
+            "preLaunchTask": "",
+            "logging": {
+                "moduleLoad": true,
+                "trace": false,
+                "engineLogging": false,
+                "programOutput": true
+            }
+        }
+    ]
+}

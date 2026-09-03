@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: Build (Debug)",
+            "type": "cmake",
+            "command": "build",
+            "targets": ["test1"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "cmake --build build/Debug"
+        },
+        {
+            "label": "CMake: Configure (Debug)",
+            "type": "cmake",
+            "command": "configure",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "cmake --preset Debug"
+        },
+        {
+            "label": "CMake: Clean",
+            "type": "cmake",
+            "command": "clean",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "cmake --build build/Debug --target clean"
+        },
+        {
+            "label": "Flash (OpenOCD)",
+            "type": "shell",
+            "command": "openocd",
+            "args": [
+                "-f", "interface/stlink.cfg",
+                "-f", "target/stm32f1x.cfg",
+                "-c", "program build/Debug/test1.elf verify reset exit"
+            ],
+            "group": "none",
+            "problemMatcher": [],
+            "detail": "Flash firmware via ST-Link"
+        }
+    ]
+}

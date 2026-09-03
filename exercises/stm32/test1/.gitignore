@@ -1,0 +1,41 @@
+# Build output
+build/
+*.elf
+*.map
+*.bin
+*.hex
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.in
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Debug
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# STM32CubeMX
+.mxproject
+test1.ioc
