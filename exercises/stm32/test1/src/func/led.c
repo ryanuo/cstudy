@@ -1,53 +1,50 @@
 #include "led.h"
-#include "stm32f1xx_hal.h"
 
-#define LED_PIN      GPIO_PIN_10
-#define LED_PORT     GPIOA
-#define BOARD_LED_PIN  GPIO_PIN_13
-#define BOARD_LED_PORT GPIOC
+// 内部封装引脚硬件映射表
+typedef struct {
+    GPIO_TypeDef* port;
+    uint16_t      pin;
+} LED_HW_Config_t;
+
+static const LED_HW_Config_t LED_TABLE[LED_COUNT] = {
+    [LED_USER]  = { .port = GPIOA, .pin = GPIO_PIN_10 },
+    [LED_BOARD] = { .port = GPIOC, .pin = GPIO_PIN_13 },
+};
 
 void LED_Init(void) {
+    // 开启所需端口时钟
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    GPIO_InitTypeDef gpio = {0};
-    gpio.Pin   = LED_PIN;
-    gpio.Mode  = GPIO_MODE_OUTPUT_PP;
-    gpio.Pull  = GPIO_NOPULL;
-    gpio.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(LED_PORT, &gpio);
-    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET); // 初始灭
-}
-
-void LED_Toggle(void) {
-    HAL_GPIO_TogglePin(LED_PORT, LED_PIN);
-}
-
-void LED_On(void) {
-    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET); // 低电平点亮
-}
-
-void LED_Off(void) {
-    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
-}
-
-void BoardLED_Init(void) {
     __HAL_RCC_GPIOC_CLK_ENABLE();
-    GPIO_InitTypeDef gpio = {0};
-    gpio.Pin   = BOARD_LED_PIN;
-    gpio.Mode  = GPIO_MODE_OUTPUT_PP;
-    gpio.Pull  = GPIO_NOPULL;
-    gpio.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(BOARD_LED_PORT, &gpio);
-    HAL_GPIO_WritePin(BOARD_LED_PORT, BOARD_LED_PIN, GPIO_PIN_SET); // 初始灭
+
+    GPIO_InitTypeDef gpio = {
+        .Mode  = GPIO_MODE_OUTPUT_PP,
+        .Pull  = GPIO_NOPULL,
+        .Speed = GPIO_SPEED_FREQ_LOW
+    };
+
+    for (int i = 0; i < LED_COUNT; i++) {
+        gpio.Pin = LED_TABLE[i].pin;
+        HAL_GPIO_Init(LED_TABLE[i].port, &gpio);
+        // 初始高电平熄灭（低电平点亮模式）
+        HAL_GPIO_WritePin(LED_TABLE[i].port, LED_TABLE[i].pin, GPIO_PIN_SET);
+    }
 }
 
-void BoardLED_Toggle(void) {
-    HAL_GPIO_TogglePin(BOARD_LED_PORT, BOARD_LED_PIN);
+void LED_On(LED_Id_t id) {
+    if (id < LED_COUNT) {
+        HAL_GPIO_WritePin(LED_TABLE[id].port, LED_TABLE[id].pin, GPIO_PIN_RESET);
+    }
 }
 
-void BoardLED_On(void) {
-    HAL_GPIO_WritePin(BOARD_LED_PORT, BOARD_LED_PIN, GPIO_PIN_RESET);
+void LED_Off(LED_Id_t id) {
+    if (id < LED_COUNT) {
+        HAL_GPIO_WritePin(LED_TABLE[id].port, LED_TABLE[id].pin, GPIO_PIN_SET);
+    }
 }
 
-void BoardLED_Off(void) {
-    HAL_GPIO_WritePin(BOARD_LED_PORT, BOARD_LED_PIN, GPIO_PIN_SET);
+void LED_Toggle(LED_Id_t id) {
+    if (id < LED_COUNT) {
+        HAL_GPIO_TogglePin(LED_TABLE[id].port, LED_TABLE[id].pin);
+        HAL_Delay(100);
+    }
 }

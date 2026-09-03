@@ -1,14 +1,18 @@
-#ifndef __LED_H
-#define __LED_H
+#ifndef __LED_H__
+#define __LED_H__
+
+#include "stm32f1xx_hal.h"
+
+// 定义 LED 逻辑编号
+typedef enum {
+    LED_USER = 0,    // PA10 外接 LED
+    LED_BOARD,       // PC13 板载 LED
+    LED_COUNT        // 自动计算 LED 总数
+} LED_Id_t;
 
 void LED_Init(void);
-void LED_Toggle(void);
-void LED_On(void);
-void LED_Off(void);
+void LED_On(LED_Id_t id);
+void LED_Off(LED_Id_t id);
+void LED_Toggle(LED_Id_t id);
 
-void BoardLED_Init(void);
-void BoardLED_Toggle(void);
-void BoardLED_On(void);
-void BoardLED_Off(void);
-
-#endif
+#endif /* __LED_H__ */

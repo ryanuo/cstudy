@@ -25,6 +25,8 @@
 #include "fan.h"
 #include "buzzer.h"
 #include "led.h"
+#include "key.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,31 +95,47 @@ int main(void)
   Fan_Init();
   Buzzer_Init();
   LED_Init();
-  BoardLED_Init();
   OLED_Init();
   OLED_ShowMode(1);
+  Key_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int mode = 5;
+  int mode = 4;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    switch (mode) {
-      case 1: Fan_Forward();  break;
-      case 2: Fan_Reverse();  break;
-      case 3: Fan_Stop();      break;
-      case 4: Buzzer_On();     break;
-      case 5: LED_Toggle(); BoardLED_Toggle(); break;
-      case 6: /* 仅刷新 OLED */ break;
+    switch (mode)
+    {
+    case 1:
+      Fan_Forward();
+      break;
+    case 2:
+      Fan_Reverse();
+      break;
+    case 3:
+      Fan_Forward_Reverse();
+      break;
+    case 4:
+      Buzzer_PlayQiFengLe();
+      break;
+    case 5:
+      LED_Toggle(0);
+      break;
+    case 6:
+      Key_led_toggle_init();
+      break;
+    default:
+      break;
     }
     OLED_ShowMode(mode);
-    HAL_Delay(1000);
-    mode = (mode % 6) + 1;
+
+    // mode = (mode % 6) + 1;
   }
+
   /* USER CODE END 3 */
 }
 
