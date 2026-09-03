@@ -7,6 +7,6 @@ void Light_Init(void);
 uint16_t Light_GetValue(void);
 void Light_AutoLED(void);
 
-#define THRESHOLD_DARK   2000
+#define THRESHOLD_DARK   2000  // 高于此值视为天黑
 
 #endif
