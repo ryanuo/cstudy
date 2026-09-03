@@ -27,6 +27,7 @@
 #include "led.h"
 #include "key.h"
 #include "light.h"
+#include "image_data.h"
 
 /* USER CODE END Includes */
 
@@ -120,7 +121,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int mode = 8;
+  int mode = 9;
   while (1)
   {
     /* USER CODE END WHILE */
@@ -162,6 +163,13 @@ int main(void)
     case 8:
       OLED_ShowString(0, 16, "Light:", OLED_8X16);
       OLED_ShowNum(56, 16, Light_GetValue(), 4, OLED_8X16);
+      break;
+    case 9:
+      if (Light_GetValue() >= THRESHOLD_DARK) {
+        OLED_ShowImage(0, 0, 128, 64, Image_Dark);
+      } else {
+        OLED_ShowImage(0, 0, 128, 64, Image_Bright);
+      }
       break;
     default:
       OLED_ShowString(0, 16, "Key Toggle", OLED_8X16);

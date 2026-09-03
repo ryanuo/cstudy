@@ -1,7 +1,6 @@
 #include "fan.h"
 #include "stm32f1xx_hal.h"
 #include "light.h"
-#include "buzzer.h"
 
 #define FAN_IA_PIN GPIO_PIN_13
 #define FAN_IB_PIN GPIO_PIN_12
@@ -55,9 +54,7 @@ void Fan_LightControl(void)
     uint16_t light = Light_GetValue();
     if (light < THRESHOLD_DARK) {
         Fan_Forward();   // 天亮 → 转
-        Buzzer_Stop();
     } else {
         Fan_Stop();      // 天黑 → 停
-        Buzzer_Start();
     }
 }

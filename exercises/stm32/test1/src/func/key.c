@@ -1,6 +1,7 @@
 #include "key.h"
 #include "stm32f1xx_hal.h"
 #include "led.h"
+#include "fan.h"
 
 #define KEY_PORT GPIOA
 #define KEY_PIN GPIO_PIN_0
@@ -53,9 +54,11 @@ void Key_led_toggle_init(void)
     if (key == 2)
     {
         LED_Toggle(0);
+        Fan_Forward();
     }
     else if (key == 1)
     {
         LED_Toggle(1);
+        Fan_Reverse();
     }
 }
