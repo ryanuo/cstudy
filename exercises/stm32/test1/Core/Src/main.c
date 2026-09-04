@@ -153,16 +153,19 @@ int main(void)
       break;
     case 3:
       OLED_ShowString(0, 16, "Fan Fwd-Rev", OLED_8X16);
+      OLED_Update();            /* 先上屏，再跑 4.5s 阻塞循环，文字立即可见 */
       Fan_Forward_Reverse();
       break;
     case 4:
       OLED_ShowString(0, 16, "Music", OLED_8X16);
-      Buzzer_Play(1);       /* 阻塞播放整首（起风了） */
+      OLED_Update();            /* 先显示 Mode:4 Music，再开始播放 */
+      Buzzer_Play(1);       /* 阻塞播放整首（起风了），播放中按 PA5 可中断 */
       mode = (mode % 10) + 1; /* 播完自动进下一模式，避免卡死无法切走 */
       break;
     case 5:
       OLED_ShowString(0, 16, "LED Blink", OLED_8X16);
       LED_Toggle(0);
+      LED_Toggle(1);
       break;
     case 6:
       OLED_ShowString(0, 16, "Light Auto", OLED_8X16);

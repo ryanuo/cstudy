@@ -23,16 +23,35 @@ void Buzzer_Start(void) {
     HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
 }
 
-/* 播放一个音符 */
+/* 播放一个音符。
+ * freq==NOTE_REST 时只静音延时。播放中检测 PA5（模式切换键）按下
+ * 则立即中断整曲返回 —— 让 main 循环能切走模式。 */
+static volatile uint8_t s_abort = 0;
+
 void Buzzer_PlayNote(uint16_t freq, uint16_t duration) {
     if (freq == NOTE_REST) {
-        HAL_Delay(duration);
+        /* 休止符：分段延时，期间也响应按键 */
+        uint32_t waited = 0;
+        while (waited < duration) {
+            if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET) {
+                while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET); /* 等松手，防 main 重复触发 */
+                s_abort = 1;
+                return;
+            }
+            HAL_Delay(10);
+            waited += 10;
+        }
         return;
     }
     /* GPIO 翻转产生方波 */
     uint32_t half_us = 500000 / freq;
     uint32_t cycles = (uint32_t)duration * 1000 / (half_us * 2);
     for (uint32_t c = 0; c < cycles; c++) {
+        if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET) {
+            while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET); /* 等松手 */
+            s_abort = 1;
+            return;
+        }
         HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET);
         for (volatile uint32_t d = 0; d < half_us * 7; d++);
         HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET);
@@ -43,9 +62,11 @@ void Buzzer_PlayNote(uint16_t freq, uint16_t duration) {
 /* 播放歌曲 */
 void Buzzer_PlayMusic(const MusicNote_t *music, uint16_t length, uint16_t beat_ms) {
     for (uint16_t i = 0; i < length; i++) {
+        if (s_abort) break;                       /* 被按键中断 */
         uint32_t duration = ((uint32_t)beat_ms * music[i].beat) / 4;
         Buzzer_PlayNote(music[i].freq, duration);
     }
+    s_abort = 0;                                  /* 播完/中断都复位，下次从头播 */
 }
 
 /* 起风了 乐谱 */
