@@ -1,4 +1,5 @@
 #include "buzzer.h"
+#include "uart_cmd.h"
 #include "stm32f1xx_hal.h"
 
 #define BUZZER_PIN  GPIO_PIN_1
@@ -63,6 +64,7 @@ void Buzzer_PlayNote(uint16_t freq, uint16_t duration) {
 void Buzzer_PlayMusic(const MusicNote_t *music, uint16_t length, uint16_t beat_ms) {
     for (uint16_t i = 0; i < length; i++) {
         if (s_abort) break;                       /* 被按键中断 */
+        if (UART_CMD_GetTargetMode() != 0 && UART_CMD_GetTargetMode() != 4) break;  /* Qt 切换模式 */
         uint32_t duration = ((uint32_t)beat_ms * music[i].beat) / 4;
         Buzzer_PlayNote(music[i].freq, duration);
     }

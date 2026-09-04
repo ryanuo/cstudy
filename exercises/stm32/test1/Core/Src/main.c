@@ -27,6 +27,7 @@
 #include "led.h"
 #include "key.h"
 #include "light.h"
+#include "uart_cmd.h"
 #include "image_data.h"
 
 /* USER CODE END Includes */
@@ -106,6 +107,8 @@ int main(void)
    * PB11 - 按键2（接正电源，按下=HIGH）
    * PB12 - 风扇 INB（L9110H）
    * PB13 - 风扇 IA（L9110H）
+   * PA10 - USART1_RX（串口接收）
+   * PB6  - USART1_TX（串口发送，复用）
    * PA5  - 模式切换按键（接正电源，按下=HIGH）
    * PC13 - 贴片灯（低电平点亮）
    * ============================================================
@@ -118,23 +121,40 @@ int main(void)
   OLED_Update();
   Key_Init();
   Light_Init();
+  UART_CMD_Init(); /* 串口命令解析：PA9=TX PA10=RX */
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   int mode = 10;
+  uint8_t auto_stop = 1;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    /* PA5: 按下切换模式 (1→2→…→10→1) */
+
+    /* Qt 通过串口设置的目标模式 */
+    if (UART_CMD_GetTargetMode() > 0)
+    {
+      mode = UART_CMD_GetTargetMode();
+      UART_CMD_ClearTargetMode();
+    }
+
+    /* 自动停止输出（仅模式 1-9，case 10 手动控制不停止） */
+    if (auto_stop) {
+      Fan_Stop();
+      Buzzer_Stop();
+      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET); /* LED 灭 */
+    }
+    auto_stop = 1;  /* 默认自动停止，case 10 会设为 0 */
+
+    /* PA5 按键切换模式 */
     if (Key_PA5_Pressed())
     {
-      Buzzer_Stop(); /* 切模式前先停掉音乐 */
-      Fan_Stop();    /* 停风扇 */
+      Buzzer_Stop();
+      Fan_Stop();
       mode = (mode % 10) + 1;
-      OLED_Clear();
       OLED_Update();
     }
 
@@ -187,14 +207,16 @@ int main(void)
       else
       {
         OLED_ShowImage(0, 0, 128, 64, Image_Bright);
-      }
-      break;
+    }
+    break;
     default:
       OLED_ShowString(0, 16, "Key Toggle", OLED_8X16);
       Key_led_toggle_init();
+      auto_stop = 0;  /* 手动控制模式，不要自动停止输出 */
       break;
     }
     OLED_Update();
+    // UART_CMD_Process() 已移到 SysTick 中断，实时响应不受主循环阻塞影响
 
     // mode = (mode % 6) + 1;
   }
@@ -273,11 +295,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA9 */
+  /*Configure GPIO pin : PA9 — 先输出高再切 AF_PP，防止 UART 前浮空产生虚假起始位 */
   GPIO_InitStruct.Pin = GPIO_PIN_9;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_SET);
 
   /*Configure GPIO pin : PA10 */
   GPIO_InitStruct.Pin = GPIO_PIN_10;
