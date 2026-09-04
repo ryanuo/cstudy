@@ -106,6 +106,7 @@ int main(void)
    * PB11 - 按键2（接正电源，按下=HIGH）
    * PB12 - 风扇 INB（L9110H）
    * PB13 - 风扇 IA（L9110H）
+   * PA5  - 模式切换按键（接正电源，按下=HIGH）
    * PC13 - 贴片灯（低电平点亮）
    * ============================================================
    */
@@ -127,6 +128,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /* PA5: 按下切换模式 (1→2→…→10→1) */
+    if (Key_PA5_Pressed())
+    {
+      Buzzer_Stop();          /* 切模式前先停掉音乐 */
+      Fan_Stop();             /* 停风扇 */
+      mode = (mode % 10) + 1;
+      OLED_Clear();
+      OLED_Update();
+    }
+
     OLED_Clear();
     OLED_ShowString(0, 0, "Mode:", OLED_8X16);
     OLED_ShowNum(40, 0, mode, 1, OLED_8X16);
@@ -146,7 +157,8 @@ int main(void)
       break;
     case 4:
       OLED_ShowString(0, 16, "Music", OLED_8X16);
-      Buzzer_Play(1);
+      Buzzer_Play(1);       /* 阻塞播放整首（起风了） */
+      mode = (mode % 10) + 1; /* 播完自动进下一模式，避免卡死无法切走 */
       break;
     case 5:
       OLED_ShowString(0, 16, "LED Blink", OLED_8X16);

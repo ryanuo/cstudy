@@ -19,6 +19,26 @@ void Key_Init(void)
 
     // 3. 执行初始化
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    // PA5 — 模式切换按键（接正电源，按下=HIGH）
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+
+uint8_t Key_PA5_Pressed(void)
+{
+    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET) // 高电平=按下
+    {
+        HAL_Delay(20); // 按下消抖
+        while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET)
+            ;          // 等待松手
+        HAL_Delay(20); // 松手消抖
+        return 1;
+    }
+    return 0;
 }
 
 uint8_t Key_GetNum(void)

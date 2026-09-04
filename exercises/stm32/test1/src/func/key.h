@@ -6,6 +6,7 @@
 
 void Key_Init(void);
 uint8_t Key_GetNum(void);
+uint8_t Key_PA5_Pressed(void);
 
 void Key_led_toggle_init(void);
 
