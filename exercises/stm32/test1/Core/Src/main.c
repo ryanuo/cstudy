@@ -98,18 +98,18 @@ int main(void)
   /* ============================================================
    * 引脚占用说明
    * ============================================================
-   * PA0  - 光敏传感器 - Do
+   * PA0  - 光敏传感器（ADC0）
    * PA1  - 蜂鸣器（低电平触发）
    * PA2  - LED（低电平点亮）
+   * PA5  - 模式切换按键（接正电源，按下=HIGH）
+   * PA9  - USART1_TX（串口发送）
+   * PA10 - USART1_RX（串口接收）
    * PB1  - 按键1（接正电源，按下=HIGH）
    * PB8  - OLED SCL（软件I2C）
    * PB9  - OLED SDA（软件I2C）
    * PB11 - 按键2（接正电源，按下=HIGH）
    * PB12 - 风扇 INB（L9110H）
    * PB13 - 风扇 IA（L9110H）
-   * PA10 - USART1_RX（串口接收）
-   * PB6  - USART1_TX（串口发送，复用）
-   * PA5  - 模式切换按键（接正电源，按下=HIGH）
    * PC13 - 贴片灯（低电平点亮）
    * ============================================================
    */
@@ -140,6 +140,9 @@ int main(void)
       mode = UART_CMD_GetTargetMode();
       UART_CMD_ClearTargetMode();
     }
+
+    /* 同步当前模式到 uart_cmd，用于 STATUS 查询 */
+    UART_CMD_SetMode((uint8_t)mode);
 
     /* 自动停止输出（仅模式 1-9，case 10 手动控制不停止） */
     if (auto_stop) {

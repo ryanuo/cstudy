@@ -28,6 +28,11 @@ uint8_t UART_CMD_GetTargetMode(void)
     return target_mode;
 }
 
+void UART_CMD_SetMode(uint8_t m)
+{
+    target_mode = m;
+}
+
 void UART_CMD_ClearTargetMode(void)
 {
     target_mode = 0;
