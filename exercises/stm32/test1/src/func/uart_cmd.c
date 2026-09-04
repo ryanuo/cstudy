@@ -1,4 +1,5 @@
 #include "uart_cmd.h"
+#include "servo.h"
 #include "stm32f1xx_hal.h"
 #include "stm32f1xx_hal_uart.h"
 #include <string.h>
@@ -107,11 +108,18 @@ void UART_CMD_Process(void)
         HAL_UART_Transmit(&huart1, (uint8_t *)dbg, len, 100);
     }
 
-    if (strncmp((char *)rx_buf, "MODE:", 5) == 0)
-    {
+    if (strncmp((char *)rx_buf, "SERVO:", 6) == 0) {
+        /* 舵机角度命令，格式: SERVO:90 */
+        int angle = atoi((char *)rx_buf + 6);
+        if (angle >= 0 && angle <= 180) {
+            servo_angle = (uint8_t)angle;
+            Servo_SetAngle(servo_angle);
+        }
+    }
+    else if (strncmp((char *)rx_buf, "MODE:", 5) == 0) {
         /* 模式切换命令，格式: MODE:3 */
         int m = atoi((char *)rx_buf + 5);
-        if (m >= 1 && m <= 10)
+        if (m >= 1 && m <= 11)
         {
             target_mode = (uint8_t)m;
             /* 回传新状态 */

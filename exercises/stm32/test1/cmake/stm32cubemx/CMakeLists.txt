@@ -52,6 +52,8 @@ set(STM32_Drivers_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_uart.c
 )
 
+# 舵机使用软件 PWM，不需要硬件 TIM HAL
+
 # Drivers Midllewares
 
 

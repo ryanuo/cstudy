@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_it.h"
+#include "servo.h"
 #include "uart_cmd.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -188,7 +189,8 @@ void SysTick_Handler(void)
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
-  UART_CMD_Process();   /* 1ms 节拍处理串口命令 — 实时响应，不受主循环阻塞影响 */
+  UART_CMD_Process();   /* 1ms 节拍处理串口命令 */
+  Servo_Update();       /* 1ms 节拍，非阻塞状态机驱动舵机 PWM */
   /* USER CODE END SysTick_IRQn 1 */
 }
 

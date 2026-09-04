@@ -1,22 +1,24 @@
 # STM32 Test1 Quick Build
 
 BUILD_DIR   := build/Debug
-BUILD_TYPE  := Debug
 TARGET     := test1.elf
 
 OPENOCD    := openocd
 OCD_IF     := interface/stlink.cfg
 OCD_TARGET := target/stm32f1x.cfg
 
-.PHONY: all config build flash clean
+JOBS       := $(shell sysctl -n hw.ncpu)
 
-all: config build
+.PHONY: all build flash clean
 
-config:
-	cmake --preset $(BUILD_TYPE)
+all: flash
 
-build:
-	cmake --build $(BUILD_DIR) -j$(shell sysctl -n hw.ncpu)
+# 只在 build 目录不存在时配置
+$(BUILD_DIR)/CMakeCache.txt:
+	cmake --preset Debug
+
+build: $(BUILD_DIR)/CMakeCache.txt
+	cmake --build $(BUILD_DIR) -j$(JOBS)
 
 flash: build
 	$(OPENOCD) -f $(OCD_IF) -f $(OCD_TARGET) -c "program $(BUILD_DIR)/$(TARGET) verify reset exit"

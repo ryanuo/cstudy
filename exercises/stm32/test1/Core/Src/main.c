@@ -28,6 +28,7 @@
 #include "key.h"
 #include "light.h"
 #include "uart_cmd.h"
+#include "servo.h"
 #include "image_data.h"
 
 /* USER CODE END Includes */
@@ -102,6 +103,7 @@ int main(void)
    * PA1  - 蜂鸣器（低电平触发）
    * PA2  - LED（低电平点亮）
    * PA5  - 模式切换按键（接正电源，按下=HIGH）
+   * PA6  - 舵机（TIM3_CH1 PWM）
    * PA9  - USART1_TX（串口发送）
    * PA10 - USART1_RX（串口接收）
    * PB1  - 按键1（接正电源，按下=HIGH）
@@ -122,12 +124,14 @@ int main(void)
   Key_Init();
   Light_Init();
   UART_CMD_Init(); /* 串口命令解析：PA9=TX PA10=RX */
+  Servo_Init();    /* 舵机：PA6=TIM3_CH1 */
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   int mode = 10;
   uint8_t auto_stop = 1;
+  uint8_t servo_angle = 90;  /* 舵机初始角度 */
   while (1)
   {
     /* USER CODE END WHILE */
@@ -157,7 +161,7 @@ int main(void)
     {
       Buzzer_Stop();
       Fan_Stop();
-      mode = (mode % 10) + 1;
+      mode = (mode % 11) + 1;  /* 1-11 循环 */
       OLED_Update();
     }
 
@@ -212,6 +216,21 @@ int main(void)
         OLED_ShowImage(0, 0, 128, 64, Image_Bright);
     }
     break;
+    case 11:
+      OLED_ShowString(0, 16, "Servo:", OLED_8X16);
+      OLED_ShowNum(56, 16, servo_angle, 3, OLED_8X16);
+      /* PB1 角度增加，PB11 角度减少 */
+      if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_SET) {
+        if (servo_angle < 180) servo_angle += 5;
+        Servo_SetAngle(servo_angle);
+        HAL_Delay(100);
+      }
+      if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11) == GPIO_PIN_SET) {
+        if (servo_angle > 0) servo_angle -= 5;
+        Servo_SetAngle(servo_angle);
+        HAL_Delay(100);
+      }
+      break;
     default:
       OLED_ShowString(0, 16, "Key Toggle", OLED_8X16);
       Key_led_toggle_init();
