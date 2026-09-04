@@ -216,9 +216,6 @@ int main(void)
       break;
     }
     OLED_Update();
-    // UART_CMD_Process() 已移到 SysTick 中断，实时响应不受主循环阻塞影响
-
-    // mode = (mode % 6) + 1;
   }
 
   /* USER CODE END 3 */
