@@ -121,7 +121,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int mode = 9;
+  int mode = 10;
   while (1)
   {
     /* USER CODE END WHILE */

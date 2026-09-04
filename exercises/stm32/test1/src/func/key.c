@@ -50,15 +50,35 @@ uint8_t Key_GetNum(void)
 
 void Key_led_toggle_init(void)
 {
+    // static 保证函数退出后能够记住当前处于什么模式
+    // 0: 停止, 1: 反转模式(LED_USER), 2: 正转模式(LED_BOARD)
+    static uint8_t current_mode = 0;
+
     uint8_t key = Key_GetNum();
-    if (key == 2)
+    if (key == 0) return; // 无按键按下直接返回
+
+    // 1. 如果重复按下当前正在运行的模式 -> 全部关闭
+    if (key == current_mode)
     {
-        LED_Toggle(0);
-        Fan_Forward();
+        current_mode = 0;
+        Fan_Stop();
+        LED_Off(LED_BOARD);
+        LED_Off(LED_USER);
     }
+    // 2. 按下按键 2 -> 开启正转模式
+    else if (key == 2)
+    {
+        current_mode = 2;
+        LED_Off(LED_USER);   // 确保反转灯熄灭
+        LED_On(LED_BOARD);   // 点亮正转灯
+        Fan_Forward();       // 开启风扇正转
+    }
+    // 3. 按下按键 1 -> 开启反转模式
     else if (key == 1)
     {
-        LED_Toggle(1);
-        Fan_Reverse();
+        current_mode = 1;
+        LED_Off(LED_BOARD);  // 确保正转灯熄灭
+        LED_On(LED_USER);    // 点亮反转灯
+        Fan_Reverse();       // 开启风扇反转
     }
 }
