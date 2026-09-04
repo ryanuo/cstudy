@@ -99,7 +99,7 @@ int main(void)
    * ============================================================
    * PA0  - 光敏传感器 - Do
    * PA1  - 蜂鸣器（低电平触发）
-   * PA10 - LED（低电平点亮）
+   * PA2  - LED（低电平点亮）
    * PB1  - 按键1（接正电源，按下=HIGH）
    * PB8  - OLED SCL（软件I2C）
    * PB9  - OLED SDA（软件I2C）
@@ -131,8 +131,8 @@ int main(void)
     /* PA5: 按下切换模式 (1→2→…→10→1) */
     if (Key_PA5_Pressed())
     {
-      Buzzer_Stop();          /* 切模式前先停掉音乐 */
-      Fan_Stop();             /* 停风扇 */
+      Buzzer_Stop(); /* 切模式前先停掉音乐 */
+      Fan_Stop();    /* 停风扇 */
       mode = (mode % 10) + 1;
       OLED_Clear();
       OLED_Update();
@@ -140,7 +140,7 @@ int main(void)
 
     OLED_Clear();
     OLED_ShowString(0, 0, "Mode:", OLED_8X16);
-    OLED_ShowNum(40, 0, mode, 1, OLED_8X16);
+    OLED_ShowNum(40, 0, mode, 2, OLED_8X16);
     switch (mode)
     {
     case 1:
@@ -153,13 +153,13 @@ int main(void)
       break;
     case 3:
       OLED_ShowString(0, 16, "Fan Fwd-Rev", OLED_8X16);
-      OLED_Update();            /* 先上屏，再跑 4.5s 阻塞循环，文字立即可见 */
+      OLED_Update(); /* 先上屏，再跑 4.5s 阻塞循环，文字立即可见 */
       Fan_Forward_Reverse();
       break;
     case 4:
       OLED_ShowString(0, 16, "Music", OLED_8X16);
-      OLED_Update();            /* 先显示 Mode:4 Music，再开始播放 */
-      Buzzer_Play(1);       /* 阻塞播放整首（起风了），播放中按 PA5 可中断 */
+      OLED_Update();          /* 先显示 Mode:4 Music，再开始播放 */
+      Buzzer_Play(1);         /* 阻塞播放整首（起风了），播放中按 PA5 可中断 */
       mode = (mode % 10) + 1; /* 播完自动进下一模式，避免卡死无法切走 */
       break;
     case 5:
@@ -180,9 +180,12 @@ int main(void)
       OLED_ShowNum(56, 16, Light_GetValue(), 4, OLED_8X16);
       break;
     case 9:
-      if (Light_GetValue() >= THRESHOLD_DARK) {
+      if (Light_GetValue() >= THRESHOLD_DARK)
+      {
         OLED_ShowImage(0, 0, 128, 64, Image_Dark);
-      } else {
+      }
+      else
+      {
         OLED_ShowImage(0, 0, 128, 64, Image_Bright);
       }
       break;

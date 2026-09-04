@@ -7,7 +7,7 @@ typedef struct {
 } LED_HW_Config_t;
 
 static const LED_HW_Config_t LED_TABLE[LED_COUNT] = {
-    [LED_USER]  = { .port = GPIOA, .pin = GPIO_PIN_10 },
+    [LED_USER]  = { .port = GPIOA, .pin = GPIO_PIN_2 },
     [LED_BOARD] = { .port = GPIOC, .pin = GPIO_PIN_13 },
 };
 

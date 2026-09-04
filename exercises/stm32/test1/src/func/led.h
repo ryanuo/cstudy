@@ -5,7 +5,7 @@
 
 // 定义 LED 逻辑编号
 typedef enum {
-    LED_USER = 0,    // PA10 外接 LED
+    LED_USER = 0,    // PA2 外接 LED
     LED_BOARD,       // PC13 板载 LED
     LED_COUNT        // 自动计算 LED 总数
 } LED_Id_t;
