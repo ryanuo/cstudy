@@ -1,20 +1,20 @@
 #include "led.h"
 
-// 内部封装引脚硬件映射表
+// LED 硬件映射表
 typedef struct {
     GPIO_TypeDef* port;
     uint16_t      pin;
 } LED_HW_Config_t;
 
 static const LED_HW_Config_t LED_TABLE[LED_COUNT] = {
-    [LED_USER]  = { .port = GPIOA, .pin = GPIO_PIN_2 },
-    [LED_BOARD] = { .port = GPIOC, .pin = GPIO_PIN_13 },
+    [LED1]  = { .port = GPIOA, .pin = GPIO_PIN_0 },
+    [LED2]  = { .port = GPIOA, .pin = GPIO_PIN_1 },
+    [LED3]  = { .port = GPIOA, .pin = GPIO_PIN_2 },
 };
 
-void LED_Init(void) {
-    // 开启所需端口时钟
+void LED_Init(void)
+{
     __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
 
     GPIO_InitTypeDef gpio = {
         .Mode  = GPIO_MODE_OUTPUT_PP,
@@ -25,26 +25,27 @@ void LED_Init(void) {
     for (int i = 0; i < LED_COUNT; i++) {
         gpio.Pin = LED_TABLE[i].pin;
         HAL_GPIO_Init(LED_TABLE[i].port, &gpio);
-        // 初始高电平熄灭（低电平点亮模式）
-        HAL_GPIO_WritePin(LED_TABLE[i].port, LED_TABLE[i].pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LED_TABLE[i].port, LED_TABLE[i].pin, GPIO_PIN_SET);  // 初始高电平 = 灭
     }
 }
 
-void LED_On(LED_Id_t id) {
+void LED_On(LED_Id_t id)
+{
     if (id < LED_COUNT) {
-        HAL_GPIO_WritePin(LED_TABLE[id].port, LED_TABLE[id].pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LED_TABLE[id].port, LED_TABLE[id].pin, GPIO_PIN_RESET);  // 低电平点亮
     }
 }
 
-void LED_Off(LED_Id_t id) {
+void LED_Off(LED_Id_t id)
+{
     if (id < LED_COUNT) {
-        HAL_GPIO_WritePin(LED_TABLE[id].port, LED_TABLE[id].pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LED_TABLE[id].port, LED_TABLE[id].pin, GPIO_PIN_SET);   // 高电平熄灭
     }
 }
 
-void LED_Toggle(LED_Id_t id) {
+void LED_Toggle(LED_Id_t id)
+{
     if (id < LED_COUNT) {
         HAL_GPIO_TogglePin(LED_TABLE[id].port, LED_TABLE[id].pin);
-        HAL_Delay(100);
     }
 }

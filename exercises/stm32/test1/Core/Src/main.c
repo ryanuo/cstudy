@@ -99,19 +99,21 @@ int main(void)
   /* ============================================================
    * 引脚占用说明
    * ============================================================
-   * PA0  - 光敏传感器（ADC0）
-   * PA1  - 蜂鸣器（低电平触发）
-   * PA2  - LED（低电平点亮）
-   * PA5  - 模式切换按键（接正电源，按下=HIGH）
-   * PA6  - 舵机（TIM3_CH1 PWM）
-   * PA9  - USART1_TX（串口发送）
-   * PA10 - USART1_RX（串口接收）
-   * PB1  - 按键1（接正电源，按下=HIGH）
+   * PA0  - LED1（低电平点亮）
+   * PA1  - LED2（低电平点亮）
+   * PA2  - LED3（低电平点亮）
+   * PA3  - 按键1（接正电源，按下=HIGH）
+   * PA4  - 按键2（接正电源，按下=HIGH）
+   * PA5  - 按键3（接正电源，按下=HIGH）
+   * PA6  - 蜂鸣器（低电平触发）
+   * PA9  - USART1_RXD（直连串口TXD）
+   * PA10 - USART1_TXD（直连串口RXD）
+   * PB3  - 舵机（软件PWM）
    * PB8  - OLED SCL（软件I2C）
    * PB9  - OLED SDA（软件I2C）
-   * PB11 - 按键2（接正电源，按下=HIGH）
    * PB12 - 风扇 INB（L9110H）
    * PB13 - 风扇 IA（L9110H）
+   * PB14 - 光敏传感器（数字输入）
    * PC13 - 贴片灯（低电平点亮）
    * ============================================================
    */
@@ -123,15 +125,14 @@ int main(void)
   OLED_Update();
   Key_Init();
   Light_Init();
-  UART_CMD_Init(); /* 串口命令解析：PA9=TX PA10=RX */
-  Servo_Init();    /* 舵机：PA6=TIM3_CH1 */
+  UART_CMD_Init(); /* 串口命令解析：PA10=TX PA9=RX */
+  Servo_Init();    /* 舵机：PA7 软件PWM */
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   int mode = 10;
   uint8_t auto_stop = 1;
-  uint8_t servo_angle = 90;  /* 舵机初始角度 */
   while (1)
   {
     /* USER CODE END WHILE */
@@ -148,22 +149,15 @@ int main(void)
     /* 同步当前模式到 uart_cmd，用于 STATUS 查询 */
     UART_CMD_SetMode((uint8_t)mode);
 
-    /* 自动停止输出（仅模式 1-9，case 10 手动控制不停止） */
-    if (auto_stop) {
-      Fan_Stop();
-      Buzzer_Stop();
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET); /* LED 灭 */
-    }
-    auto_stop = 1;  /* 默认自动停止，case 10 会设为 0 */
-
-    /* PA5 按键切换模式 */
-    if (Key_PA5_Pressed())
+    /* 自动停止输出（模式 1-9 停止，10/11 手动控制不停止） */
+    if (auto_stop)
     {
-      Buzzer_Stop();
       Fan_Stop();
-      mode = (mode % 11) + 1;  /* 1-11 循环 */
-      OLED_Update();
+      Buzzer_Stop();
+      LED_Off(LED1);
+      LED_Off(LED2);
     }
+    auto_stop = 1; /* 默认自动停止，case 10 会设为 0 */
 
     OLED_Clear();
     OLED_ShowString(0, 0, "Mode:", OLED_8X16);
@@ -191,8 +185,8 @@ int main(void)
       break;
     case 5:
       OLED_ShowString(0, 16, "LED Blink", OLED_8X16);
-      LED_Toggle(0);
-      LED_Toggle(1);
+      LED_Toggle(LED1);
+      LED_Toggle(LED2);
       break;
     case 6:
       OLED_ShowString(0, 16, "Light Auto", OLED_8X16);
@@ -207,34 +201,48 @@ int main(void)
       OLED_ShowNum(56, 16, Light_GetValue(), 4, OLED_8X16);
       break;
     case 9:
-      if (Light_GetValue() >= THRESHOLD_DARK)
+    {
+      static uint8_t last_dark = 0;
+      uint8_t is_dark = (Light_GetValue() >= THRESHOLD_DARK) ? 1 : 0;
+      if (is_dark != last_dark)
+      {
+        last_dark = is_dark;
+        OLED_Clear();
+      }
+      if (is_dark)
       {
         OLED_ShowImage(0, 0, 128, 64, Image_Dark);
       }
       else
       {
         OLED_ShowImage(0, 0, 128, 64, Image_Bright);
+      }
     }
     break;
     case 11:
       OLED_ShowString(0, 16, "Servo:", OLED_8X16);
       OLED_ShowNum(56, 16, servo_angle, 3, OLED_8X16);
-      /* PB1 角度增加，PB11 角度减少 */
-      if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_SET) {
-        if (servo_angle < 180) servo_angle += 5;
+      /* PA4 角度增加，PA5 角度减少 */
+      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET)
+      {
+        if (servo_angle < 180)
+          servo_angle += 5;
         Servo_SetAngle(servo_angle);
         HAL_Delay(100);
       }
-      if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_11) == GPIO_PIN_SET) {
-        if (servo_angle > 0) servo_angle -= 5;
+      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET)
+      {
+        if (servo_angle > 0)
+          servo_angle -= 5;
         Servo_SetAngle(servo_angle);
         HAL_Delay(100);
       }
+      auto_stop = 0; /* 手动控制模式，不要自动停止输出 */
       break;
     default:
       OLED_ShowString(0, 16, "Key Toggle", OLED_8X16);
       Key_led_toggle_init();
-      auto_stop = 0;  /* 手动控制模式，不要自动停止输出 */
+      auto_stop = 0; /* 手动控制模式，不要自动停止输出 */
       break;
     }
     OLED_Update();
@@ -299,7 +307,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
 
   /*Configure GPIO pins : PA0 PA1 PA2 PA6 */
   GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_6;
