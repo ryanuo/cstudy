@@ -132,7 +132,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   int mode = 10;
-  uint8_t auto_stop = 1;
+  int last_mode = -1; /* 记录上一次的 mode，用于检测模式切换 */
   while (1)
   {
     /* USER CODE END WHILE */
@@ -149,15 +149,15 @@ int main(void)
     /* 同步当前模式到 uart_cmd，用于 STATUS 查询 */
     UART_CMD_SetMode((uint8_t)mode);
 
-    /* 自动停止输出（模式 1-9 停止，10/11 手动控制不停止） */
-    if (auto_stop)
+    /* 只在模式切换时停止所有输出，避免切换时遗留上一个模式的动作 */
+    if (mode != last_mode)
     {
       Fan_Stop();
       Buzzer_Stop();
       LED_Off(LED1);
       LED_Off(LED2);
+      last_mode = mode;
     }
-    auto_stop = 1; /* 默认自动停止，case 10 会设为 0 */
 
     OLED_Clear();
     OLED_ShowString(0, 0, "Mode:", OLED_8X16);
@@ -179,14 +179,15 @@ int main(void)
       break;
     case 4:
       OLED_ShowString(0, 16, "Music", OLED_8X16);
-      OLED_Update();          /* 先显示 Mode:4 Music，再开始播放 */
-      Buzzer_Play(1);         /* 阻塞播放整首（起风了），播放中按 PA5 可中断 */
-      mode = (mode % 10) + 1; /* 播完自动进下一模式，避免卡死无法切走 */
+      if (!Music_IsPlaying()) {
+        Buzzer_Play(1);  /* 播放《起风了》 */
+      }
       break;
     case 5:
       OLED_ShowString(0, 16, "LED Blink", OLED_8X16);
       LED_Toggle(LED1);
       LED_Toggle(LED2);
+      LED_Toggle(LED3);
       break;
     case 6:
       OLED_ShowString(0, 16, "Light Auto", OLED_8X16);
@@ -219,6 +220,10 @@ int main(void)
       }
     }
     break;
+    case 10:
+      OLED_ShowString(0, 16, "Key Toggle", OLED_8X16);
+      Key_led_toggle_init();
+      break;
     case 11:
       OLED_ShowString(0, 16, "Servo:", OLED_8X16);
       OLED_ShowNum(56, 16, servo_angle, 3, OLED_8X16);
@@ -237,14 +242,9 @@ int main(void)
         Servo_SetAngle(servo_angle);
         HAL_Delay(100);
       }
-      auto_stop = 0; /* 手动控制模式，不要自动停止输出 */
-      break;
-    default:
-      OLED_ShowString(0, 16, "Key Toggle", OLED_8X16);
-      Key_led_toggle_init();
-      auto_stop = 0; /* 手动控制模式，不要自动停止输出 */
       break;
     }
+
     OLED_Update();
   }
 

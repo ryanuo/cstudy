@@ -37,9 +37,12 @@ typedef struct {
 void Buzzer_Init(void);
 void Buzzer_Stop(void);
 void Buzzer_Start(void);
-void Buzzer_PlayNote(uint16_t freq, uint16_t duration);
-void Buzzer_PlayMusic(const MusicNote_t *music, uint16_t length, uint16_t beat_ms);
+void Buzzer_Play(uint8_t song_id);  /* 兼容旧接口：1=起风了 */
 
-void Buzzer_Play(uint8_t song_id);
+/* 非阻塞音乐播放：在主循环中调用 Music_Update() */
+void Music_Play(const MusicNote_t *music, uint16_t length, uint16_t beat_ms);
+void Music_Update(void);  // 每 1ms 调用一次（放在主循环或 SysTick）
+uint8_t Music_IsPlaying(void);
+void Music_Toggle(void);  // 播放/暂停切换
 
 #endif

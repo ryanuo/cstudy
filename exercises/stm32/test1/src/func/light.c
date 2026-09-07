@@ -29,8 +29,12 @@ void Light_AutoLED(void)
 {
     uint16_t light = Light_GetValue();
     if (light < THRESHOLD_DARK) {
+        LED_On(LED1);
+        LED_Off(LED2);
         LED_On(LED3);   // 天亮 -> LED3 亮
     } else {
+        LED_Off(LED1);
+        LED_On(LED2);
         LED_Off(LED3);  // 天黑 -> LED3 灭
     }
 }

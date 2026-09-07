@@ -22,6 +22,7 @@
 #include "stm32f1xx_it.h"
 #include "servo.h"
 #include "uart_cmd.h"
+#include "buzzer.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -191,6 +192,7 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 1 */
   UART_CMD_Process();   /* 1ms 节拍处理串口命令 */
   Servo_Update();       /* 1ms 节拍，非阻塞状态机驱动舵机 PWM */
+  Music_Update();       /* 1ms 节拍，非阻塞音乐播放 */
   /* USER CODE END SysTick_IRQn 1 */
 }
 
