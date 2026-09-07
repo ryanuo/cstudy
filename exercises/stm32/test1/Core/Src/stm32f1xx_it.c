@@ -23,6 +23,8 @@
 #include "servo.h"
 #include "uart_cmd.h"
 #include "buzzer.h"
+#include "led.h"
+#include "fan.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -193,6 +195,8 @@ void SysTick_Handler(void)
   UART_CMD_Process();   /* 1ms 节拍处理串口命令 */
   Servo_Update();       /* 1ms 节拍，非阻塞状态机驱动舵机 PWM */
   Music_Update();       /* 1ms 节拍，非阻塞音乐播放 */
+  LED_Update();         /* 1ms 节拍，LED 流水灯/闪烁 */
+  Fan_Update();         /* 1ms 节拍，风扇正反转循环 */
   /* USER CODE END SysTick_IRQn 1 */
 }
 

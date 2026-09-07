@@ -49,3 +49,43 @@ void LED_Toggle(LED_Id_t id)
         HAL_GPIO_TogglePin(LED_TABLE[id].port, LED_TABLE[id].pin);
     }
 }
+
+/* 流水灯和闪烁：由 LED_Update() 每 1ms 调用 */
+static uint8_t s_led_mode = 0;  // 1=LED1, 2=LED2, 3=LED3, 4=流水灯, 5=闪烁
+static uint16_t s_led_tick = 0;
+static uint8_t s_led_step = 0;
+
+void LED_SetMode(uint8_t mode)
+{
+    s_led_mode = mode;
+    s_led_tick = 0;
+    s_led_step = 0;
+    LED_Off(LED1);
+    LED_Off(LED2);
+    LED_Off(LED3);
+    if (mode == 1)      LED_On(LED1);
+    else if (mode == 2) LED_On(LED2);
+    else if (mode == 3) LED_On(LED3);
+}
+
+void LED_Update(void)
+{
+    if (s_led_mode == 4) {
+        // 流水灯：每 200ms 切换
+        s_led_tick++;
+        if (s_led_tick >= 200) {
+            s_led_tick = 0;
+            LED_Off(LED1); LED_Off(LED2); LED_Off(LED3);
+            if (s_led_step == 0)      { LED_On(LED1); s_led_step = 1; }
+            else if (s_led_step == 1) { LED_On(LED2); s_led_step = 2; }
+            else if (s_led_step == 2) { LED_On(LED3); s_led_step = 0; }
+        }
+    } else if (s_led_mode == 5) {
+        // 闪烁：每 500ms 翻转所有 LED
+        s_led_tick++;
+        if (s_led_tick >= 500) {
+            s_led_tick = 0;
+            LED_Toggle(LED1); LED_Toggle(LED2); LED_Toggle(LED3);
+        }
+    }
+}

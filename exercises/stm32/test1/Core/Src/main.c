@@ -102,9 +102,9 @@ int main(void)
    * PA0  - LED1（低电平点亮）
    * PA1  - LED2（低电平点亮）
    * PA2  - LED3（低电平点亮）
-   * PA3  - 按键1（接正电源，按下=HIGH）
-   * PA4  - 按键2（接正电源，按下=HIGH）
-   * PA5  - 按键3（接正电源，按下=HIGH）
+   * PA3  - 按键1（按下=LOW，接GND）
+   * PA4  - 按键2（按下=LOW，接GND）
+   * PA5  - 按键3（按下=LOW，接GND）
    * PA6  - 蜂鸣器（低电平触发）
    * PA9  - USART1_RXD（直连串口TXD）
    * PA10 - USART1_TXD（直连串口RXD）
@@ -175,7 +175,7 @@ int main(void)
     case 3:
       OLED_ShowString(0, 16, "Fan Fwd-Rev", OLED_8X16);
       OLED_Update(); /* 先上屏，再跑 4.5s 阻塞循环，文字立即可见 */
-      Fan_Forward_Reverse();
+      Fan_Forward_Reverse_Start();
       break;
     case 4:
       OLED_ShowString(0, 16, "Music", OLED_8X16);
@@ -228,14 +228,14 @@ int main(void)
       OLED_ShowString(0, 16, "Servo:", OLED_8X16);
       OLED_ShowNum(56, 16, servo_angle, 3, OLED_8X16);
       /* PA4 角度增加，PA5 角度减少 */
-      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET)
+      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET)
       {
         if (servo_angle < 180)
           servo_angle += 5;
         Servo_SetAngle(servo_angle);
         HAL_Delay(100);
       }
-      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET)
+      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_RESET)
       {
         if (servo_angle > 0)
           servo_angle -= 5;
@@ -320,7 +320,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : PA3 PA4 PA5 */
   GPIO_InitStruct.Pin = GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA9 — 先输出高再切 AF_PP，防止 UART 前浮空产生虚假起始位 */
