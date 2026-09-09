@@ -1,0 +1,50 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: Configure (Debug)",
+            "type": "cmake",
+            "command": "configure",
+            "preset": "Debug",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "cmake --preset Debug"
+        },
+        {
+            "label": "CMake: Build (Debug)",
+            "type": "cmake",
+            "command": "build",
+            "preset": "Debug",
+            "targets": ["test407"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "detail": "cmake --build build/Debug --target test407"
+        },
+        {
+            "label": "CMake: Clean",
+            "type": "cmake",
+            "command": "clean",
+            "preset": "Debug",
+            "targets": ["test407"],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "cmake --build build/Debug --target clean"
+        },
+        {
+            "label": "Flash (OpenOCD)",
+            "type": "shell",
+            "command": "openocd",
+            "args": [
+                "-f", "interface/stlink.cfg",
+                "-f", "target/stm32f4x.cfg",
+                "-c", "program build/Debug/test407.elf verify reset exit"
+            ],
+            "group": "none",
+            "problemMatcher": [],
+            "detail": "Flash test407.elf via ST-Link + OpenOCD"
+        }
+    ]
+}
