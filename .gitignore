@@ -80,3 +80,4 @@ PPC32e500v2*
 package
 *.DS_Store
 .qtcreator
+.workbuddy
