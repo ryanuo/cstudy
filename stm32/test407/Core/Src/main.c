@@ -29,6 +29,8 @@
 #include "temp_ctrl.h"
 #include "uart.h"
 #include "OLED.h"
+#include "clock.h"
+#include "delay.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,6 +49,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim6;
+
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
@@ -57,13 +61,47 @@ UART_HandleTypeDef huart3;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/**
+  * @brief  OLED 刷新：当前时钟模式 + 运行时间
+  * @note   运行时间由 DWT 周期数换算，时钟源不准时它就会跑偏
+  */
+static void UI_ShowClock(void)
+{
+  char *mode = (Clock_GetMode() == CLK_MODE_HSE_PLL) ? "HSE PLL" : "HSI PLL";
+  uint32_t ms = Delay_GetMs();
 
+  OLED_ShowString(0, 0, "CLK TEST", OLED_8X16);
+
+  OLED_ShowString(0, 20, "MODE : ", OLED_6X8);
+  OLED_ShowString(42, 20, mode, OLED_6X8);
+
+  OLED_ShowString(0, 30, "SYS  : 168MHz", OLED_6X8);
+  /* MCO1 频率由 RCC 寄存器反算，改分频/时钟源后自动跟着变 */
+  {
+    uint32_t khz = Clock_GetMco1Freq() / 1000U;
+
+    OLED_ShowString(0, 40, "MCO1 : ", OLED_6X8);
+    OLED_ShowNum(42, 40, khz / 1000U, 2, OLED_6X8);
+    OLED_ShowChar(54, 40, '.', OLED_6X8);
+    OLED_ShowNum(60, 40, (khz % 1000U) / 100U, 1, OLED_6X8);
+    OLED_ShowString(66, 40, "MHz", OLED_6X8);
+  }
+
+  OLED_ShowString(0, 50, "TIME : ", OLED_6X8);
+  OLED_ShowNum(42, 50, ms / 1000U, 6, OLED_6X8);
+  OLED_ShowChar(78, 50, '.', OLED_6X8);
+  OLED_ShowNum(84, 50, (ms % 1000U) / 100U, 1, OLED_6X8);
+  OLED_ShowChar(90, 50, 's', OLED_6X8);
+
+  OLED_Update();
+}
 /* USER CODE END 0 */
 
 /**
@@ -96,16 +134,19 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART3_UART_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   LED_Init();
+  Key_Init();
+  Delay_Init();                       /* DWT 延时，不占 SysTick 中断 */
+  Clock_Init();                       /* HSE PLL 168MHz + PA8(MCO1) 输出 33.6MHz */
   // Beep_Init();
-  // Key_Init();
   // Fan_Init();
   // Light_Init();
   // TempCtrl_Init();
   // UART3_Init();
-  // OLED_Init();
-  // OLED_Update();
+  OLED_Init();
+  OLED_Update();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -115,7 +156,20 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    TempCtrl_Task();
+    /* KEY0(PA0) 按下：切换 HSE PLL <-> HSI PLL */
+    if (Key_GetNum() == KEY0_VAL)
+    {
+      Clock_Toggle();
+    }
+
+    /* LED0(PF9) 闪烁：延时长度由当前时钟频率决定 */
+    LED_Toggle(LED0);
+
+    /* OLED 显示当前模式与运行时间 */
+    UI_ShowClock();
+
+    Delay_Ms(200);
+    // TempCtrl_Task();
   }
   /* USER CODE END 3 */
 }
@@ -163,6 +217,44 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 41;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 1999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
 }
 
 /**

@@ -22,6 +22,7 @@
 #include "stm32f4xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -183,14 +184,14 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-  static uint32_t counter = 0;
+  // static uint32_t counter = 0;
 
-  counter++;
-  if (counter >= 1000)
-  {
-      HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_13);
-      counter = 0;
-  }
+  // counter++;
+  // if (counter >= 1000)
+  // {
+  //     HAL_GPIO_TogglePin(GPIOE, GPIO_PIN_13);
+  //     counter = 0;
+  // }
 
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();

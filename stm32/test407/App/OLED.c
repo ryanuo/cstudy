@@ -21,19 +21,32 @@
 
 static GPIO_InitTypeDef oled_gpio = {0};
 
+/**
+  * @brief  软件 I2C 位延时
+  * @note   江协这套驱动原本跑在 72MHz 的 F103 上，移植到 168MHz 的 F407 后
+  *         SCL 速度翻了一倍多，SSD1306 采样不到会整屏不显示。
+  *         这里插空循环把 SCL 压到约 200~250kHz。
+  */
+static void OLED_I2C_Delay(void) {
+    for (volatile uint32_t i = 0; i < 40U; i++) {
+    }
+}
+
 static void OLED_W_SCL(uint8_t BitValue) {
     HAL_GPIO_WritePin(OLED_SCL_PORT, OLED_SCL_PIN, (GPIO_PinState)BitValue);
+    OLED_I2C_Delay();
 }
 
 static void OLED_W_SDA(uint8_t BitValue) {
     HAL_GPIO_WritePin(OLED_SDA_PORT, OLED_SDA_PIN, (GPIO_PinState)BitValue);
+    OLED_I2C_Delay();
 }
 
 static void OLED_GPIO_Init(void) {
     __HAL_RCC_GPIOB_CLK_ENABLE();
     oled_gpio.Pin = OLED_SCL_PIN | OLED_SDA_PIN;
     oled_gpio.Mode = GPIO_MODE_OUTPUT_OD;
-    oled_gpio.Pull = GPIO_NOPULL;
+    oled_gpio.Pull = GPIO_PULLUP;
     oled_gpio.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(GPIOB, &oled_gpio);
     HAL_GPIO_WritePin(GPIOB, OLED_SCL_PIN | OLED_SDA_PIN, GPIO_PIN_SET);
@@ -171,7 +184,8 @@ void OLED_WriteData(uint8_t *Data, uint8_t Count)
 void OLED_Init(void)
 {
 	OLED_GPIO_Init();
-	
+	HAL_Delay(100);			/* 等 SSD1306 上电稳定再发命令 */
+
 	OLED_WriteCommand(0xAE);
 	
 	OLED_WriteCommand(0xD5);
