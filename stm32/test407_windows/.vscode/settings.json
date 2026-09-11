@@ -16,5 +16,15 @@
     "**/Listings/**": true
   },
   "C_Cpp.errorSquiggles": "enabled",
-  "C_Cpp.workspaceParsingPriority": "medium"
+  "C_Cpp.workspaceParsingPriority": "medium",
+  "C_Cpp.default.browse.path": [
+    "${workspaceFolder}/USER",
+    "${workspaceFolder}/HARDWARE",
+    "${workspaceFolder}/SYSTEM",
+    "${workspaceFolder}/RTE",
+    "${workspaceFolder}",
+    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/src",
+    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Source"
+  ],
+  "C_Cpp.default.browse.limitSymbolsToIncludedHeaders": false
 }

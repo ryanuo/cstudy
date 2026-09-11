@@ -128,7 +128,19 @@
                 "__yield()=",
                 "__vfp_status(x,y)=0"
             ],
-            "intelliSenseMode": "${default}"
+            "intelliSenseMode": "${default}",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/USER",
+                    "${workspaceFolder}/HARDWARE",
+                    "${workspaceFolder}/SYSTEM",
+                    "${workspaceFolder}/RTE",
+                    "${workspaceFolder}",
+                    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/src",
+                    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Source"
+                ],
+                "limitSymbolsToIncludedHeaders": false
+            }
         }
     ]
 }
