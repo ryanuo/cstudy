@@ -41,12 +41,16 @@
         {
             "name": "Target 1",
             "includePath": [
-                "/Volumes/Keil_v5/projects/test407/.\\RTE",
-                "/Volumes/Keil_v5/projects/test407/.\\RTE\\Device\\STM32F407ZE",
-                "/Volumes/Keil_v5/projects/test407/.\\USER",
-                "/Volumes/Keil_v5/projects/test407/.\\HARDWARE",
-                "/Volumes/Keil_v5/projects/test407/.\\SYSTEM",
-                "/Volumes/Keil_v5/projects/test407"
+                "${workspaceFolder}/RTE",
+                "${workspaceFolder}/RTE/_Target_1",
+                "${workspaceFolder}/RTE/Device/STM32F407ZE",
+                "${workspaceFolder}/USER",
+                "${workspaceFolder}/HARDWARE",
+                "${workspaceFolder}/SYSTEM",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Include",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/inc",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/CMSIS/Core/Include",
+                "${workspaceFolder}"
             ],
             "defines": [
                 "USE_STDPERIPH_DRIVER",
