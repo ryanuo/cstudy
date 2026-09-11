@@ -28,7 +28,20 @@ static GPIO_InitTypeDef oled_gpio = {0};
   *         这里插空循环把 SCL 压到约 200~250kHz。
   */
 static void OLED_I2C_Delay(void) {
-    for (volatile uint32_t i = 0; i < 40U; i++) {
+    /* 江协那套驱动原本跑在 72MHz 的 F103 上，没有位延时；移植到
+       168MHz 的 F407 后 SCL 高达 1.5~2.5MHz，超过 SSD1306 的 400kHz
+       上限 -> 整屏收不到命令（黑屏）。
+
+       这里按 SystemCoreClock 缩放，让 SCL 在各种时钟模式下都稳定在
+       约 250kHz。不能写成固定次数：168MHz 下 40 次空循环刷屏约 37ms，
+       切到 8MHz 后会变成约 780ms，屏幕严重拖影。 */
+    uint32_t n = SystemCoreClock / 4000000U;   /* 168MHz -> 42 */
+
+    if (n == 0U) {
+        n = 1U;
+    }
+    while (n--) {
+        __NOP();
     }
 }
 
@@ -439,7 +452,7 @@ void OLED_ShowChar(int16_t X, int16_t Y, char Char, uint8_t FontSize)
   * @brief  Display a string, Chinese characters supported
   * @param  X/Y: top-left, String: null-terminated string, FontSize: font size
   */
-void OLED_ShowString(int16_t X, int16_t Y, char *String, uint8_t FontSize)
+void OLED_ShowString(int16_t X, int16_t Y, const char *String, uint8_t FontSize)
 {
 	uint16_t i = 0;
 	char SingleChar[5];

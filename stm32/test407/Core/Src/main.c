@@ -68,46 +68,71 @@ static void MX_TIM6_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* ============================================================
+ *  闪烁基准：LED0 每 BLINK_RAW_LOOP 次主循环翻转一次
+ *  ------------------------------------------------------------
+ *  这里是「固定循环次数」，不是固定时间 —— 时钟越慢，同样次数花的时间越长，
+ *  所以三种模式的闪烁速度会明显不同（8MHz 比 168MHz 慢 21 倍）。
+ *
+ *  故意不用 HAL_Delay()/Delay_Ms()：它们在切时钟后会被重新换算，
+ *  三种模式永远一样快，就看不出差别了。
+ *
+ *  实测半周期会显示在 OLED 的 BLINK 那一行，嫌快嫌慢就改这个数字，
+ *  半周期与它成正比。
+ * ============================================================ */
+#define BLINK_RAW_LOOP   50000U
+
+/* 闪烁节拍状态（放文件作用域，UI_ShowClock 要读实测周期） */
+static uint32_t s_blink_cnt     = 0;   /* 主循环计数 */
+static uint32_t s_blink_t0      = 0;   /* 上次翻转时刻(ms) */
+static uint32_t s_blink_half_ms = 0;   /* 实测半周期(ms) */
+
 /**
-  * @brief  OLED 刷新：当前时钟模式 + 运行时间
-  * @note   运行时间由 DWT 周期数换算，时钟源不准时它就会跑偏
-  */
+ * @brief  OLED 刷新：当前时钟模式 + 频率 + 闪烁实测周期 + 运行时间
+ * @note   SYSCLK / MCO1 全部从 RCC 寄存器反算，不写死
+ */
 static void UI_ShowClock(void)
 {
-  char *mode = (Clock_GetMode() == CLK_MODE_HSE_PLL) ? "HSE PLL" : "HSI PLL";
-  uint32_t ms = Delay_GetMs();
+  uint32_t khz;
+  uint32_t sec = HAL_GetTick() / 1000U;
 
   OLED_ShowString(0, 0, "CLK TEST", OLED_8X16);
 
-  OLED_ShowString(0, 20, "MODE : ", OLED_6X8);
-  OLED_ShowString(42, 20, mode, OLED_6X8);
+  OLED_ShowString(0, 16, "MODE  : ", OLED_6X8);
+  OLED_ShowString(48, 16, Clock_GetModeName(), OLED_6X8);
 
-  OLED_ShowString(0, 30, "SYS  : 168MHz", OLED_6X8);
-  /* MCO1 频率由 RCC 寄存器反算，改分频/时钟源后自动跟着变 */
-  {
-    uint32_t khz = Clock_GetMco1Freq() / 1000U;
+  /* SYSCLK：直接问 HAL 要，它从 RCC->CFGR 反算 */
+  OLED_ShowString(0, 24, "SYSCLK: ", OLED_6X8);
+  OLED_ShowNum(48, 24, HAL_RCC_GetSysClockFreq() / 1000000U, 3, OLED_6X8);
+  OLED_ShowString(66, 24, "MHz", OLED_6X8);
 
-    OLED_ShowString(0, 40, "MCO1 : ", OLED_6X8);
-    OLED_ShowNum(42, 40, khz / 1000U, 2, OLED_6X8);
-    OLED_ShowChar(54, 40, '.', OLED_6X8);
-    OLED_ShowNum(60, 40, (khz % 1000U) / 100U, 1, OLED_6X8);
-    OLED_ShowString(66, 40, "MHz", OLED_6X8);
-  }
+  /* MCO1：源+分频都从 RCC->CFGR 读回来，换源后自动跟着变 */
+  khz = Clock_GetMco1Freq() / 1000U;
+  OLED_ShowString(0, 32, "MCO1  : ", OLED_6X8);
+  OLED_ShowNum(48, 32, khz / 1000U, 3, OLED_6X8);
+  OLED_ShowChar(66, 32, '.', OLED_6X8);
+  OLED_ShowNum(72, 32, (khz % 1000U) / 100U, 1, OLED_6X8);
+  OLED_ShowString(78, 32, "MHz", OLED_6X8);
 
-  OLED_ShowString(0, 50, "TIME : ", OLED_6X8);
-  OLED_ShowNum(42, 50, ms / 1000U, 6, OLED_6X8);
-  OLED_ShowChar(78, 50, '.', OLED_6X8);
-  OLED_ShowNum(84, 50, (ms % 1000U) / 100U, 1, OLED_6X8);
-  OLED_ShowChar(90, 50, 's', OLED_6X8);
+  /* BLINK：实测半周期 —— 时钟一慢它就变大，这就是要看的现象 */
+  OLED_ShowString(0, 40, "BLINK : ", OLED_6X8);
+  OLED_ShowNum(48, 40, s_blink_half_ms, 4, OLED_6X8);
+  OLED_ShowString(72, 40, "ms", OLED_6X8);
 
-  OLED_Update();
+  /* RUN：HAL_GetTick() 走 SysTick，切时钟后 HAL 会重算重装载值，
+     三种模式下走时一样快 —— 正好和 BLINK 的差别形成对照 */
+  OLED_ShowString(0, 48, "RUN   : ", OLED_6X8);
+  OLED_ShowNum(48, 48, (sec / 60U) % 100U, 2, OLED_6X8);
+  OLED_ShowChar(60, 48, ':', OLED_6X8);
+  OLED_ShowNum(66, 48, sec % 60U, 2, OLED_6X8);
+  OLED_ShowChar(78, 48, 's', OLED_6X8);
 }
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
 
@@ -138,8 +163,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   LED_Init();
   Key_Init();
-  Delay_Init();                       /* DWT 延时，不占 SysTick 中断 */
-  Clock_Init();                       /* HSE PLL 168MHz + PA8(MCO1) 输出 33.6MHz */
+  Delay_Init(); /* DWT 延时模块（备用，主循环现在用固定循环延时） */
+  Clock_Init(); /* 上电默认 HSE PLL 168MHz，PA8(MCO1) 输出 33.6MHz */
   // Beep_Init();
   // Fan_Init();
   // Light_Init();
@@ -151,46 +176,69 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  static uint32_t last_sec = 0;
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    /* KEY0(PA0) 按下：切换 HSE PLL <-> HSI PLL */
+    /* 按键每轮都采样，不用等 LED 那一拍 —— 任何时钟模式下都不会漏按 */
     if (Key_GetNum() == KEY0_VAL)
     {
-      Clock_Toggle();
+      static uint32_t last_press = 0;
+      uint32_t now = HAL_GetTick();
+
+      /* 软件消抖：循环现在跑到微秒级，机械抖动会产生多个边沿 */
+      if ((now - last_press) > 150U)
+      {
+        last_press = now;
+        Clock_Toggle();        /* 168MHz -> 16MHz -> 8MHz -> 168MHz ... */
+        UI_ShowClock();
+        OLED_Update();
+      }
     }
 
-    /* LED0(PF9) 闪烁：延时长度由当前时钟频率决定 */
-    LED_Toggle(LED0);
+    /* LED0(PF9)：固定循环次数延时 —— 时钟越慢闪得越慢，这就是要看的现象 */
+    if (++s_blink_cnt >= BLINK_RAW_LOOP)
+    {
+      uint32_t now = HAL_GetTick();
 
-    /* OLED 显示当前模式与运行时间 */
-    UI_ShowClock();
+      s_blink_cnt     = 0;
+      s_blink_half_ms = now - s_blink_t0;   /* 实测半周期 */
+      s_blink_t0      = now;
+      LED_Toggle(LED0);
+    }
 
-    Delay_Ms(200);
-    // TempCtrl_Task();
+    /* 每秒刷一次屏（RUN 走秒 + BLINK 显示实测值） */
+    if ((HAL_GetTick() / 1000U) != last_sec)
+    {
+      last_sec = HAL_GetTick() / 1000U;
+      UI_ShowClock();
+      OLED_Update();
+    }
   }
   /* USER CODE END 3 */
+
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -205,9 +253,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
@@ -220,10 +267,10 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief TIM6 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief TIM6 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_TIM6_Init(void)
 {
 
@@ -254,14 +301,13 @@ static void MX_TIM6_Init(void)
   /* USER CODE BEGIN TIM6_Init 2 */
 
   /* USER CODE END TIM6_Init 2 */
-
 }
 
 /**
-  * @brief USART3 Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief USART3 Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_USART3_UART_Init(void)
 {
 
@@ -287,14 +333,13 @@ static void MX_USART3_UART_Init(void)
   /* USER CODE BEGIN USART3_Init 2 */
 
   /* USER CODE END USART3_Init 2 */
-
 }
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
+ * @brief GPIO Initialization Function
+ * @param None
+ * @retval None
+ */
 static void MX_GPIO_Init(void)
 {
   /* USER CODE BEGIN MX_GPIO_Init_1 */
@@ -315,9 +360,9 @@ static void MX_GPIO_Init(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -330,12 +375,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
