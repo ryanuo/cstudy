@@ -1,0 +1,20 @@
+{
+  "files.encoding": "gbk",
+  "files.autoGuessEncoding": true,
+  "files.exclude": {
+    "**/Objects": true,
+    "**/Listings": true,
+    "**/*.uvguix.*": true,
+    "**/*.scvd": true
+  },
+  "search.exclude": {
+    "**/Objects": true,
+    "**/Listings": true
+  },
+  "files.watcherExclude": {
+    "**/Objects/**": true,
+    "**/Listings/**": true
+  },
+  "C_Cpp.errorSquiggles": "enabled",
+  "C_Cpp.workspaceParsingPriority": "medium"
+}
