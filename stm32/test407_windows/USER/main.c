@@ -15,16 +15,16 @@ int main(void)
 {
 	// SysTick_Config(SystemCoreClock/1000/1000);
 	LED_init();
-	BEEP_init();
-	KEY_init();
-	LIGHTSENSOR_init();
-	FAN_init();
-	TIM6_init();
+	// BEEP_init();
+	// KEY_init();
+	// LIGHTSENSOR_init();
+	// FAN_init();
+	// TIM6_init();
 	OLED_Init();
 	// CountSensor_Init();
 	Encoder_Init();
 
-	OLED_ShowString(0, 0, "Hello World", OLED_8X16); // ? OLED_6X8
+	// OLED_ShowString(0, 0, "Hello World", OLED_8X16); // ? OLED_6X8
 	// OLED_ShowString(0, 16, "count:", OLED_6X8);		 // ? OLED_6X8
 
 	// RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
@@ -54,10 +54,22 @@ int main(void)
 
 		if (Encoder_GetSW())
 		{
-			/* 这里处理按键按下的动作 */
-			Encoder_ResetCount();
-			Encoder_ClearSW(); // 处理完必须清标志，否则每轮循环都会把计数清零
+			// 如果是旋转误碰或毛刺，此时电平早已弹回高电平（1）
+			// 只有用户真正按住按键时，电平才是稳定的低电平（0）
+			if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_13) == 0)
+			{
+				LED1_on();
+				Encoder_ResetCount();
+			}
+			Encoder_ClearSW(); // 无论真按还是误触，清除标志
 		}
+
+		/* ---- 诊断：A/B 相原始电平。缓慢转一格应看到 (A,B) 走 11→01→00→10 或 11→10→00→01 ---- */
+		OLED_ShowString(0,  0, "A:", OLED_6X8);
+		OLED_ShowNum(14, 0, GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_5),  1, OLED_6X8);
+		OLED_ShowString(36, 0, "B:", OLED_6X8);
+		OLED_ShowNum(50, 0, GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_6), 1, OLED_6X8);
+
 		OLED_Update();
 
 		// LED1_on();
