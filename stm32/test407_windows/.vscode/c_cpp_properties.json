@@ -54,6 +54,7 @@
             ],
             "defines": [
                 "USE_STDPERIPH_DRIVER",
+                "STM32F40_41xxx",
                 "HSE_VALUE=8000000",
                 "__CC_ARM",
                 "__arm__",
