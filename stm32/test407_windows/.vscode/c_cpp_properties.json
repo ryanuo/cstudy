@@ -8,6 +8,7 @@
                 "${workspaceFolder}/HARDWARE",
                 "${workspaceFolder}/SYSTEM",
                 "${workspaceFolder}/RTE",
+                "${workspaceFolder}/AGREEMENT",
                 "${workspaceFolder}/RTE/_Target_1",
                 "${workspaceFolder}/RTE/Device/STM32F407ZE",
                 "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Include",
@@ -32,6 +33,7 @@
                     "${workspaceFolder}/HARDWARE",
                     "${workspaceFolder}/SYSTEM",
                     "${workspaceFolder}/RTE",
+                    "${workspaceFolder}/AGREEMENT",
                     "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/src",
                     "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Source"
                 ],
@@ -47,6 +49,7 @@
                 "${workspaceFolder}/USER",
                 "${workspaceFolder}/HARDWARE",
                 "${workspaceFolder}/SYSTEM",
+                "${workspaceFolder}/AGREEMENT",
                 "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Include",
                 "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/inc",
                 "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/CMSIS/Core/Include",
@@ -64,6 +67,7 @@
                     "${workspaceFolder}/HARDWARE",
                     "${workspaceFolder}/SYSTEM",
                     "${workspaceFolder}/RTE",
+                    "${workspaceFolder}/AGREEMENT",
                     "${workspaceFolder}",
                     "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/src",
                     "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Source"

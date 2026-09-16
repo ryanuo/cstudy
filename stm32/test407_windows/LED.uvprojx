@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_STDPERIPH_DRIVER,HSE_VALUE=8000000</Define>
               <Undefine></Undefine>
-              <IncludePath>.\RTE;.\RTE\Device\STM32F407ZE;.\USER;.\HARDWARE;.\SYSTEM</IncludePath>
+              <IncludePath>.\RTE;.\RTE\Device\STM32F407ZE;.\USER;.\HARDWARE;.\SYSTEM;.\AGREEMENT</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -507,6 +507,26 @@
               <FileType>5</FileType>
               <FilePath>.\HARDWARE\Encoder.h</FilePath>
             </File>
+            <File>
+              <FileName>Timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\HARDWARE\Timer.c</FilePath>
+            </File>
+            <File>
+              <FileName>Timer.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\HARDWARE\Timer.h</FilePath>
+            </File>
+            <File>
+              <FileName>ETIM.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\HARDWARE\ETIM.c</FilePath>
+            </File>
+            <File>
+              <FileName>ETIM.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\HARDWARE\ETIM.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -521,6 +541,21 @@
               <FileName>DELAY.h</FileName>
               <FileType>5</FileType>
               <FilePath>.\SYSTEM\DELAY.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>AGREEMENT</GroupName>
+          <Files>
+            <File>
+              <FileName>USART.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\AGREEMENT\USART.c</FilePath>
+            </File>
+            <File>
+              <FileName>USART.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\AGREEMENT\USART.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -580,6 +615,12 @@
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="StdPeriph Drivers" Csub="TIM" Cvendor="Keil" Cversion="1.3.0" condition="STM32F4 STDPERIPH RCC">
+        <package name="STM32F4xx_DFP" schemaVersion="1.2" url="http://www.keil.com/pack" vendor="Keil" version="1.0.8"/>
+        <targetInfos>
+          <targetInfo name="Target 1"/>
+        </targetInfos>
+      </component>
+      <component Cclass="Device" Cgroup="StdPeriph Drivers" Csub="USART" Cvendor="Keil" Cversion="1.3.0" condition="STM32F4 STDPERIPH RCC">
         <package name="STM32F4xx_DFP" schemaVersion="1.2" url="http://www.keil.com/pack" vendor="Keil" version="1.0.8"/>
         <targetInfos>
           <targetInfo name="Target 1"/>

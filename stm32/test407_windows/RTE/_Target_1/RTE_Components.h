@@ -30,6 +30,8 @@
 #define RTE_DEVICE_STDPERIPH_SYSCFG
 /*  Keil::Device:StdPeriph Drivers:TIM:1.3.0 */
 #define RTE_DEVICE_STDPERIPH_TIM
+/*  Keil::Device:StdPeriph Drivers:USART:1.3.0 */
+#define RTE_DEVICE_STDPERIPH_USART
 
 
 #endif /* RTE_COMPONENTS_H */

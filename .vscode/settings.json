@@ -11,5 +11,6 @@
   "appleContainer.autoStop.enabled": false,
   "appleContainer.autoStop.timeout": 5,
   "appleContainer.resources.defaultCpus": 4,
-  "appleContainer.resources.defaultMemory": "8GB"
+  "appleContainer.resources.defaultMemory": "8GB",
+  "cmake.sourceDirectory": "/Volumes/Keil_v5/projects/cstudy/qt"
 }

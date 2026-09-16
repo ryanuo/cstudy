@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-
 #define GPIO_SCL_PIN GPIO_Pin_8
 #define GPIO_SDA_PIN GPIO_Pin_9
 #define GPIO_OLED_PORT GPIOB
@@ -101,10 +100,26 @@ uint8_t OLED_DisplayBuf[8][128];
    超过 SSD1306 的 400kHz 上限，面板会静默丢弃所有命令（现象 = 全黑且毫无反应）。
    用 SystemCoreClock 缩放，换时钟/换主频都不用改这里；168MHz 时 n=168，SCL 约 100~150kHz。
    若日后出现花屏/残影等不稳定现象，把除数改小（如 500000U）即可变慢。 */
+// static void OLED_I2C_Delay(void)
+// {
+// 	volatile uint32_t n = SystemCoreClock / 1000000U;
+// 	while (n--) { __NOP(); }
+// }
+
+void DWT_Init(void)
+{
+	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // 使能 Trace
+	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;			// 使能 CYCCNT 计数器
+}
+
+// 2. 微秒延时
 static void OLED_I2C_Delay(void)
 {
-	volatile uint32_t n = SystemCoreClock / 1000000U;
-	while (n--) { __NOP(); }
+	// 延时 2 微秒
+	uint32_t ticks = 2 * (SystemCoreClock / 1000000U);
+	uint32_t start = DWT->CYCCNT;
+	while ((DWT->CYCCNT - start) < ticks)
+		;
 }
 
 void OLED_W_SCL(uint8_t BitValue)
@@ -270,6 +285,8 @@ void OLED_WriteData(uint8_t *Data, uint8_t Count)
  */
 void OLED_Init(void)
 {
+	DWT_Init();
+
 	OLED_GPIO_Init(); // 先调用底层的端口初始化
 
 	/*写入一系列的命令，对OLED进行初始化配置*/
