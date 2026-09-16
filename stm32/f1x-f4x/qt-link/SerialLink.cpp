@@ -25,6 +25,16 @@ bool isUsbSerial(const QSerialPortInfo &info)
         || name.contains(QStringLiteral("usbmodem"))
         || name.contains(QStringLiteral("slab"));
 }
+
+// macOS 的这几个是虚拟口（调试台 / 蓝牙 / 无线调试），排到最后，避免默认选中它们
+bool isVirtualPort(const QSerialPortInfo &info)
+{
+    const QString name = info.portName().toLower();
+    return name.contains(QStringLiteral("debug-console"))
+        || name.contains(QStringLiteral("bluetooth"))
+        || name.contains(QStringLiteral("wlan-debug"))
+        || name.contains(QStringLiteral("incoming-port"));
+}
 } // namespace
 
 SerialLink::SerialLink(QObject *parent)
@@ -44,6 +54,7 @@ void SerialLink::refreshPorts()
 
     QVariantList usbPorts;
     QVariantList otherPorts;
+    QVariantList virtualPorts;
     for (const QSerialPortInfo &info : infos) {
         QVariantMap item;
         const QString description = info.description();
@@ -51,10 +62,15 @@ void SerialLink::refreshPorts()
         item.insert(QStringLiteral("label"),
                     description.isEmpty() ? info.portName()
                                           : QStringLiteral("%1 · %2").arg(info.portName(), description));
-        (isUsbSerial(info) ? usbPorts : otherPorts).append(item);
+        if (isVirtualPort(info))
+            virtualPorts.append(item);
+        else if (isUsbSerial(info))
+            usbPorts.append(item);
+        else
+            otherPorts.append(item);
     }
 
-    m_ports = usbPorts + otherPorts;
+    m_ports = usbPorts + otherPorts + virtualPorts;
 
     // 没有手动指定过端口时，默认选第一个可用串口
     if (m_portName.isEmpty() && !m_ports.isEmpty())

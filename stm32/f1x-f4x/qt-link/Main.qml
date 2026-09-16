@@ -8,10 +8,15 @@ import QtShadcn
 // 收到 F407 上送的数据包 → 本地重算 CRC-16/MODBUS 校验 → 显示 → 校验通过回 "OK"（失败回 "ERR"）
 ApplicationWindow {
     id: root
-    width: 1180
-    height: 760
-    minimumWidth: 1000
-    minimumHeight: 640
+    // 初始尺寸取屏幕可用区域（这台屏 1440×900：原来定死 800 高会超出，底部日志看不见）
+    // 注意：某些平台在 Component.onCompleted 时 screen.availableWidth 还是 0，必须兜底，
+    // 否则 width 会算成 1×1；屏幕信息稍后就绪时绑定会自动重算
+    readonly property real _usableW: (screen && screen.availableWidth > 200) ? screen.availableWidth : 1200
+    readonly property real _usableH: (screen && screen.availableHeight > 200) ? screen.availableHeight : 820
+    width: Math.max(minimumWidth, Math.min(1180, Math.round(_usableW - 40)))
+    height: Math.max(minimumHeight, Math.min(820, Math.round(_usableH - 60)))
+    minimumWidth: 880
+    minimumHeight: 620
     visible: true
     title: qsTr("F103 → F407 数据监测台")
     color: theme.background
@@ -24,6 +29,21 @@ ApplicationWindow {
     property var selectedPacket: ({})     // 当前选中的包（详情面板）
     property string rawLog: ""            // 原始日志（最新在最上面）
     readonly property int maxRows: 300
+
+    // 串口下拉的模型：必须是**真正的 JS 字符串数组**。
+    // 坑：ShadcnSelect 的委托用 `Array.isArray(model)` 判断，
+    //     C++ 的 QVariantList/QStringList 传到 QML 后 isArray 为 false，
+    //     会走 `String(model[textRole])` 分支 → 列表每项显示 "undefined"。
+    property var portLabels: []
+
+    function rebuildPortModel() {
+        var list = serialLink.ports
+        var labels = []
+        for (var i = 0; i < list.length; ++i)
+            labels.push(String(list[i].label))
+        portLabels = labels
+        portSelect.currentIndex = serialLink.portIndex
+    }
 
     function logLine(text) {
         var next = text + "\n" + rawLog
@@ -38,7 +58,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        portSelect.currentIndex = serialLink.portIndex
+        rebuildPortModel()
         logLine("[系统] 就绪 · 协议 FF D0 D1 D2 D3 CRC_L CRC_H FE（同时兼容文本行 RX: xx xx xx xx  CRC=xxxx）")
     }
 
@@ -49,6 +69,10 @@ ApplicationWindow {
         property color valueColor: "#111827"
 
         size: ShadcnCard.Size.Small
+        // ShadcnCard 自带 implicitWidth: 320，作为布局项会变成"最小宽 320"，
+        // 4 张卡叠加就把整行顶到 1316 → 内容横向溢出窗口，所以必须放开最小宽度并让它均分宽度
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
 
         Column {
             width: parent.width
@@ -83,14 +107,15 @@ ApplicationWindow {
             selectionColor: Qt.rgba(0.2, 0.4, 0.8, 0.25)
             font.pixelSize: 12
             Layout.fillWidth: true
+            Layout.minimumWidth: 0        // TextEdit 的最小宽度默认=内容宽，不置 0 会把整列撑宽、横向溢出
             height: Math.max(18, contentHeight)
         }
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 20
-        spacing: 14
+        anchors.margins: 14
+        spacing: 10
 
         // ───────────────────────── 1. 标题 ─────────────────────────
         RowLayout {
@@ -114,12 +139,13 @@ ApplicationWindow {
 
         // ───────────────────────── 2. 连接与控制（重要入口在顶部）─────────────────────────
         ShadcnCard {
+            id: connCard
             size: ShadcnCard.Size.Small
             Layout.fillWidth: true
 
             Column {
                 width: parent.width
-                spacing: 10
+                spacing: 8
 
                 // 2.1 串口 / 波特率 / 连接
                 RowLayout {
@@ -131,8 +157,8 @@ ApplicationWindow {
                     ShadcnSelect {
                         id: portSelect
                         Layout.fillWidth: true
-                        model: serialLink.ports
-                        textRole: "label"
+                        Layout.minimumWidth: 0     // 端口名可能很长（cu.wchusbserial1234 · USB-Serial）
+                        model: root.portLabels
                         onActivated: serialLink.portName = serialLink.ports[currentIndex].name
                     }
 
@@ -195,6 +221,7 @@ ApplicationWindow {
                     ShadcnInput {
                         id: manualInput
                         Layout.preferredWidth: 240
+                        Layout.minimumWidth: 120
                         enabled: serialLink.connected
                         placeholderText: qsTr("手动发送文本（回车即发）")
                         onAccepted: if (text.length > 0) { serialLink.sendText(text); text = "" }
@@ -206,49 +233,6 @@ ApplicationWindow {
                         enabled: serialLink.connected && manualInput.text.length > 0
                         onClicked: { serialLink.sendText(manualInput.text); manualInput.text = "" }
                     }
-                }
-
-                // 2.3 链路自检
-                RowLayout {
-                    width: parent.width
-                    spacing: 8
-
-                    ShadcnLabel { text: qsTr("链路自检"); size: ShadcnLabel.Size.Small; variant: ShadcnLabel.Variant.Muted }
-
-                    ShadcnButton {
-                        text: qsTr("发送 0xAA")
-                        variant: ShadcnButton.Variant.Outline
-                        size: ShadcnButton.Size.Small
-                        enabled: serialLink.connected
-                        onClicked: serialLink.sendHex("AA")
-                    }
-                    ShadcnButton {
-                        text: qsTr("发送 0x55")
-                        variant: ShadcnButton.Variant.Outline
-                        size: ShadcnButton.Size.Small
-                        enabled: serialLink.connected
-                        onClicked: serialLink.sendHex("55")
-                    }
-                    ShadcnLabel {
-                        text: qsTr("（F407 固件里 AA → 回 CC 并点亮 LED1，55 → 回 DD 并熄灭）")
-                        size: ShadcnLabel.Size.Small
-                        variant: ShadcnLabel.Variant.Muted
-                    }
-
-                    ShadcnButton {
-                        text: qsTr("自测·正确包")
-                        variant: ShadcnButton.Variant.Ghost
-                        size: ShadcnButton.Size.Small
-                        onClicked: serialLink.injectHex("FF 01 02 03 04 A1 2B FE")
-                    }
-                    ShadcnButton {
-                        text: qsTr("自测·错误包")
-                        variant: ShadcnButton.Variant.Ghost
-                        size: ShadcnButton.Size.Small
-                        onClicked: serialLink.injectHex("FF 01 02 03 04 00 00 FE")
-                    }
-
-                    Item { Layout.fillWidth: true }
 
                     ShadcnButton {
                         text: qsTr("清空统计")
@@ -272,6 +256,7 @@ ApplicationWindow {
 
         // ───────────────────────── 3. 统计 ─────────────────────────
         RowLayout {
+            id: statsRow
             Layout.fillWidth: true
             spacing: 12
 
@@ -299,16 +284,19 @@ ApplicationWindow {
 
         // ───────────────────────── 4. 数据表 + 详情/日志 ─────────────────────────
         RowLayout {
+            id: mainRow
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 12
 
             ColumnLayout {
+                id: tableCol
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: 8
 
                 RowLayout {
+                    id: tableHeader
                     Layout.fillWidth: true
                     spacing: 8
                     ShadcnLabel { text: qsTr("接收到的数据包") }
@@ -325,6 +313,7 @@ ApplicationWindow {
                 }
 
                 ShadcnTable {
+                    id: tableItem
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     model: packetModel
@@ -335,95 +324,118 @@ ApplicationWindow {
                     id: packetModel
                     columns: [
                         { key: "idx",    title: "#",    width: 54,  align: "left" },
-                        { key: "time",   title: qsTr("时间"), width: 110, align: "left" },
-                        { key: "d0",     title: "D0",   width: 52,  align: "center" },
-                        { key: "d1",     title: "D1",   width: 52,  align: "center" },
-                        { key: "d2",     title: "D2",   width: 52,  align: "center" },
-                        { key: "d3",     title: "D3",   width: 52,  align: "center" },
-                        { key: "crc",    title: "CRC",  width: 70,  align: "center" },
-                        { key: "calc",   title: qsTr("重算"), width: 70, align: "center" },
-                        { key: "result", title: qsTr("校验"), width: 70, align: "center" },
-                        { key: "source", title: qsTr("来源"), width: 90, align: "left" }
+                        { key: "time",   title: qsTr("时间"), width: 116, align: "left" },
+                        { key: "d0",     title: "D0",   width: 56,  align: "center" },
+                        { key: "d1",     title: "D1",   width: 56,  align: "center" },
+                        { key: "d2",     title: "D2",   width: 56,  align: "center" },
+                        { key: "d3",     title: "D3",   width: 56,  align: "center" },
+                        { key: "crc",    title: "CRC",  width: 76,  align: "center" },
+                        { key: "result", title: qsTr("校验"), width: 76, align: "center" }
                     ]
                     rows: root.packetRows
                 }
             }
 
             ColumnLayout {
+                id: rightCol
                 Layout.preferredWidth: 350
+                Layout.minimumWidth: 320
+                Layout.maximumWidth: 400        // 卡住右列宽度，避免它抢走表格的宽度
                 Layout.fillHeight: true
-                spacing: 12
+                spacing: 8
 
-                // 4.1 本包详情（字段可鼠标选中复制）
-                ShadcnCard {
-                    size: ShadcnCard.Size.Small
+                // 4.1 本包详情：与左列完全同构 —— 标题行（对齐「接收到的数据包」）+ 卡片框（对齐表格框）
+                RowLayout {
+                    id: detailsHeader
                     Layout.fillWidth: true
-
-                    Column {
-                        width: parent.width
-                        spacing: 8
-
-                        ShadcnCardHeader {
-                            ShadcnCardTitle { text: qsTr("本包详情") }
-                            ShadcnCardDescription { text: qsTr("字段可鼠标选中复制") }
-                        }
-
-                        ShadcnBadge {
-                            text: selectedPacket.result === undefined
-                                  ? qsTr("暂无数据")
-                                  : (selectedPacket.ok === true ? qsTr("✓ 校验通过") : qsTr("✗ 校验失败"))
-                            variant: selectedPacket.ok === true ? ShadcnBadge.Variant.Default
-                                                                : ShadcnBadge.Variant.Destructive
-                        }
-
-                        DetailRow { labelText: qsTr("序号");   valueText: root.fieldOf("idx");  valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("时间");   valueText: root.fieldOf("time"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("数据");   valueText: root.fieldOf("data"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("收到 CRC"); valueText: root.fieldOf("crc"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("重算 CRC"); valueText: root.fieldOf("calc"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("结果");   valueText: root.fieldOf("result"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("来源");   valueText: root.fieldOf("source"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("原始");   valueText: root.fieldOf("raw");  valueColor: theme.foreground }
+                    spacing: 8
+                    ShadcnLabel { text: qsTr("本包详情") }
+                    Item { Layout.fillWidth: true }
+                    ShadcnBadge {
+                        text: selectedPacket.result === undefined
+                              ? qsTr("暂无数据")
+                              : (selectedPacket.ok === true ? qsTr("✓ 校验通过") : qsTr("✗ 校验失败"))
+                        variant: selectedPacket.ok === true ? ShadcnBadge.Variant.Default
+                                                            : ShadcnBadge.Variant.Destructive
                     }
                 }
 
-                // 4.2 原始日志（可选中复制）
                 ShadcnCard {
+                    id: detailsCard
                     size: ShadcnCard.Size.Small
                     Layout.fillWidth: true
                     Layout.fillHeight: true
 
                     Column {
                         width: parent.width
-                        spacing: 8
+                        spacing: 6
 
-                        ShadcnCardHeader {
-                            ShadcnCardTitle { text: qsTr("原始日志") }
-                            ShadcnCardDescription { text: qsTr("接收 / 校验 / 回复") }
+                        DetailRow { labelText: qsTr("序号");   valueText: root.fieldOf("idx");  valueColor: theme.foreground }
+                        DetailRow { labelText: qsTr("时间");   valueText: root.fieldOf("time"); valueColor: theme.foreground }
+                        DetailRow { labelText: qsTr("数据");   valueText: root.fieldOf("data"); valueColor: theme.foreground }
+                        DetailRow {
+                            labelText: qsTr("CRC 收到/重算")
+                            valueText: root.fieldOf("crc") + " / " + root.fieldOf("calc")
+                            valueColor: theme.foreground
                         }
+                        DetailRow { labelText: qsTr("结果");   valueText: root.fieldOf("result"); valueColor: theme.foreground }
+                        DetailRow { labelText: qsTr("来源");   valueText: root.fieldOf("source"); valueColor: theme.foreground }
+                        DetailRow { labelText: qsTr("原始");   valueText: root.fieldOf("raw");  valueColor: theme.foreground }
+                    }
+                }
 
-                        Flickable {
-                            id: logFlick
-                            width: parent.width
-                            height: 250
-                            clip: true
-                            contentWidth: width
-                            contentHeight: logEdit.contentHeight
-                            boundsBehavior: Flickable.StopAtBounds
+            }
+        }
 
-                            TextEdit {
-                                id: logEdit
-                                width: logFlick.width
-                                text: root.rawLog
-                                readOnly: true
-                                selectByMouse: true
-                                persistentSelection: true
-                                wrapMode: TextEdit.WrapAnywhere
-                                color: theme.mutedForeground
-                                font.family: "Menlo"
-                                font.pixelSize: 11
-                            }
-                        }
+        // ───────────────────────── 5. 原始日志条（整宽 · 3 行高 · 可选中复制）─────────────────────────
+        Rectangle {
+            id: logCard
+            Layout.fillWidth: true
+            Layout.preferredHeight: 46 + 22 + 6 + 24      // 正文 3×~15px + 标题行 + 间距 + 上下内边距
+            color: theme.card
+            radius: theme.radius
+            border.width: 1
+            border.color: Qt.rgba(theme.foreground.r, theme.foreground.g, theme.foreground.b,
+                                  theme.mode === "dark" ? 0.10 : 0.05)
+            clip: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 6
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    ShadcnLabel { text: qsTr("原始日志") }
+                    Item { Layout.fillWidth: true }
+                    ShadcnLabel {
+                        text: qsTr("接收 / 校验 / 回复")
+                        size: ShadcnLabel.Size.Small
+                        variant: ShadcnLabel.Variant.Muted
+                    }
+                }
+
+                Flickable {
+                    id: logFlick
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumWidth: 0     // 同上：Flickable 的隐式宽来自内容，必须允许收缩
+                    clip: true
+                    contentWidth: width
+                    contentHeight: logEdit.contentHeight
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    TextEdit {
+                        id: logEdit
+                        width: logFlick.width
+                        text: root.rawLog
+                        readOnly: true
+                        selectByMouse: true
+                        persistentSelection: true
+                        wrapMode: TextEdit.WrapAnywhere
+                        color: theme.mutedForeground
+                        font.family: "Menlo"
+                        font.pixelSize: 11
                     }
                 }
             }
@@ -435,7 +447,7 @@ ApplicationWindow {
         target: serialLink
 
         function onPortsChanged() {
-            portSelect.currentIndex = serialLink.portIndex
+            root.rebuildPortModel()
         }
 
         function onPacketReceived(packet) {
@@ -447,9 +459,7 @@ ApplicationWindow {
                 "d2": packet.d2,
                 "d3": packet.d3,
                 "crc": packet.crc,
-                "calc": packet.calc,
-                "result": packet.result,
-                "source": packet.source
+                "result": packet.result
             }
             packetRows = [row].concat(packetRows).slice(0, root.maxRows)
             selectedPacket = packet
