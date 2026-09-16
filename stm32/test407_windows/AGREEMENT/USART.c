@@ -1,7 +1,8 @@
 #include "stm32f4xx.h"
+#include <stdio.h>
 
 volatile uint8_t USART_flag = 0;
-void USART_init(void)
+void USART1_init(void)
 {
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -55,4 +56,27 @@ void USART1_IRQHandler(void)
 
         USART_ClearITPendingBit(USART1, USART_IT_RXNE);
     }
+}
+
+void USART1_SendData(uint8_t data)
+{
+    USART_SendData(USART1, data);
+    while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET)
+        ;
+}
+
+void USART1_SendString(char *string)
+{
+    for (int i = 0; string[i] != '\0'; i++)
+    {
+        USART1_SendData(string[i]);
+    }
+}
+
+int fputc(int ch, FILE *f)
+{
+    USART1_SendData(ch);
+    while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET)
+        ;
+    return ch;
 }

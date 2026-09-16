@@ -1,0 +1,79 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "STM32F407ZE (Keil StdPeriph / LED)",
+            "includePath": [
+                "${workspaceFolder}/USER",
+                "${workspaceFolder}/HARDWARE",
+                "${workspaceFolder}/SYSTEM",
+                "${workspaceFolder}/RTE",
+                "${workspaceFolder}/AGREEMENT",
+                "${workspaceFolder}/RTE/_Target_1",
+                "${workspaceFolder}/RTE/Device/STM32F407ZE",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Include",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/inc",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/CMSIS/Core/Include"
+            ],
+            "defines": [
+                "USE_STDPERIPH_DRIVER",
+                "STM32F40_41xxx"
+            ],
+            "compilerPath": "/Users/ryanuo/dev/toolchains/bin/arm-none-eabi-gcc",
+            "compilerArgs": [
+                "-mcpu=cortex-m4",
+                "-mthumb"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-arm",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/USER",
+                    "${workspaceFolder}/HARDWARE",
+                    "${workspaceFolder}/SYSTEM",
+                    "${workspaceFolder}/RTE",
+                    "${workspaceFolder}/AGREEMENT",
+                    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/src",
+                    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Source"
+                ],
+                "limitSymbolsToIncludedHeaders": false
+            }
+        },
+        {
+            "name": "Target 1",
+            "includePath": [
+                "${workspaceFolder}/RTE",
+                "${workspaceFolder}/RTE/_Target_1",
+                "${workspaceFolder}/RTE/Device/STM32F407ZE",
+                "${workspaceFolder}/USER",
+                "${workspaceFolder}/HARDWARE",
+                "${workspaceFolder}/SYSTEM",
+                "${workspaceFolder}/AGREEMENT",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Include",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/inc",
+                "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/CMSIS/Core/Include",
+                "${workspaceFolder}"
+            ],
+            "defines": [
+                "USE_STDPERIPH_DRIVER",
+                "STM32F40_41xxx",
+                "HSE_VALUE=8000000"
+            ],
+            "intelliSenseMode": "${default}",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/USER",
+                    "${workspaceFolder}/HARDWARE",
+                    "${workspaceFolder}/SYSTEM",
+                    "${workspaceFolder}/RTE",
+                    "${workspaceFolder}/AGREEMENT",
+                    "${workspaceFolder}",
+                    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/src",
+                    "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Source"
+                ],
+                "limitSymbolsToIncludedHeaders": false
+            }
+        }
+    ]
+}

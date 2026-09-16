@@ -1,0 +1,21 @@
+# Keil MDK project: commit sources only.
+# Build output
+Objects/
+Listings/
+
+# Keil/IDE user state and machine-specific settings
+*.uvguix.*
+JLinkLog.txt
+JLinkSettings.ini
+EventRecorderStub.scvd
+.vscode/*.log
+.vscode/*.lock
+
+# Local backups and OS files
+*.bak
+*.orig
+.DS_Store
+
+# 工程只引用 startup_stm32f10x_md.s（F103C8 = 中容量），其余型号启动文件不入库
+# 需要换型号时把对应那一行注释掉即可
+Start

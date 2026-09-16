@@ -1,0 +1,17 @@
+# Keil MDK project: commit sources only.
+# Build output
+Objects/
+Listings/
+
+# Keil/IDE user state and machine-specific settings
+*.uvguix.*
+JLinkLog.txt
+JLinkSettings.ini
+EventRecorderStub.scvd
+.vscode/*.log
+.vscode/*.lock
+
+# Local backups and OS files
+*.bak
+*.orig
+.DS_Store
