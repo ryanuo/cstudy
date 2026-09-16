@@ -84,3 +84,4 @@ package
 # agent
 .workbuddy
 .hermes
+.cache

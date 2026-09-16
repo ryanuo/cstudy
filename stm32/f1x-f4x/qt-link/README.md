@@ -1,0 +1,87 @@
+# qt-link — F103 → F407 数据监测台（上位机）
+
+Qt 6 + QML + QtShadcn 串口上位机：接收 F407 上送的数据包，**本地重算 CRC-16/MODBUS 校验**后
+显示，并把校验结果回给 F407。
+
+```
+F103 (USART1 9600) --杜邦线--> F407 USART2 (PA2/PA3 9600)
+                                    |
+                              F407 USART1 (PA9/PA10)
+                                    |
+                              外接 USB-TTL (9600 8N1)
+                                    |
+                                  本程序
+```
+
+## 数据协议
+
+**① 二进制帧（推荐，8 字节定长）**
+
+```
+FF  D0 D1 D2 D3  CRC_L CRC_H  FE
+│   └──── 数据 ───┘  └─ CRC 低/高 ─┘  └ 包尾
+└ 包头
+```
+
+CRC = **CRC-16/MODBUS**（多项式 0x8005 反射形式 0xA001，初值 0xFFFF），
+计算范围是 4 个数据字节，与 F103/F407 两端实现完全一致。
+
+例：`FF 01 02 03 04 A1 2B FE` → 数据 `01 02 03 04`，CRC `0x2BA1`。
+
+**② 文本行（兼容 F407 现有固件的 `USART1_Printf` 输出）**
+
+```
+RX: 05 06 07 08  CRC=9825
+```
+
+程序两种格式同时支持、自动识别：二进制帧走定长状态机，其余字节按行处理，
+非数据文本（`F407 Ready...` / `F407 alive` / `PC cmd: n`）只进原始日志、不计入统计。
+
+## 回复规则
+
+| 情况 | 回复 |
+|---|---|
+| 校验通过 | `OK\r\n` |
+| 校验失败 | `ERR\r\n` |
+
+「已回复」计数只在**真的写出去**时才累加（串口没开不会虚增）。可在界面用开关关闭自动回复。
+
+> ⚠️ 当前 F407 固件的 `USART1_IRQHandler` 只处理 `0xAA` / `0x55`，收到 `OK` 不会有反应。
+> 想让 F407 对 `OK` 做动作（比如点灯/计数），需要在 `f407/AGREEMENT/USART.c` 里加分支。
+
+## 构建与运行
+
+```bash
+make run      # 首次会配置 + 编译（含 QtShadcn 组件库），之后增量
+make build    # 只编译
+make clean    # 删除构建目录
+make info     # 打印 Qt / 构建目录 / QML 导入路径
+```
+
+- Qt 用 **Homebrew 的 `qt`（6.11.2）**：只有它带 QtSerialPort（`~/Qt/6.11.1/macos` 没装）。
+- **构建目录默认放本机 `~/dev/qt/qt-link-build`**，不放工程里。原因：本工程在 SMB 网络盘
+  （`/Volumes/Keil_v5`）上，CMake 写在该盘上的中间文件会丢，实测编译时报
+  `include could not find requested file: build/.qt/appqtlink_qml.cmake`，
+  以及 `CMakeFiles/Makefile2` 找不到。要在盘内构建：`make build BUILD_DIR=build`。
+- 组件库在 `third_party/qtshadcn`（GitHub 上的 QtShadcn）。
+- `main.cpp` 里 `QQuickStyle::setStyle("Basic")` 是**必须**的，否则 macOS 原生样式拒绝自定义
+  `background`/`contentItem`，组件会"样式不生效"。
+
+## 离线自测（不用接真机）
+
+1. `bash tests/run.sh` —— 直接编译工程里的 `SerialLink.cpp` 跑解析用例（二进制帧 / CRC 错 /
+   分包到达 / 文本行 / 假包头重同步 / 混合流 / 回复计数等，共 24 项）。
+2. 界面上「链路自检」一栏：
+   - `自测·正确包` / `自测·错误包`：把 `FF 01 02 03 04 A1 2B FE` 和 CRC 故意写错的帧
+     注入解析器，用于确认表格、统计、详情、日志这条 UI 链路；
+   - `发送 0xAA` / `发送 0x55`：走真实串口，F407 固件收到会回 `0xCC` / `0xDD` 并控制 LED1，
+     用来单独确认「上位机 ↔ F407」这一段通不通。
+
+## 界面
+
+- 顶部：串口选择（CH340 等 USB 串口优先）、刷新、波特率（默认 9600）、连接/断开、连接状态
+- 自动回复开关、手动发送、链路自检、清空统计
+- 统计：收到总数 / 校验通过 / 校验失败 / 已回复
+- 左：数据表（最新在上，默认保留 300 条），点行看详情
+- 右：本包详情（字段可鼠标选中复制）+ 原始日志（接收/校验/回复，可选中复制）
+- 右上角可切换深浅色主题（QtShadcn token 全局随动）
