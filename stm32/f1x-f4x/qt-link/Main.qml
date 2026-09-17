@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import QtShadcn
@@ -89,15 +90,20 @@ ApplicationWindow {
         property string labelText: ""
         property string valueText: ""
         property color valueColor: "#111827"
+        property bool emphasized: false      // 关键字段（数据）加大加粗
+        property bool mono: false            // 时间/十六进制/CRC/报文 → 等宽，纵向对得齐
+        property bool boxed: false           // 原始报文 → 浅灰代码块容器
 
-        spacing: 8
+        spacing: 10
         ShadcnLabel {
             text: labelText
             size: ShadcnLabel.Size.Small
             variant: ShadcnLabel.Variant.Muted
-            Layout.preferredWidth: 70
+            Layout.preferredWidth: 76          // Label 固定宽 + 左对齐 → 标签与值各成一列栅格
+            horizontalAlignment: Text.AlignLeft
         }
         TextEdit {
+            visible: !boxed
             text: valueText
             readOnly: true
             selectByMouse: true
@@ -105,10 +111,40 @@ ApplicationWindow {
             wrapMode: TextEdit.WrapAnywhere
             color: valueColor
             selectionColor: Qt.rgba(0.2, 0.4, 0.8, 0.25)
-            font.pixelSize: 12
+            font.pixelSize: emphasized ? 15 : 12
+            font.bold: emphasized
+            font.family: (mono || emphasized) ? "Menlo" : ""   // 空串 = 用默认字体
             Layout.fillWidth: true
-            Layout.minimumWidth: 0        // TextEdit 的最小宽度默认=内容宽，不置 0 会把整列撑宽、横向溢出
-            height: Math.max(18, contentHeight)
+            Layout.minimumWidth: 0
+            height: Math.max(emphasized ? 22 : 18, contentHeight)
+        }
+        // boxed：等宽 + 浅灰底 + 圆角 4 + 内边距 6/8，长报文换行不挤压（对齐 shadcn 的 code block）
+        Rectangle {
+            visible: boxed
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            implicitHeight: boxedValue.implicitHeight + 12
+            radius: 4
+            color: theme.muted
+            border.width: 1
+            border.color: theme.border
+            TextEdit {
+                id: boxedValue
+                anchors.fill: parent
+                anchors.topMargin: 6
+                anchors.bottomMargin: 6
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                text: valueText
+                readOnly: true
+                selectByMouse: true
+                persistentSelection: true
+                wrapMode: TextEdit.WrapAnywhere
+                color: valueColor
+                selectionColor: Qt.rgba(0.2, 0.4, 0.8, 0.25)
+                font.family: "Menlo"
+                font.pixelSize: 12
+            }
         }
     }
 
@@ -298,39 +334,52 @@ ApplicationWindow {
                 RowLayout {
                     id: tableHeader
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 24        // 与右列标题行同高 → 两侧卡片顶边齐平
                     spacing: 8
                     ShadcnLabel { text: qsTr("接收到的数据包") }
                     ShadcnBadge {
                         text: qsTr("%1 条").arg(packetRows.length)
                         variant: ShadcnBadge.Variant.Outline
+                        Layout.alignment: Qt.AlignVCenter
                     }
                     Item { Layout.fillWidth: true }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 120
+
+                    ShadcnTable {
+                        id: tableItem
+                        anchors.fill: parent
+                        model: packetModel
+                        onRowClicked: function(row) { selectedPacket = packetModel.getRow(row) }
+                    }
+
+                    // 空状态：没数据时给一句提示，免得大片空白看着像坏了
                     ShadcnLabel {
-                        text: qsTr("点任意一行看详情")
+                        anchors.centerIn: parent
+                        visible: root.packetRows.length === 0
+                        text: qsTr("暂无数据 · 等 F407 上报（收到后点任意一行看详情）")
                         size: ShadcnLabel.Size.Small
                         variant: ShadcnLabel.Variant.Muted
                     }
                 }
 
-                ShadcnTable {
-                    id: tableItem
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: packetModel
-                    onRowClicked: function(row) { selectedPacket = packetModel.getRow(row) }
-                }
-
                 ShadcnTableModel {
                     id: packetModel
                     columns: [
-                        { key: "idx",    title: "#",    width: 54,  align: "left" },
-                        { key: "time",   title: qsTr("时间"), width: 116, align: "left" },
-                        { key: "d0",     title: "D0",   width: 56,  align: "center" },
-                        { key: "d1",     title: "D1",   width: 56,  align: "center" },
-                        { key: "d2",     title: "D2",   width: 56,  align: "center" },
-                        { key: "d3",     title: "D3",   width: 56,  align: "center" },
-                        { key: "crc",    title: "CRC",  width: 76,  align: "center" },
-                        { key: "result", title: qsTr("校验"), width: 76, align: "center" }
+                        // D0~D3 合成一列 PAYLOAD (HEX)：列少了间距自然紧凑，也腾出宽度给数据
+                        // 宽度按表格实际宽度按比例分配：库的列宽写死后 totalWidth = max(列宽和, 容器宽)，
+                        // 列宽和小于容器宽时，表头底线与行分隔线会在表格右侧断掉
+                        // 数值列一律 align: "right"（库的 "center" 实际是空操作：Text 只锚 left，
+                        // 宽度=内容宽，HCenter 无效），值靠右对齐后表头/内容垂向成一条线
+                        { key: "idx",    title: "#",             width: Math.round(tableItem.width * 0.07), align: "right" },
+                        { key: "time",   title: qsTr("时间"),     width: Math.round(tableItem.width * 0.18), align: "right" },
+                        { key: "data",   title: "PAYLOAD (HEX)", width: Math.round(tableItem.width * 0.38), align: "right" },
+                        { key: "crc",    title: "CRC",           width: Math.round(tableItem.width * 0.19), align: "right" },
+                        { key: "check",  title: qsTr("校验"),     width: Math.round(tableItem.width * 0.17), align: "right" }
                     ]
                     rows: root.packetRows
                 }
@@ -342,45 +391,92 @@ ApplicationWindow {
                 Layout.minimumWidth: 320
                 Layout.maximumWidth: 400        // 卡住右列宽度，避免它抢走表格的宽度
                 Layout.fillHeight: true
+                // 必须显式顶部对齐：这一列的内容高（标题 24 + 卡 216 + 间距）小于 mainRow 高，
+                // 实测单靠 fillHeight 不会把本列撑开，RowLayout 会把它垂直居中 → 整列下移 66px
+                Layout.alignment: Qt.AlignTop
                 spacing: 8
 
                 // 4.1 本包详情：与左列完全同构 —— 标题行（对齐「接收到的数据包」）+ 卡片框（对齐表格框）
                 RowLayout {
                     id: detailsHeader
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 24        // 与左列标题行同高 → 两侧卡片顶边齐平
                     spacing: 8
                     ShadcnLabel { text: qsTr("本包详情") }
                     Item { Layout.fillWidth: true }
-                    ShadcnBadge {
-                        text: selectedPacket.result === undefined
-                              ? qsTr("暂无数据")
-                              : (selectedPacket.ok === true ? qsTr("✓ 校验通过") : qsTr("✗ 校验失败"))
-                        variant: selectedPacket.ok === true ? ShadcnBadge.Variant.Default
-                                                            : ShadcnBadge.Variant.Destructive
+                    // 状态胶囊：成功=浅绿底深绿字（比实心黑温和，不抢主视觉）；失败=浅红底深红字
+                    Rectangle {
+                        id: statusPill
+                        Layout.alignment: Qt.AlignVCenter
+                        readonly property bool noData: selectedPacket.result === undefined
+                        readonly property bool pass: selectedPacket.result === "通过"
+
+                        implicitWidth: statusPillText.implicitWidth + 18
+                        implicitHeight: 22
+                        radius: 999
+                        color: noData ? theme.muted
+                                      : (pass ? Qt.rgba(theme.success.r, theme.success.g, theme.success.b, 0.14)
+                                              : Qt.rgba(theme.destructive.r, theme.destructive.g, theme.destructive.b, 0.14))
+
+                        Text {
+                            id: statusPillText
+                            anchors.centerIn: parent
+                            text: statusPill.noData
+                                  ? qsTr("暂无数据")
+                                  : (statusPill.pass ? qsTr("✓ 校验通过") : qsTr("✗ 校验失败"))
+                            color: statusPill.noData ? theme.mutedForeground
+                                                     : (statusPill.pass ? theme.success : theme.destructive)
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                        }
                     }
                 }
 
-                ShadcnCard {
+                // 卡片外观 + 与表格同一种描边（theme.border）：原来 ShadcnCard 的 5% 淡环
+                // 跟表格的实线边框是两种强度，导致「主次区域划分不清晰」
+                Rectangle {
                     id: detailsCard
-                    size: ShadcnCard.Size.Small
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    implicitHeight: detailsCol.implicitHeight + 28      // 贴内容高度，不拉满（避免卡内大片空白）
+                    color: theme.card
+                    radius: theme.radius
+                    border.width: 1
+                    border.color: theme.border
+                    clip: true
+
+                    // 与 ShadcnCard 同款阴影，保持卡片观感
+                    layer.enabled: !ThemeManager.screenshotMode()
+                    layer.effect: MultiEffect {
+                        shadowEnabled: true
+                        shadowBlur: 0.4
+                        shadowVerticalOffset: 2
+                        shadowColor: Qt.rgba(0, 0, 0, theme.mode === "dark" ? 0.35 : 0.08)
+                    }
 
                     Column {
-                        width: parent.width
+                        id: detailsCol
+                        anchors.fill: parent
+                        anchors.margins: 14
                         spacing: 6
 
-                        DetailRow { labelText: qsTr("序号");   valueText: root.fieldOf("idx");  valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("时间");   valueText: root.fieldOf("time"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("数据");   valueText: root.fieldOf("data"); valueColor: theme.foreground }
+                        DetailRow { labelText: qsTr("序号");     valueText: root.fieldOf("idx");    valueColor: theme.foreground; mono: true }
+                        DetailRow { labelText: qsTr("接收时间"); valueText: root.fieldOf("time");   valueColor: theme.foreground; mono: true }
                         DetailRow {
-                            labelText: qsTr("CRC 收到/重算")
-                            valueText: root.fieldOf("crc") + " / " + root.fieldOf("calc")
+                            labelText: qsTr("数据")
+                            valueText: root.fieldOf("data")
                             valueColor: theme.foreground
+                            emphasized: true                    // 最核心的信息，放大加粗等宽
                         }
-                        DetailRow { labelText: qsTr("结果");   valueText: root.fieldOf("result"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("来源");   valueText: root.fieldOf("source"); valueColor: theme.foreground }
-                        DetailRow { labelText: qsTr("原始");   valueText: root.fieldOf("raw");  valueColor: theme.foreground }
+                        DetailRow { labelText: qsTr("CRC 收到"); valueText: root.fieldOf("crc");    valueColor: theme.foreground; mono: true }
+                        DetailRow { labelText: qsTr("CRC 重算"); valueText: root.fieldOf("calc");   valueColor: theme.foreground; mono: true }
+                        DetailRow { labelText: qsTr("结果");     valueText: root.fieldOf("result"); valueColor: theme.foreground }
+                        DetailRow { labelText: qsTr("来源");     valueText: root.fieldOf("source"); valueColor: theme.foreground }
+                        DetailRow {
+                            labelText: qsTr("原始报文")
+                            valueText: root.fieldOf("raw")
+                            valueColor: theme.foreground
+                            boxed: true                         // 浅灰代码块容器，长报文换行不挤压
+                        }
                     }
                 }
 
@@ -391,22 +487,26 @@ ApplicationWindow {
         Rectangle {
             id: logCard
             Layout.fillWidth: true
-            Layout.preferredHeight: 46 + 22 + 6 + 24      // 正文 3×~15px + 标题行 + 间距 + 上下内边距
+            Layout.preferredHeight: 46 + 18 + 6 + 20      // 正文 3×~15px + 紧凑标题行 + 间距 + 上下内边距
             color: theme.card
             radius: theme.radius
             border.width: 1
-            border.color: Qt.rgba(theme.foreground.r, theme.foreground.g, theme.foreground.b,
-                                  theme.mode === "dark" ? 0.10 : 0.05)
+            border.color: theme.border                     // 与表格/详情卡同一种描边
             clip: true
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: 10
                 spacing: 6
 
                 RowLayout {
                     Layout.fillWidth: true
-                    ShadcnLabel { text: qsTr("原始日志") }
+                    Layout.minimumHeight: 18
+                    ShadcnLabel {
+                        text: qsTr("原始日志")
+                        size: ShadcnLabel.Size.Small
+                        variant: ShadcnLabel.Variant.Muted
+                    }
                     Item { Layout.fillWidth: true }
                     ShadcnLabel {
                         text: qsTr("接收 / 校验 / 回复")
@@ -451,15 +551,23 @@ ApplicationWindow {
         }
 
         function onPacketReceived(packet) {
+            // 注意：右侧「本包详情」是用 packetModel.getRow(row) 取的数据（点击行时），
+            // 所以这里必须放**完整**字段；表格只显示 columns 里声明的那几列
             var row = {
                 "idx": packet.idx,
                 "time": packet.time,
+                "data": packet.data,        // ← 详情「数据」行读的就是它，漏了会永远显示 "—"
                 "d0": packet.d0,
                 "d1": packet.d1,
                 "d2": packet.d2,
                 "d3": packet.d3,
                 "crc": packet.crc,
-                "result": packet.result
+                "calc": packet.calc,
+                "result": packet.result,
+                "check": packet.ok ? "✓" : "✗ 失败",   // 表格用：正常态弱化成一个勾，异常态才显眼
+                "ok": packet.ok,
+                "source": packet.source,
+                "raw": packet.raw
             }
             packetRows = [row].concat(packetRows).slice(0, root.maxRows)
             selectedPacket = packet

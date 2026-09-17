@@ -18,6 +18,10 @@
 
 /*  Keil::Device:Startup:1.3.1 */
 #define RTE_DEVICE_STARTUP_STM32F4xx    /* Device Startup for STM32F4 */
+/*  Keil::Device:StdPeriph Drivers:ADC:1.3.0 */
+#define RTE_DEVICE_STDPERIPH_ADC
+/*  Keil::Device:StdPeriph Drivers:DAC:1.3.0 */
+#define RTE_DEVICE_STDPERIPH_DAC
 /*  Keil::Device:StdPeriph Drivers:EXTI:1.3.0 */
 #define RTE_DEVICE_STDPERIPH_EXTI
 /*  Keil::Device:StdPeriph Drivers:Framework:1.3.1 */

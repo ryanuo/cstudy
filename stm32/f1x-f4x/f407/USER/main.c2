@@ -1,0 +1,33 @@
+#include "stm32f4xx.h"
+#include "OLED.h"
+#include "LED.h"
+#include "USART.h"
+#include "ADC.h"         // PA5 / ADC1 滑动变阻器
+#include "LIGHTSENSOR.h" // PF7 / ADC3 光敏传感器
+#include "DAC.h"
+
+// 简易延时
+static void Delay_ms(uint32_t ms)
+{
+    volatile uint32_t count = ms * 16800; // 适配 168MHz
+    while (count--)
+    {
+    }
+}
+
+int main(void)
+{
+    // 1. 各模块初始化
+    OLED_Init();
+    LED_init();
+    USART1_init();
+    ADC1PA5_Init(); // 初始化 PA5 与 ADC1
+    LIGHT_Init();   // 初始化 PF7 与 ADC3
+
+    while (1)
+    {
+        DAC_SetChannel1Data(DAC_Align_12b_R, 2048);
+        // 刷新间隔 200ms
+        Delay_ms(200);
+    }
+}

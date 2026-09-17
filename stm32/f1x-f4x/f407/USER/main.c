@@ -1,117 +1,85 @@
-#include "stm32f4xx.h"      // Device header
+#include "stm32f4xx.h"
 #include "OLED.h"
 #include "LED.h"
 #include "USART.h"
+#include "ADC.h"         // PA5 / ADC1 »¬¶¯±ä×èÆ÷
+#include "LIGHTSENSOR.h" // PF7 / ADC3 ¹âÃô´«¸ĞÆ÷
+#include "INOUT.h"
+#include <stdio.h>
+
+/* DAC / ADC »Ø»·²âÊÔº¯ÊıÉùÃ÷£¨Èô INOUT.h ÀïÒÑÉùÃ÷¿ÉÉ¾µôÕâÁ½ĞĞ£© */
+void DAC_SetVoltage(float voltage);
+float ADC_ReadVoltage(void);
+
+// ¼òÒ×ÑÓÊ±
+static void Delay_ms(uint32_t ms)
+{
+    volatile uint32_t count = ms * 16800; // ÊÊÅä 168MHz
+    while (count--)
+    {
+    }
+}
 
 int main(void)
 {
-    /* ==================== 1. åˆå§‹åŒ– ==================== */
+    char buf[24]; /* ÓÃÓÚ sprintf Æ´×Ö·û´® */
+
+    float set_voltage = 3.3f;
+    float read_voltage = 0.0f;
+    float error = 0.0f;
+
+    /* ³õÊ¼»¯ÍâÉè */
     OLED_Init();
     LED_init();
+    USART1_init();
+    ADC1PA5_Init();
+    LIGHT_Init();
+    INOUT_Init(); /* DAC + PA6 ADC ³õÊ¼»¯£¬Ö»µ÷ÓÃÒ»´Î */
 
-    USART1_init();          // æ¥ä¸Šä½æœº PA9/PA10
-    USART2_init();          // æ¥ F103   PA2/PA3
+    /* OLED ¾²Ì¬±êÌâ£¨Ö»Ë¢Ò»´Î£© */
+    OLED_ShowString(0, 0, "DAC-ADC Loop", OLED_8X16);
+    OLED_Update(); /* ÈôÄãµÄ¿â¸üĞÂº¯Êı½Ğ±ğµÄÃû×Ö£¬¸Ä³É¶ÔÓ¦Ãû×Ö */
 
-    /* ==================== 2. å¼€æœºç•Œé¢ ==================== */
-    OLED_Clear();
-    OLED_ShowString(0, 0, "F407 System", OLED_8X16);
-    OLED_ShowString(0, 2, "U1: PC",      OLED_8X16);
-    OLED_ShowString(0, 4, "U2: F103",    OLED_8X16);
-    OLED_ShowString(0, 6, "Wait F103...", OLED_8X16);
-    OLED_Update();
-
-    USART1_SendString("F407 Ready, waiting for F103...\r\n");
-
-    /* ==================== 3. å˜é‡ ==================== */
-    uint32_t cnt = 0;           // æ”¶åˆ°åŒ…çš„è®¡æ•°
-    char buf[32];               // ä¸´æ—¶æ ¼å¼åŒ–ç¼“å†²åŒº
-
-    /* ==================== 4. ä¸»å¾ªç¯ ==================== */
     while (1)
     {
-        /* ---------- 4.1 æ”¶åˆ° F103 ä¸€ä¸ª CRC æ­£ç¡®çš„åŒ… ---------- */
-        if (Serial_RxFlag == 1)
+        /* 1. ÉèÖÃ DAC Êä³öµçÑ¹ */
+        DAC_SetVoltage(set_voltage);
+
+        /* µÈ´ı DAC Êä³öÎÈ¶¨ */
+        for (volatile int i = 0; i < 100000; i++)
+            ;
+
+        /* 2. ÓÃ ADC ²É¼¯ PA6 ÉÏµÄµçÑ¹ */
+        read_voltage = ADC_ReadVoltage();
+
+        /* 3. ¼ÆËãÎó²î */
+        error = read_voltage - set_voltage;
+
+        /* 4. OLED ÏÔÊ¾£ºÓÃ sprintf Æ´ºÃ×Ö·û´®ÔÙÏÔÊ¾ */
+        /* µÚ 2 ĞĞ£ºÉè¶¨µçÑ¹ */
+        sprintf(buf, "SET:%5.3fV", set_voltage);
+        OLED_ShowString(0, 16, buf, OLED_8X16);
+
+        /* µÚ 3 ĞĞ£º²É¼¯µçÑ¹ */
+        sprintf(buf, "RD :%5.3fV", read_voltage);
+        OLED_ShowString(0, 32, buf, OLED_8X16);
+
+        /* µÚ 4 ĞĞ£ºÎó²î */
+        sprintf(buf, "ERR:%5.3fV", error);
+        OLED_ShowString(0, 48, buf, OLED_8X16);
+
+        /* 5. Ë¢ĞÂµ½ÆÁÄ» */
+        OLED_Update();
+
+        /* 6. ¸Ä±äÉè¶¨µçÑ¹£¬ÓÃÓÚÑ­»·²âÊÔ */
+        set_voltage += 0.1f;
+        if (set_voltage > 3.3f)
         {
-            Serial_RxFlag = 0;
-            cnt++;
-
-            /* ---- 4.1.1 é€šè¿‡ USART1 å‘åˆ°ä¸Šä½æœº ---- */
-            USART1_Printf("RX: %02X %02X %02X %02X  CRC=%04X\r\n",
-                          Serial_RxPacket[0], Serial_RxPacket[1],
-                          Serial_RxPacket[2], Serial_RxPacket[3],
-                          Serial_RxCrc);
-
-            /* ---- 4.1.2 åœ¨ OLED ä¸Šæ˜¾ç¤º ---- */
-            OLED_Clear();
-
-            /* ç¬¬ 0 è¡Œï¼šæ ‡é¢˜ */
-            OLED_ShowString(0, 0, "F103->F407 OK ", OLED_8X16);
-
-            /* ç¬¬ 2 è¡Œï¼šD0 D1 */
-            OLED_ShowString(0, 2, "D0:", OLED_8X16);
-            OLED_ShowHexNum(24, 2, Serial_RxPacket[0], 2, OLED_8X16);
-            OLED_ShowString(56, 2, "D1:", OLED_8X16);
-            OLED_ShowHexNum(80, 2, Serial_RxPacket[1], 2, OLED_8X16);
-
-            /* ç¬¬ 4 è¡Œï¼šD2 D3 */
-            OLED_ShowString(0, 4, "D2:", OLED_8X16);
-            OLED_ShowHexNum(24, 4, Serial_RxPacket[2], 2, OLED_8X16);
-            OLED_ShowString(56, 4, "D3:", OLED_8X16);
-            OLED_ShowHexNum(80, 4, Serial_RxPacket[3], 2, OLED_8X16);
-
-            /* ç¬¬ 6 è¡Œï¼šè®¡æ•° + CRC */
-            OLED_ShowString(0, 6, "N:", OLED_8X16);
-            OLED_ShowNum(16, 6, cnt, 5, OLED_8X16);
-            OLED_ShowString(64, 6, "C:", OLED_8X16);
-            OLED_ShowHexNum(80, 6, Serial_RxCrc, 4, OLED_8X16);
-
-            OLED_Update();      // â˜… å¿…é¡»åˆ·æ–°
-
-            /* ---- 4.1.3 æ ¹æ®æ•°æ®åš LED æŒ‡ç¤ºï¼ˆç¤ºä¾‹ï¼‰ ---- */
-            switch (Serial_RxPacket[0])
-            {
-                case 0x01:
-                    LED1_on();
-                    break;
-                case 0x02:
-                    LED1_off();
-                    break;
-                default:
-                    break;
-            }
+            set_voltage = 0.0f;
         }
 
-        /* ---------- 4.2 å¤„ç†ä¸Šä½æœºå‘æ¥çš„æŒ‡ä»¤ ---------- */
-        if (USART_flag != 0)
-        {
-            uint8_t f = USART_flag;
-            USART_flag = 0;
-
-            USART1_Printf("PC cmd: %d\r\n", f);
-
-            /* åœ¨ OLED å³ä¸Šè§’æ˜¾ç¤º PC æŒ‡ä»¤ */
-            OLED_ShowString(80, 0, "PC:", OLED_8X16);
-            OLED_ShowNum(104, 0, f, 1, OLED_8X16);
-            OLED_Update();
-
-            /* æ ¹æ® PC æŒ‡ä»¤åšåŠ¨ä½œ */
-            if (f == 1)
-            {
-                LED1_on();
-            }
-            else if (f == 2)
-            {
-                LED1_off();
-            }
-        }
-
-        // /* ---------- 4.3 å‘¨æœŸæ€§å‘ä¸Šä½æœºå‘å¿ƒè·³ï¼ˆå¯é€‰ï¼‰ ---------- */
-        // static uint32_t tick = 0;
-        // tick++;
-        // if (tick >= 500000)         // ç²—ç•¥å»¶æ—¶ï¼Œå®é™…å¯æ¢æˆ SysTick
-        // {
-        //     tick = 0;
-        //     USART1_SendString("F407 alive\r\n");
-        // }
+        /* ÑÓÊ±Ô¼ 1 Ãë£¨¼ÙÉè 168MHz Ö÷Æµ£© */
+        for (volatile int i = 0; i < 16800000; i++)
+            ;
     }
 }
