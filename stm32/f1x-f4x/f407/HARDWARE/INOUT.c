@@ -26,7 +26,7 @@ void DAC4_Config(void)
     DAC_Cmd(DAC_Channel_1, ENABLE);
 }
 
-/* ==================== ADC ≈‰÷√ ==================== */
+/* ==================== ADC ≈‰÷√ ==================== */ 
 void ADC6_Config(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;

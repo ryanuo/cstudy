@@ -26,16 +26,32 @@ int main(void)
     PWR_init();
     EXTI_init();
     USART1_init();
-    ADC1PA5_Init(); // 初始化 ADC1，PA5 滑动变阻器
 
     /* OLED 静态标题（只刷一次） */
-    OLED_ShowString(0, 0, "DMA-MODE", OLED_8X16);
+    OLED_ShowString(0, 0, "PWR-MODE", OLED_8X16);
 
     while (1)
     {
-        USART1_Printf("ADC1 Value: %d\r\n", ADC1ConvertedValue);
         // GPIO_ToggleBits(GPIOF, GPIO_Pin_9);
         DELAY_ms(500);
+        if (2 == flag)
+        {
+            SLEEP_mode();
+            flag = 0;
+            OLED_Printf(0, 2, OLED_8X16, "SLEEP MODE");
+        }
+        if (3 == flag)
+        {
+            STOP_mode();
+            flag = 0;
+            OLED_Printf(0, 2, OLED_8X16, "STOP MODE");
+        }
+        if (4 == flag)
+        {
+            STANDBY_mode();
+            flag = 0;
+            OLED_Printf(0, 2, OLED_8X16, "STANDBY MODE");
+        }
         OLED_Update(); /* 若你的库更新函数叫别的名字，改成对应名字 */
     }
 }
