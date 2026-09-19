@@ -54,7 +54,7 @@ tailwind.config = {
     </div>
 
         <p v-if="err" class="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-      {{ err }}<span v-if="!err.startsWith('令牌')">（检查电脑和板子是否同一网段、路由器有没有开 AP 隔离）</span>
+      {{ err }}<span v-if="err.startsWith('连不')">（检查电脑和板子是否同一网段、路由器有没有开 AP 隔离）</span>
     </p>
   </div>
 
@@ -148,7 +148,7 @@ createApp({ setup() {
     try {
       const r = await fetch(url('data'), { cache: 'no-store' });
       const j = await r.json();
-      if (j.err) { online.value = true; err.value = TOKEN_HINT; return; }   /* 板子回 err = 令牌不对 */
+      if (j.err) { online.value = true; err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
       s.value = j;
       online.value = true;
       err.value = '';
@@ -163,6 +163,8 @@ createApp({ setup() {
      现在忙的时候把最后一次意图记下来，当前请求一回来立刻补发 ——
      点过的动作最终一定会到板子，不会凭空消失 */
   const TOKEN_HINT = '令牌不对：页面顶部填 web.h 里 WEB_TOKEN 的值（默认 stm32-407）';
+  /* 板子的两种 err 要分开报：{"err":1,"need":"token"} = 令牌；纯 {"err":1} = 路由不认识（固件旧了）*/
+  const ROUTE_HINT = '板子回了 err（不认识这个接口）：固件可能不是最新版，重新 Rebuild + Download 一次';
   const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
   const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
 
@@ -173,7 +175,7 @@ createApp({ setup() {
     try {
       const r = await fetch(url(p), { cache: 'no-store' });
       const j = await r.json();                    /* 再用板子的真实状态校准 */
-      if (j.err) { online.value = true; err.value = TOKEN_HINT; return; }
+      if (j.err) { online.value = true; err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
       s.value = j;
       online.value = true;
       err.value = '';
