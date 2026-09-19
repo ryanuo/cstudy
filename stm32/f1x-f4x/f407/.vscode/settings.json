@@ -22,6 +22,7 @@
     "${workspaceFolder}/HARDWARE",
     "${workspaceFolder}/SYSTEM",
     "${workspaceFolder}/RTE",
+    "${workspaceFolder}/WEB",
     "${workspaceFolder}",
     "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/src",
     "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Source"

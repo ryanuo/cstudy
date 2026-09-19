@@ -1,0 +1,41 @@
+#include "stm32f4xx.h"
+#include "OLED.h"
+#include "LED.h"
+#include "USART.h"
+#include "ADC.h"         // PA5 / ADC1 滑动变阻器
+#include "LIGHTSENSOR.h" // PF7 / ADC3 光敏传感器
+#include "INOUT.h"
+#include <stdio.h>
+#include "PWR.h"
+#include "EXTI.h"
+
+// 简易延时
+static void Delay_ms(uint32_t ms)
+{
+    volatile uint32_t count = ms * 16800; // 适配 168MHz
+    while (count--)
+    {
+    }
+}
+
+int main(void)
+{
+    /* 初始化外设 */
+    OLED_Init();
+    LED_init();
+    PWR_init();
+    EXTI_init();
+    USART1_init();
+    ADC1PA5_Init(); // 初始化 ADC1，PA5 滑动变阻器
+
+    /* OLED 静态标题（只刷一次） */
+    OLED_ShowString(0, 0, "DMA-MODE", OLED_8X16);
+
+    while (1)
+    {
+        USART1_Printf("ADC1 Value: %d\r\n", ADC1ConvertedValue);
+        // GPIO_ToggleBits(GPIOF, GPIO_Pin_9);
+        DELAY_ms(500);
+        OLED_Update(); /* 若你的库更新函数叫别的名字，改成对应名字 */
+    }
+}
