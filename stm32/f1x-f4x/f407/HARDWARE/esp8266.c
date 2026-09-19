@@ -87,7 +87,7 @@ void ESP8266_Init(void)
 
 /**
   * @brief  重新设置 USART3 波特率（诊断用：扫描模块真实波特率）
-  * @note   USART_Init 会按 CR1_CLEAR_MASK 清 CR1，可能把 RXNEIE 一起清掉，
+  * @note   USART_Init 会按 CR1_CLEAR_MASK 清 CR1，会把 RXNEIE 一起清掉，
   *         所以这里必须重新使能接收中断，否则改完波特率就再也收不到数据。
   */
 void ESP8266_SetBaud(uint32_t baud)
@@ -104,6 +104,57 @@ void ESP8266_SetBaud(uint32_t baud)
 
     USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);   /* 保住接收中断 */
     USART_Cmd(USART3, ENABLE);
+}
+
+/**
+  * @brief  片内回环自测（CR3 的 HDSEL 位）
+  * @note   参考手册 RM0090 26.3.10：HDSEL 置 1 后 "TX 和 RX 线路从内部相连接"。
+  *         所以这条路测的是芯片 + 代码（USART3 发送/接收、RXNE 中断、NVIC、
+  *         环形缓冲、快照、字符串匹配），完全不需要外部接线。
+  */
+uint8_t ESP8266_SelfLoopTest(char *expected, uint32_t timeout_ms)
+{
+    uint8_t ok;
+
+    USART3->CR3 |= USART_CR3_HDSEL;    /* TX 内部接到 RX */
+    ESP8266_ClearBuffer();
+    ESP8266_SendAT("AT");
+    ok = ESP8266_WaitResponse(expected, timeout_ms);
+    USART3->CR3 &= (uint16_t)(~USART_CR3_HDSEL);   /* 恢复全双工 */
+    ESP8266_ClearBuffer();
+    return ok;
+}
+
+/**
+  * @brief  探测 PB11 电平（下拉输入）
+  * @retval 1 = 线上有东西在主动拉高（模块 TX 空闲应为高电平，说明线通且有供电）
+  *         0 = 悬空或没被驱动（模块没供电/被复位按住/线断）
+  */
+uint8_t ESP8266_ProbeRxPin(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    volatile uint32_t i;
+    uint8_t lvl;
+
+    USART_Cmd(USART3, DISABLE);
+
+    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_11;
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IN;
+    GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_DOWN;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    for (i = 0; i < 200000; i++);            /* 等电平稳定 */
+    lvl = GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_11);
+
+    /* 恢复复用功能 */
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    GPIO_PinAFConfig(GPIOB, GPIO_PinSource11, GPIO_AF_USART3);
+
+    USART_Cmd(USART3, ENABLE);
+    return lvl;
 }
 
 /**
