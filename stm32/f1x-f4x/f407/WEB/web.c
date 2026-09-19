@@ -12,10 +12,11 @@
  *
  * 接口（全部 GET，返回 application/json）：
  *   /                    接口清单
- *   /data                {"led0":0,"led1":1,"led3":1,"light":1234,"pot":2048,"req":12}
- *                        （led0/led1/led3 是直接读引脚的硬件真实状态）
+ *   /data                {"led0":0,"led1":1,"led3":1,"led4":0,"light":1234,"pot":2048,"req":12}
+ *                        （led0/led1/led3/led4 是直接读引脚的硬件真实状态）
  *   /led0/1  /led0/0     板子丝印 LED0（PF9）开/关 -> {"ok":1}
  *   /led1/1  /led1/0     板子丝印 LED1（PF10）开/关 -> {"ok":1}
+ *   /led4/1  /led4/0     板子丝印 FSMC_D11（PE14）开/关 -> {"ok":1}
  *   /beep                蜂鸣器响 200ms        -> {"ok":1}
  *   OPTIONS 任意路径     返回 204 + CORS 头（浏览器跨域预检）
  *
@@ -39,7 +40,8 @@ static uint8_t LedOn(GPIO_TypeDef *port, uint16_t pin)
 static const char json_ok[]  = "{\"ok\":1}";
 static const char json_err[] = "{\"err\":1}";
 static const char json_api[] = "{\"api\":\"stm32f407-esp8266\",\"routes\":"
-                               "[\"/data\",\"/led0/1\",\"/led0/0\",\"/led1/1\",\"/led1/0\",\"/beep\"]}";
+                               "[\"/data\",\"/led0/1\",\"/led0/0\",\"/led1/1\",\"/led1/0\","
+                               "\"/led4/1\",\"/led4/0\",\"/beep\"]}";
 
 /* CORS：普通请求只要 ACAO；预检(OPTIONS)还要方法/头 */
 #define CORS_HDR "Access-Control-Allow-Origin: *\r\n"
@@ -193,10 +195,12 @@ static void SendDataJson(uint8_t link)
 {
     char json[96];
 
-    sprintf(json, "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"light\":%u,\"pot\":%u,\"req\":%u}",
+    sprintf(json, "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,"
+                  "\"light\":%u,\"pot\":%u,\"req\":%u}",
             (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* 板子丝印 LED0 */
             (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* 板子丝印 LED1 */
             (unsigned)LedOn(GPIOE, GPIO_Pin_13),   /* 板子丝印 FSMC_D10：服务器指示灯 */
+            (unsigned)LedOn(GPIOE, GPIO_Pin_14),   /* 板子丝印 FSMC_D11 */
             (unsigned)LIGHT_GetValue(), (unsigned)ADC1ConvertedValue,
             (unsigned)req_n);
 
@@ -247,6 +251,8 @@ void Web_Task(void)
     else if (strcmp(path, "led0/0") == 0)         { LED1_off(); ReplyJson(link, json_ok, 8); }
     else if (strcmp(path, "led1/1") == 0)         { LED2_on();  ReplyJson(link, json_ok, 8); }  /* 板子 LED1 = PF10 */
     else if (strcmp(path, "led1/0") == 0)         { LED2_off(); ReplyJson(link, json_ok, 8); }
+    else if (strcmp(path, "led4/1") == 0)         { LED4_on();  ReplyJson(link, json_ok, 8); }  /* 板子 FSMC_D11 = PE14 */
+    else if (strcmp(path, "led4/0") == 0)         { LED4_off(); ReplyJson(link, json_ok, 8); }
     else if (strcmp(path, "beep")  == 0)          { BEEP_on(); ESP8266_DelayMs(200); BEEP_off(); ReplyJson(link, json_ok, 8); }
     else if (strcmp(path, "favicon.ico") == 0)    CloseLink(link);
     else                                          ReplyJson(link, json_err, (uint16_t)(sizeof(json_err) - 1));

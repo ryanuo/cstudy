@@ -9,9 +9,11 @@
  *
  * 接口（GET，返回 application/json；所有响应都带 Access-Control-Allow-Origin: *）：
  *   /                  接口清单
- *   /data              {"led0":0,"led1":1,"light":1234,"pot":2048,"req":12}
+ *   /data              {"led0":0,"led1":1,"led3":1,"led4":0,"light":1234,"pot":2048,"req":12}
+ *                      （led0/led1/led3/led4 都是直接读引脚的硬件真实状态）
  *   /led0/1 /led0/0    板子丝印 LED0（PF9）开/关 -> {"ok":1}
  *   /led1/1 /led1/0    板子丝印 LED1（PF10）开/关 -> {"ok":1}
+ *   /led4/1 /led4/0    板子丝印 FSMC_D11（PE14）开/关 -> {"ok":1}
  *   /beep              蜂鸣器响 200ms          -> {"ok":1}
  *   OPTIONS 任意路径   204 + CORS 头（跨域预检）
  */
