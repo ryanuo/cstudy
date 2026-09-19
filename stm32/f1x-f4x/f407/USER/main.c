@@ -47,11 +47,23 @@ static void OLED_ShowAscii(int16_t Y, uint8_t *buf, uint16_t len)
     OLED_ShowString(0, Y, s, OLED_6X8);
 }
 
+/* 风扇引脚自检：在 x,y 处显示 "FAN:10"（两位分别是 PC6、PC7 的输出位）
+   不用万用表就能看出"点了正转之后 MCU 到底有没有拉高引脚" */
+static void OLED_ShowFanPins(int16_t x, int16_t y)
+{
+    uint8_t p = FAN_ReadPins();
+
+    OLED_ShowString(x, y, "FAN:", OLED_6X8);
+    OLED_ShowNum(x + 24, y, (p >> 1) & 1, 1, OLED_6X8);
+    OLED_ShowNum(x + 30, y, p & 1, 1, OLED_6X8);
+}
+
 static void OLED_Status(char *ip, uint8_t srv_ok)
 {
     OLED_ShowString(0, 24, srv_ok ? "Server:80 OK        " : "Server:80 FAIL      ", OLED_6X8);
     OLED_ShowString(0, 32, "req:", OLED_6X8);
     OLED_ShowNum(24, 32, Web_ReqCount(), 4, OLED_6X8);
+    OLED_ShowFanPins(54, 32);                       /* 自检：FAN:xy = PC6,PC7 的实际输出位 */
     OLED_ShowString(0, 40, "SSID:" WIFI_SSID, OLED_6X8);
     OLED_ShowString(0, 48, "http://", OLED_6X8);
     OLED_ShowString(0, 56, (ip != 0 && ip[0] != '\0') ? ip : "no ip", OLED_6X8);
@@ -172,6 +184,7 @@ int main(void)
             ui = 0;
             OLED_ShowString(0, 32, "req:", OLED_6X8);
             OLED_ShowNum(24, 32, Web_ReqCount(), 4, OLED_6X8);
+            OLED_ShowFanPins(54, 32);                   /* 自检：FAN:xy = PC6,PC7 */
             OLED_Update();
         }
     }

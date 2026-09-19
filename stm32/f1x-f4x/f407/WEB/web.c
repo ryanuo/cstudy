@@ -40,15 +40,14 @@ static uint8_t LedOn(GPIO_TypeDef *port, uint16_t pin)
     return (GPIO_ReadOutputDataBit(port, pin) == Bit_RESET) ? 1 : 0;
 }
 
-/* 风扇状态也靠读引脚回推（电机没有回读）
+/* 风扇状态也靠读引脚回推（电机没有回读，见 FAN_ReadPins）
    0 = 停（PC6/PC7 都低）、1 = 正转（PC6 高）、2 = 反转（PC7 高） */
 static uint8_t FanState(void)
 {
-    uint8_t a = (GPIO_ReadOutputDataBit(GPIOC, GPIO_Pin_6) != Bit_RESET) ? 1 : 0;
-    uint8_t b = (GPIO_ReadOutputDataBit(GPIOC, GPIO_Pin_7) != Bit_RESET) ? 1 : 0;
+    uint8_t p = FAN_ReadPins();
 
-    if (a && !b) return 1;
-    if (b && !a) return 2;
+    if (p == 0x02) return 1;
+    if (p == 0x01) return 2;
     return 0;
 }
 
