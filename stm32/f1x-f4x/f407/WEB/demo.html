@@ -95,7 +95,10 @@ tailwind.config = {
 <script>
 const { createApp, ref, onMounted } = Vue;
 createApp({ setup() {
-  const ip = ref(localStorage.getItem('boardIp') || '192.168.1.101');
+  /* 支持 ?ip=192.168.1.101 预填（serve.py --board 会自动带上） */
+  const qs = new URLSearchParams(location.search).get('ip');
+  if (qs) localStorage.setItem('boardIp', qs);
+  const ip = ref(qs || localStorage.getItem('boardIp') || '192.168.1.101');
   const s = ref({});
   const online = ref(false);
   const err = ref('');
