@@ -249,6 +249,23 @@ static void SendDataJson(uint8_t link)
     ReplyJson(link, json, (uint16_t)strlen(json));
 }
 
+/* 从 "GET /data?k=xxx HTTP/1.1" 里取出路由名 "data"
+   注意：必须遇到 '?' 就停：查询串是给令牌用的，算进路由就永远匹配不上（整条路由变成 404） */
+static uint8_t PathOf(char *req, char *path, uint8_t max)
+{
+    char   *g = strstr(req, "GET /");
+    uint8_t k = 0, skip = 5;                     /* "GET /" 是 5 个字符 */
+
+    if (g == 0) { g = strstr(req, "POST /"); skip = 6; }   /* "POST /" 是 6 个 —— 别用 5 */
+    if (g == 0) { path[0] = '\0'; return 0; }    /* 根本不是 HTTP 请求 */
+
+    g += skip;                                   /* 跳过方法 + 空格 + '/' */
+    while (k + 1 < max && *g != '\0' && *g != ' ' && *g != '\r' && *g != '?')
+        path[k++] = *g++;
+    path[k] = '\0';
+    return 1;
+}
+
 /* 令牌校验：请求里要有 "?k=<WEB_TOKEN>"（"?k=" 或 "&k=" 开头，避免 ?ak=xx 蒙混）
    简单但够用：这是局域网小工具，防的是"别人扫到 IP 就能开你的灯"，不是防爆破 */
 static uint8_t TokenOk(char *req)
@@ -268,8 +285,7 @@ static uint8_t HandleOne(void)
 {
     static char req[256];
     uint16_t    n;
-    uint8_t     link = 0, k;
-    char       *g;
+    uint8_t     link = 0;
     char        path[24];
 
     n = ESP8266_TakeIp(&link, req, sizeof(req));
@@ -292,18 +308,11 @@ static uint8_t HandleOne(void)
         return 1;
     }
 
-    g = strstr(req, "GET /");                    /* 真实请求的请求行 */
-    if (g == 0) g = strstr(req, "POST /");
-    if (g == 0)
+    if (!PathOf(req, path, sizeof(path)))        /* 取路由（已在 '?' 处截断） */
     {
         CloseLink(link);                         /* 不是 HTTP 请求，关掉别占着链接 */
         return 1;
     }
-
-    k = 0;
-    g += 5;                                      /* 跳过 "GET /" / "POST /" */
-    while (k < 23 && *g != '\0' && *g != ' ' && *g != '\r') path[k++] = *g++;
-    path[k] = '\0';
 
     if (path[0] == '\0')                          ReplyJson(link, json_api, (uint16_t)(sizeof(json_api) - 1));
     else if (strcmp(path, "data") == 0)           SendDataJson(link);
