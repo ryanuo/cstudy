@@ -14,7 +14,7 @@ static uint8_t  esp_rx_buf[ESP8266_RX_BUF_SIZE];
 static volatile uint16_t esp_rx_head = 0;   /* 中断写入位置 */
 static volatile uint16_t esp_rx_tail = 0;   /* 读取位置 */
 
-#define ESP8266_ACC_SIZE 1024
+#define ESP8266_ACC_SIZE 2048   /* 多人排队时能多装几个请求 */
 static char     esp_acc[ESP8266_ACC_SIZE];  /* 累积文本（上次 ClearBuffer 之后收到的） */
 static uint16_t esp_acc_len = 0;
 
@@ -144,6 +144,69 @@ void ESP8266_ClearBuffer(void)
     esp_acc_len = 0;
     esp_acc[0] = '\0';
 }
+
+/* ---------- 按块取请求：只消费自己这一块，别人排队的请求留着 ---------- */
+
+/* 丢掉 mark 之前的已处理内容 */
+static void esp_drop_to(char *mark)
+{
+    uint16_t off;
+
+    if (mark == 0 || mark <= esp_acc || mark >= esp_acc + esp_acc_len)
+    {
+        esp_acc_len = 0;
+        esp_acc[0]   = '\0';
+        return;
+    }
+
+    off = (uint16_t)(mark - esp_acc);
+    memmove(esp_acc, esp_acc + off, (size_t)(esp_acc_len - off));
+    esp_acc_len = (uint16_t)(esp_acc_len - off);
+    esp_acc[esp_acc_len] = '\0';
+}
+
+/**
+  * @brief  取出缓冲里第一个 "+IPD,<id>,<len>:<数据>" 块：拷进 buf 并 NUL 结尾，
+  *         取完立刻把这一块消费掉（后面排队的请求原样保留）
+  * @note   数据还没收全就返回 0，等下一轮 —— 请求行在数据最前面，
+  *         所以即使 max 截断了尾巴也不影响解析
+  * @retval 数据长度；0 = 还没有完整的一块
+  */
+uint16_t ESP8266_TakeIp(uint8_t *pid, char *buf, uint16_t max)
+{
+    char    *p, *q;
+    uint16_t id = 0, len = 0, n;
+
+    p = strstr(esp_acc, "+IPD,");
+    if (p == 0) return 0;
+
+    q = p + 5;
+    while (*q >= '0' && *q <= '9') { id = (uint16_t)(id * 10 + (uint16_t)(*q - '0')); q++; }
+
+    if (*q == ',')                       /* 多链接："+IPD,<id>,<len>:" */
+    {
+        q++;
+        while (*q >= '0' && *q <= '9') { len = (uint16_t)(len * 10 + (uint16_t)(*q - '0')); q++; }
+    }
+    else                                 /* 单链接："+IPD,<len>:" */
+    {
+        len = id;
+        id  = 0;
+    }
+
+    if (*q != ':' || len == 0) return 0;                            /* 头还没收全 */
+    q++;
+    if ((uint16_t)((esp_acc + esp_acc_len) - q) < len) return 0;    /* 数据还没收全 */
+
+    n = (uint16_t)((len < (uint16_t)(max - 1)) ? len : (uint16_t)(max - 1));
+    memcpy(buf, q, (size_t)n);
+    buf[n] = '\0';
+    *pid   = (uint8_t)id;
+
+    esp_drop_to(q + len);                /* 只消费这一块 */
+    return n;
+}
+
 
 /**
   * @brief  等待特定响应（真实毫秒超时）

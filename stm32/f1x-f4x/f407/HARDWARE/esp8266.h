@@ -4,7 +4,9 @@
 #include "stm32f4xx.h"
 
 /* 串口接收缓冲区大小（环形缓冲，中断里写） */
-#define ESP8266_RX_BUF_SIZE  512
+#define ESP8266_RX_BUF_SIZE  4096   /* 原来 512（≈44ms 的数据量）：
+                                     多人同时发请求、主循环又在等 AT 回复时，
+                                     512 很容易溢出丢字节，请求就残缺了 */
 
 /* 初始化：USART3(PB10/PB11, 115200-8-N-1) + RXNE 中断 + 1ms 滴答 */
 void     ESP8266_Init(void);
@@ -17,6 +19,8 @@ void     ESP8266_ClearBuffer(void);
 /* 等待响应，真实毫秒超时 */
 uint8_t  ESP8266_WaitResponse(char *expected, uint32_t timeout_ms);
 /* 已收到的数据里是否包含 expected（不消费） */
+uint16_t ESP8266_TakeIp(uint8_t *pid, char *buf, uint16_t max);
+
 uint8_t  ESP8266_Contains(char *expected);
 /* 在已收到的数据里找子串，返回指针（找不到返回 0） */
 char    *ESP8266_Find(char *pattern);

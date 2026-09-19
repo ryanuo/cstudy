@@ -145,22 +145,15 @@ createApp({ setup() {
     }
   }
 
-  /* 防抖（前沿）：同一动作 DEBOUNCE 毫秒内重复点只发一次；
-     并且同一时刻只允许一个请求在飞 —— 板子是单连接，
-     连点会把请求堆在 ESP8266 那边，越点越慢 */
+  /* 防抖改成"保留最后一次意图"：原来忙或点太密就直接把点击丢掉，
+     连点 / 多人操作时会出现"我这边显示 ON、板上其实 OFF"。
+     现在忙的时候把最后一次意图记下来，当前请求一回来立刻补发 ——
+     点过的动作最终一定会到板子，不会凭空消失 */
   const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
-  const lastAt = {};                /* 每个动作上次发送时间 */
-  const DEBOUNCE = 300;             /* ms */
+  const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
 
-  /* 点一下：先本地改状态（立刻出效果，不等网络），再发一个请求，
-     用板子回来的真实状态校准。动作接口现在直接回完整状态，
-     所以不用再拉一次 /data —— 一次请求搞定，延迟减半 */
-  async function cmd(p, patch) {
-    const now = Date.now();
-    if (busy.value) return;                        /* 上一个还没回来，直接丢 */
-    if (now - (lastAt[p] || 0) < DEBOUNCE) return; /* 连点：防抖丢掉 */
-    lastAt[p] = now;
-
+  /* 真正发请求（串行，不并发）；发完如果期间又点过，补发最后一次 */
+  async function send(p, patch) {
     busy.value = true;
     if (patch) Object.assign(s.value, patch);      /* 乐观更新：先亮 */
     try {
@@ -171,10 +164,17 @@ createApp({ setup() {
     } catch (e) {
       online.value = false;
       err.value = e.message || String(e);
-      await load();
     } finally {
       busy.value = false;
+      const nxt = Object.keys(pending)[0];
+      if (nxt) { const q = pending[nxt]; delete pending[nxt]; send(nxt, q); }
     }
+  }
+
+  /* 点一下：空闲就立刻发（保持跟手）；忙就只记下意图，等上一个回来补发 */
+  function cmd(p, patch) {
+    if (busy.value) pending[p] = patch;
+    else send(p, patch);
   }
 
   /* 刷新/连接：尾沿防抖，狂点只在停下后发一次 */

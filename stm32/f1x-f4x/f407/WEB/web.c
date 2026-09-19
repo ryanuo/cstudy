@@ -246,43 +246,40 @@ static void SendDataJson(uint8_t link)
     ReplyJson(link, json, (uint16_t)strlen(json));
 }
 
-void Web_Task(void)
+/* 处理缓冲里的一个请求：返回 1 = 消费掉了一个请求块，0 = 没有请求了
+   关键：用 ESP8266_TakeIp 只消费"这一个"块，别人排队等着的请求不会被清掉 */
+static uint8_t HandleOne(void)
 {
-    char    *p, *g;
-    char     path[24];
-    uint8_t  link, k;
+    static char req[256];
+    uint16_t    n;
+    uint8_t     link = 0, k;
+    char       *g;
+    char        path[24];
 
-    p = ESP8266_Find("+IPD,");                   /* 有数据进来 */
-    if (p == 0) return;
-
-    link = (uint8_t)(p[5] - '0');                /* "+IPD,<id>,<len>:..." */
-    if (link > 4) link = 0;
+    n = ESP8266_TakeIp(&link, req, sizeof(req));
+    if (n == 0) return 0;
 
     req_n++;
 
     /* 跨域预检：浏览器先发 OPTIONS，必须回 204 + CORS 头，否则真实请求不会被发出去 */
-    if (ESP8266_Contains("OPTIONS"))
+    if (strstr(req, "OPTIONS") != 0)
     {
-        ESP8266_ClearBuffer();
         ReplyNoContent(link);
-        return;
+        return 1;
     }
 
-    g = ESP8266_Find("GET /");                   /* 真实请求的请求行 */
-    if (g == 0) g = ESP8266_Find("POST /");
+    g = strstr(req, "GET /");                    /* 真实请求的请求行 */
+    if (g == 0) g = strstr(req, "POST /");
     if (g == 0)
     {
-        ESP8266_ClearBuffer();
-        CloseLink(link);
-        return;
+        CloseLink(link);                         /* 不是 HTTP 请求，关掉别占着链接 */
+        return 1;
     }
 
     k = 0;
     g += 5;                                      /* 跳过 "GET /" / "POST /" */
     while (k < 23 && *g != '\0' && *g != ' ' && *g != '\r') path[k++] = *g++;
     path[k] = '\0';
-
-    ESP8266_ClearBuffer();                       /* 解析完了就清缓冲，等下一个请求 */
 
     if (path[0] == '\0')                          ReplyJson(link, json_api, (uint16_t)(sizeof(json_api) - 1));
     else if (strcmp(path, "data") == 0)           SendDataJson(link);
@@ -298,6 +295,20 @@ void Web_Task(void)
     else if (strcmp(path, "beep")  == 0)          { BEEP_on(); ESP8266_DelayMs(200); BEEP_off(); ReplyOkState(link); }
     else if (strcmp(path, "favicon.ico") == 0)    CloseLink(link);
     else                                          ReplyJson(link, json_err, (uint16_t)(sizeof(json_err) - 1));
+    return 1;
+}
+
+void Web_Task(void)
+{
+    uint8_t n = 0;
+
+    /* 一次尽量把排队的请求都处理掉（最多 4 个，免得在这里待太久）。
+       以前是处理完一个就 ClearBuffer 清整个缓冲 —— 别人同时发来的请求会被连带清掉，
+       而我们的 HTTP 没有重传，那个请求就永久丢了（页面一直转圈） */
+    while (n < 4 && HandleOne()) n++;
+
+    if (ESP8266_Find("+IPD,") == 0)              /* 没有积压了才清，AT 回复的垃圾不会越积越多 */
+        ESP8266_ClearBuffer();
 }
 
 uint16_t Web_ReqCount(void)
