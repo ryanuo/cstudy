@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STM32F407 控制台（跨域调用板子）</title>
+<!--
+  这个页面放在电脑/云上跑，通过 HTTP + CORS 调用板子的 JSON 接口。
+  用法：在电脑上 `python3 -m http.server 8000`，浏览器开 http://localhost:8000/demo.html
+        （或直接双击用 file:// 打开，多数浏览器也能跨域 GET）
+  注意：页面本身要跑在 http(s):// 上，别用 https 页面去请求 http 板子（混合内容会被拦）。
+-->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+/* shadcn 的 token 名配成 Tailwind 颜色，class 写法和 shadcn 一致 */
+tailwind.config = {
+  theme: { extend: {
+    colors: {
+      border: "#e4e4e7", background: "#ffffff", foreground: "#18181b",
+      muted: "#f4f4f5", "muted-foreground": "#71717a",
+      primary: "#18181b", "primary-foreground": "#fafafa"
+    },
+    borderRadius: { lg: "12px", md: "8px" }
+  } }
+};
+</script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body class="bg-muted text-foreground font-sans">
+<div id="app" class="mx-auto max-w-md p-4">
+
+  <div class="rounded-lg border border-border bg-background p-4">
+    <div class="mb-3 flex items-center gap-2">
+      <h1 class="text-base font-semibold">STM32F407 控制台</h1>
+      <span class="ml-auto rounded-md px-2 py-0.5 text-xs"
+            :class="online ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
+        {{ online ? '已连接' : '未连接' }}
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2 border-t border-muted pt-3">
+      <span class="w-16 text-sm text-muted-foreground">板子 IP</span>
+      <input v-model="ip" @change="save" placeholder="192.168.1.101"
+             class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
+      <button @click="load" class="rounded-md border border-border bg-background px-3 py-1 text-xs">连接</button>
+    </div>
+
+    <p v-if="err" class="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+      连不上：{{ err }}（检查电脑和板子是否同一网段、路由器有没有开 AP 隔离）
+    </p>
+  </div>
+
+  <div class="mt-4 rounded-lg border border-border bg-background p-4">
+    <div class="flex items-center gap-2 border-b border-muted pb-3">
+      <span class="w-16 text-sm text-muted-foreground">LED0</span>
+      <span class="rounded-md px-2 py-0.5 text-xs"
+            :class="s.led0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
+        {{ s.led0 ? 'ON' : 'OFF' }}</span>
+      <button @click="cmd('led0/1')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
+      <button @click="cmd('led0/0')" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
+    </div>
+
+    <div class="flex items-center gap-2 border-b border-muted py-3">
+      <span class="w-16 text-sm text-muted-foreground">LED1</span>
+      <span class="rounded-md px-2 py-0.5 text-xs"
+            :class="s.led1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
+        {{ s.led1 ? 'ON' : 'OFF' }}</span>
+      <button @click="cmd('led1/1')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
+      <button @click="cmd('led1/0')" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
+    </div>
+
+    <div class="flex items-center gap-2 border-b border-muted py-3">
+      <span class="w-16 text-sm text-muted-foreground">蜂鸣器</span>
+      <button @click="cmd('beep')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">响一下</button>
+    </div>
+
+    <div class="flex items-center gap-2 border-b border-muted py-3">
+      <span class="w-16 text-sm text-muted-foreground">光敏</span><b class="text-sm">{{ s.light }}</b>
+    </div>
+    <div class="flex items-center gap-2 border-b border-muted py-3">
+      <span class="w-16 text-sm text-muted-foreground">电位器</span><b class="text-sm">{{ s.pot }}</b>
+    </div>
+    <div class="flex items-center gap-2 pt-3">
+      <span class="w-16 text-sm text-muted-foreground">请求数</span><b class="text-sm">{{ s.req }}</b>
+      <span class="ml-auto text-xs text-muted-foreground">每 1 秒自动刷新</span>
+    </div>
+  </div>
+
+  <p class="mt-3 text-center text-xs text-muted-foreground">
+    页面在电脑上 · 板子只提供 JSON 接口 · 跨域(CORS) 访问
+  </p>
+</div>
+
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({ setup() {
+  const ip = ref(localStorage.getItem('boardIp') || '192.168.1.101');
+  const s = ref({});
+  const online = ref(false);
+  const err = ref('');
+  let timer = null;
+
+  const base = () => 'http://' + ip.value.trim();
+
+  async function load() {
+    try {
+      const r = await fetch(base() + '/data', { cache: 'no-store' });
+      s.value = await r.json();
+      online.value = true;
+      err.value = '';
+    } catch (e) {
+      online.value = false;
+      err.value = e.message || String(e);
+    }
+  }
+
+  async function cmd(p) {
+    try {
+      await fetch(base() + '/' + p, { cache: 'no-store' });
+      await load();
+    } catch (e) {
+      online.value = false;
+      err.value = e.message || String(e);
+    }
+  }
+
+  function save() { localStorage.setItem('boardIp', ip.value.trim()); load(); }
+
+  onMounted(() => {
+    load();
+    timer = setInterval(load, 1000);
+  });
+
+  return { ip, s, online, err, load, cmd, save };
+} }).mount('#app');
+</script>
+</body>
+</html>
