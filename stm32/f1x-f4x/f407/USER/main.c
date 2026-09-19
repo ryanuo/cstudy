@@ -122,6 +122,7 @@ static uint16_t BuildPage(void)
 
     hlen = (uint16_t)sprintf(page,
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=gbk\r\n"
+        "Cache-Control: no-store\r\n"
         "Content-Length: %u\r\nConnection: close\r\n\r\n", (unsigned)blen);
 
     memcpy(page + hlen, body, blen);
