@@ -3,6 +3,9 @@
 #include "LED.h"
 #include "web.h"
 #include "esp8266.h"
+#include "BEEP.h"
+#include "ADC.h"
+#include "LIGHTSENSOR.h"
 
 /* ==========================================================================
  * STM32F407 + ESP8266 (ESP-01S, AT 固件) —— 手机网页控制
@@ -62,6 +65,9 @@ int main(void)
     uint16_t rxn;
 
     LED_init();
+    BEEP_init();                    /* 蜂鸣器 PF8 */
+    ADC1PA5_Init();                 /* 电位器 PA5 / ADC1 + DMA */
+    LIGHT_Init();                   /* 光敏 PF7 / ADC3 */
     ESP8266_Init();                 /* USART3 + 1ms 滴答 */
     OLED_Init();
     OLED_Clear();
