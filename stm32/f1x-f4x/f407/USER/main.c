@@ -48,17 +48,6 @@ static void OLED_ShowAscii(int16_t Y, uint8_t *buf, uint16_t len)
     OLED_ShowString(0, Y, s, OLED_6X8);
 }
 
-/* 最多拷 max_len-1 个字符并补 '\0'
-   （OLED_ShowString 会一直画到 '\0'，从累积缓冲拿到的指针必须先截断） */
-static void CopyN(char *dst, char *src, uint8_t max_len)
-{
-    uint8_t k = 0;
-
-    if (src == 0) { dst[0] = '\0'; return; }
-    while (k < (uint8_t)(max_len - 1) && src[k] != '\0') { dst[k] = src[k]; k++; }
-    dst[k] = '\0';
-}
-
 /* 连 WiFi：15 秒内等到 "GOT IP" 或 "OK" 算成功；FAIL/ERROR 立刻返回 */
 static uint8_t WIFI_Connect(void)
 {
@@ -76,16 +65,29 @@ static uint8_t WIFI_Connect(void)
     return 0;
 }
 
-/* 读 IP 显示在最后一行 */
-static void OLED_ShowIp(void)
+/* 读 IP 显示在最后一行（连上后模块可能还忙，重试几次；抓不到就把回复原文显示出来） */
+static void OLED_ShowIp(uint8_t *rxb)
 {
-    char line[24];
+    char     line[24];
+    uint8_t  try;
+    uint16_t rxn;
 
-    ESP8266_ClearBuffer();
-    ESP8266_SendAT("AT+CIFSR");
-    ESP8266_WaitResponse("OK", 3000);
-    CopyN(line, ESP8266_Find("STAIP"), sizeof(line));
-    OLED_ShowString(0, 56, line[0] ? line : "no IP               ", OLED_6X8);
+    for (try = 0; try < 3; try++)
+    {
+        ESP8266_ClearBuffer();
+        ESP8266_SendAT("AT+CIFSR");
+        ESP8266_WaitResponse("OK", 3000);
+
+        if (ESP8266_FindIp(line, sizeof(line)))
+        {
+            OLED_ShowString(0, 56, line, OLED_6X8);
+            return;
+        }
+        ESP8266_DelayMs(500);
+    }
+
+    rxn = ESP8266_Peek(rxb, 20);                      /* 兜底：显示模块原话 */
+    OLED_ShowAscii(56, rxb, (rxn > 20) ? 20 : rxn);
 }
 
 int main(void)
@@ -143,7 +145,7 @@ int main(void)
     {
         LED3_on();                                    /* PE13 亮 = 连上并拿到 IP */
         OLED_ShowString(0, 32, "WIFI: OK            ", OLED_6X8);
-        OLED_ShowIp();
+        OLED_ShowIp(rxb);
     }
     else
     {
@@ -174,7 +176,7 @@ int main(void)
                     LED2_on();
                     LED3_on();
                     OLED_ShowString(0, 32, "WIFI: OK            ", OLED_6X8);
-                    OLED_ShowIp();
+                    OLED_ShowIp(rxb);
                     OLED_Update();
                 }
             }

@@ -20,6 +20,8 @@ uint8_t  ESP8266_WaitResponse(char *expected, uint32_t timeout_ms);
 uint8_t  ESP8266_Contains(char *expected);
 /* 在已收到的数据里找子串，返回指针（找不到返回 0） */
 char    *ESP8266_Find(char *pattern);
+/* 从已收到的数据里抓一个 IPv4 地址（兼容 AT+CIFSR 新旧返回格式），返回 1=抓到 */
+uint8_t  ESP8266_FindIp(char *dst, uint8_t max_len);
 /* 取一份已收到的数据（不消费），返回字节数 */
 uint16_t ESP8266_Peek(uint8_t *dst, uint16_t max_len);
 

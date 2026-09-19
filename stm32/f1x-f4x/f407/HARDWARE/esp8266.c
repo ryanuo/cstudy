@@ -27,7 +27,7 @@ void SysTick_Handler(void)          /* 启动文件里是弱符号，这里覆盖它 */
     esp_tick_ms++;
 }
 
-static void ESP8266_TickInit(void)
+void ESP8266_TickInit(void)
 {
     SysTick_Config(SystemCoreClock / 1000U);
 }
@@ -176,6 +176,60 @@ char *ESP8266_Find(char *pattern)
 {
     esp_pump();
     return strstr(esp_acc, pattern);
+}
+
+/**
+  * @brief  从累积文本里抓一个 IPv4 地址（形如 192.168.1.101）
+  * @note   不同 AT 固件 AT+CIFSR 的返回格式不一样：新版是
+  *         "+CIFSR:STAIP,"192.168.1.101""，老版直接返回裸的 "192.168.1.101"。
+  *         这里按"数字.数字.数字.数字"找，取最后一个（APIP 在前、STAIP 在后；
+  *         老版只有一个），两种格式都能拿到。
+  * @retval 1 = 抓到了；0 = 没抓到
+  */
+uint8_t ESP8266_FindIp(char *dst, uint8_t max_len)
+{
+    char *p = esp_acc;
+    char *found = 0;
+    uint8_t found_len = 0, k;
+
+    esp_pump();
+
+    while (*p != '\0')
+    {
+        char *q = p;
+        uint8_t seg, digits, ok = 1;
+
+        if (!(*p >= '0' && *p <= '9')) { p++; continue; }
+
+        for (seg = 0; seg < 4 && ok; seg++)
+        {
+            digits = 0;
+            while (*q >= '0' && *q <= '9' && digits < 3) { q++; digits++; }
+            if (digits == 0) { ok = 0; break; }
+            if (seg < 3)
+            {
+                if (*q != '.') { ok = 0; break; }
+                q++;
+            }
+        }
+        if (ok && !(*q >= '0' && *q <= '9'))   /* 后面不能再接数字，避免只匹配到长数字的前缀 */
+        {
+            found = p;
+            found_len = (uint8_t)(q - p);
+            p = q;
+        }
+        else
+        {
+            p++;
+        }
+    }
+
+    if (found == 0) { dst[0] = '\0'; return 0; }
+
+    k = 0;
+    while (k < found_len && k < (uint8_t)(max_len - 1)) { dst[k] = found[k]; k++; }
+    dst[k] = '\0';
+    return 1;
 }
 
 uint16_t ESP8266_Peek(uint8_t *dst, uint16_t max_len)
