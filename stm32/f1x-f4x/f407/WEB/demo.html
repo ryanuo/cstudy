@@ -71,6 +71,14 @@ tailwind.config = {
     </div>
 
     <div class="flex items-center gap-2 border-b border-muted py-3">
+      <span class="w-16 text-sm text-muted-foreground">服务器灯</span>
+      <span class="rounded-md px-2 py-0.5 text-xs"
+            :class="s.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
+        {{ s.led3 ? 'ON' : 'OFF' }}</span>
+      <span class="ml-auto text-xs text-muted-foreground">PE13·服务器已开就亮</span>
+    </div>
+
+    <div class="flex items-center gap-2 border-b border-muted py-3">
       <span class="w-16 text-sm text-muted-foreground">蜂鸣器</span>
       <button @click="cmd('beep')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">响一下</button>
     </div>
