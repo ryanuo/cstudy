@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_STDPERIPH_DRIVER,HSE_VALUE=8000000</Define>
               <Undefine></Undefine>
-              <IncludePath>.\RTE;.\RTE\Device\STM32F407ZE;.\USER;.\HARDWARE;.\SYSTEM;.\AGREEMENT</IncludePath>
+              <IncludePath>.\RTE;.\RTE\Device\STM32F407ZE;.\USER;.\HARDWARE;.\SYSTEM;.\AGREEMENT;.\WEB</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -606,6 +606,21 @@
               <FileName>USART.h</FileName>
               <FileType>5</FileType>
               <FilePath>.\AGREEMENT\USART.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>WEB</GroupName>
+          <Files>
+            <File>
+              <FileName>web.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\WEB\web.c</FilePath>
+            </File>
+            <File>
+              <FileName>web.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\WEB\web.h</FilePath>
             </File>
           </Files>
         </Group>
