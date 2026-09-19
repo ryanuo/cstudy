@@ -177,9 +177,9 @@ int main(void)
 
         /* 在线：处理网页请求，顺便刷新计数 */
         Web_Task();
-        ESP8266_DelayMs(50);
+        ESP8266_DelayMs(5);          /* 5ms 轮一次：点按钮到出效果更快（原来 50ms）*/
 
-        if (++ui >= 10)
+        if (++ui >= 100)             /* 每 500ms 刷一次 OLED */
         {
             ui = 0;
             OLED_ShowString(0, 32, "req:", OLED_6X8);

@@ -51,7 +51,34 @@ static uint8_t FanState(void)
     return 0;
 }
 
-static const char json_ok[]  = "{\"ok\":1}";
+/* 组装一份完整状态 JSON（/data 和动作接口共用） */
+static uint16_t BuildStateJson(char *json)
+{
+    return (uint16_t)sprintf(json,
+        "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,\"fan\":%u,"
+        "\"light\":%u,\"pot\":%u,\"req\":%u}",
+        (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* 板子丝印 LED0 */
+        (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* 板子丝印 LED1 */
+        (unsigned)LedOn(GPIOE, GPIO_Pin_13),   /* 板子丝印 FSMC_D10：服务器指示灯 */
+        (unsigned)LedOn(GPIOE, GPIO_Pin_14),   /* 板子丝印 FSMC_D11 */
+        (unsigned)FanState(),                  /* 风扇：0 停 / 1 正转 / 2 反转 */
+        (unsigned)LIGHT_GetValue(), (unsigned)ADC1ConvertedValue,
+        (unsigned)req_n);
+}
+
+/* 动作接口的回复：{"ok":1, + 最新状态}
+   这样页面点一下只发一个请求就能顺便把界面刷新，不用再拉一次 /data */
+static void ReplyOkState(uint8_t link)
+{
+    static char tmp[144];
+    static char out[160];
+
+    BuildStateJson(tmp);                        /* {...} */
+    sprintf(out, "{\"ok\":1,%s", tmp + 1);      /* 把开头的 '{' 换成 '{"ok":1,' */
+    ReplyJson(link, out, (uint16_t)strlen(out));
+}
+
+static const char json_ok[]  = "{\"ok\":1}";   /* 仅少数地方用，动作接口见 ReplyOkState */
 static const char json_err[] = "{\"err\":1}";
 static const char json_api[] = "{\"api\":\"stm32f407-esp8266\",\"routes\":"
                                "[\"/data\",\"/led0/1\",\"/led0/0\",\"/led1/1\",\"/led1/0\","
@@ -71,8 +98,9 @@ static void CloseLink(uint8_t link)
     char cmd[24];
 
     sprintf(cmd, "AT+CIPCLOSE=%u", (unsigned)link);
+    ESP8266_ClearBuffer();                    /* 清掉上一轮的残留，否则会拿旧的 OK 当回复 */
     ESP8266_SendAT(cmd);
-    ESP8266_WaitResponse("OK", 1000);
+    ESP8266_WaitResponse("OK", 200);          /* 200ms 够；出错时 WaitResponse 会提前返回 */
 }
 
 /* 按 2048 字节分片发（AT+CIPSEND 单次上限），每片等 SEND OK 再发下一片 */
@@ -98,19 +126,22 @@ static void HttpSend(uint8_t link, const char *buf, uint16_t len)
     }
 }
 
-/* 回 200 + JSON（先发头再发正文，TCP 是字节流浏览器拼得起来） */
+/* 回 200 + JSON：头 + 正文拼成一个缓冲一次 CIPSEND 发完
+   （原来头发一轮、正文又一轮，每轮都要等 '>' 和 SEND OK，白等一次往返） */
 static void ReplyJson(uint8_t link, const char *body, uint16_t blen)
 {
-    char     head[200];
+    static uint8_t out[512];
     uint16_t hlen;
 
-    hlen = (uint16_t)sprintf(head,
+    hlen = (uint16_t)sprintf((char *)out,
         "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=gbk\r\n"
         CORS_HDR "Cache-Control: no-store\r\n"
         "Content-Length: %u\r\nConnection: close\r\n\r\n", (unsigned)blen);
 
-    HttpSend(link, head, hlen);
-    HttpSend(link, body, blen);
+    if ((uint32_t)hlen + blen > sizeof(out)) blen = (uint16_t)(sizeof(out) - hlen);
+    memcpy(out + hlen, body, blen);
+
+    HttpSend(link, (char *)out, (uint16_t)(hlen + blen));
     CloseLink(link);
 }
 
@@ -207,17 +238,9 @@ uint8_t Web_OpenServer(uint16_t port)
 
 static void SendDataJson(uint8_t link)
 {
-    char json[128];
+    static char json[144];
 
-    sprintf(json, "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,\"fan\":%u,"
-                  "\"light\":%u,\"pot\":%u,\"req\":%u}",
-            (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* 板子丝印 LED0 */
-            (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* 板子丝印 LED1 */
-            (unsigned)LedOn(GPIOE, GPIO_Pin_13),   /* 板子丝印 FSMC_D10：服务器指示灯 */
-            (unsigned)LedOn(GPIOE, GPIO_Pin_14),   /* 板子丝印 FSMC_D11 */
-            (unsigned)FanState(),                  /* 风扇：0 停 / 1 正转 / 2 反转 */
-            (unsigned)LIGHT_GetValue(), (unsigned)ADC1ConvertedValue,
-            (unsigned)req_n);
+    BuildStateJson(json);
 
     ReplyJson(link, json, (uint16_t)strlen(json));
 }
@@ -262,16 +285,16 @@ void Web_Task(void)
 
     if (path[0] == '\0')                          ReplyJson(link, json_api, (uint16_t)(sizeof(json_api) - 1));
     else if (strcmp(path, "data") == 0)           SendDataJson(link);
-    else if (strcmp(path, "led0/1") == 0)         { LED1_on();  ReplyJson(link, json_ok, 8); }  /* 板子 LED0 = PF9 */
-    else if (strcmp(path, "led0/0") == 0)         { LED1_off(); ReplyJson(link, json_ok, 8); }
-    else if (strcmp(path, "led1/1") == 0)         { LED2_on();  ReplyJson(link, json_ok, 8); }  /* 板子 LED1 = PF10 */
-    else if (strcmp(path, "led1/0") == 0)         { LED2_off(); ReplyJson(link, json_ok, 8); }
-    else if (strcmp(path, "led4/1") == 0)         { LED4_on();  ReplyJson(link, json_ok, 8); }  /* 板子 FSMC_D11 = PE14 */
-    else if (strcmp(path, "led4/0") == 0)         { LED4_off(); ReplyJson(link, json_ok, 8); }
-    else if (strcmp(path, "fan/1") == 0)          { FAN_forwardrotation(); ReplyJson(link, json_ok, 8); }  /* 正转 */
-    else if (strcmp(path, "fan/2") == 0)          { FAN_reverserotation();  ReplyJson(link, json_ok, 8); }  /* 反转 */
-    else if (strcmp(path, "fan/0") == 0)          { FAN_off();              ReplyJson(link, json_ok, 8); }  /* 停 */
-    else if (strcmp(path, "beep")  == 0)          { BEEP_on(); ESP8266_DelayMs(200); BEEP_off(); ReplyJson(link, json_ok, 8); }
+    else if (strcmp(path, "led0/1") == 0)         { LED1_on();  ReplyOkState(link); }  /* 板子 LED0 = PF9 */
+    else if (strcmp(path, "led0/0") == 0)         { LED1_off(); ReplyOkState(link); }
+    else if (strcmp(path, "led1/1") == 0)         { LED2_on();  ReplyOkState(link); }  /* 板子 LED1 = PF10 */
+    else if (strcmp(path, "led1/0") == 0)         { LED2_off(); ReplyOkState(link); }
+    else if (strcmp(path, "led4/1") == 0)         { LED4_on();  ReplyOkState(link); }  /* 板子 FSMC_D11 = PE14 */
+    else if (strcmp(path, "led4/0") == 0)         { LED4_off(); ReplyOkState(link); }
+    else if (strcmp(path, "fan/1") == 0)          { FAN_forwardrotation(); ReplyOkState(link); }  /* 正转 */
+    else if (strcmp(path, "fan/2") == 0)          { FAN_reverserotation();  ReplyOkState(link); }  /* 反转 */
+    else if (strcmp(path, "fan/0") == 0)          { FAN_off();              ReplyOkState(link); }  /* 停 */
+    else if (strcmp(path, "beep")  == 0)          { BEEP_on(); ESP8266_DelayMs(200); BEEP_off(); ReplyOkState(link); }
     else if (strcmp(path, "favicon.ico") == 0)    CloseLink(link);
     else                                          ReplyJson(link, json_err, (uint16_t)(sizeof(json_err) - 1));
 }

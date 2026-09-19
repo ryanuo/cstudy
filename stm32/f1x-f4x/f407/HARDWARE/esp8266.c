@@ -160,6 +160,12 @@ uint8_t ESP8266_WaitResponse(char *expected, uint32_t timeout_ms)
         {
             esp_pump();
             if (strstr(esp_acc, expected) != 0) return 1;
+
+            /* ERROR / FAIL / CLOSED 说明这次没戏了，不用再等满超时。
+               以前等满 1 秒，网页点一下就会卡一秒（CIPCLOSE 时最常见）*/
+            if (strstr(esp_acc, "ERROR")  != 0) return 0;
+            if (strstr(esp_acc, "FAIL")   != 0) return 0;
+            if (strstr(esp_acc, "CLOSED") != 0) return 0;
         }
     }
     return 0;

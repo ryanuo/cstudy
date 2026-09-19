@@ -57,8 +57,8 @@ tailwind.config = {
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.led0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
         {{ s.led0 ? 'ON' : 'OFF' }}</span>
-      <button @click="cmd('led0/1')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
-      <button @click="cmd('led0/0')" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
+      <button @click="cmd('led0/1', {led0:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
+      <button @click="cmd('led0/0', {led0:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
     </div>
 
     <div class="flex items-center gap-2 border-b border-muted py-3">
@@ -66,8 +66,8 @@ tailwind.config = {
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.led1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
         {{ s.led1 ? 'ON' : 'OFF' }}</span>
-      <button @click="cmd('led1/1')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
-      <button @click="cmd('led1/0')" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
+      <button @click="cmd('led1/1', {led1:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
+      <button @click="cmd('led1/0', {led1:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
     </div>
 
     <div class="flex items-center gap-2 border-b border-muted py-3">
@@ -75,8 +75,8 @@ tailwind.config = {
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.led4 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
         {{ s.led4 ? 'ON' : 'OFF' }}</span>
-      <button @click="cmd('led4/1')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
-      <button @click="cmd('led4/0')" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
+      <button @click="cmd('led4/1', {led4:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">开</button>
+      <button @click="cmd('led4/0', {led4:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">关</button>
     </div>
 
     <div class="flex items-center gap-2 border-b border-muted py-3">
@@ -84,9 +84,9 @@ tailwind.config = {
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.fan ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
         {{ ['停','正转','反转'][s.fan || 0] }}</span>
-      <button @click="cmd('fan/1')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">正转</button>
-      <button @click="cmd('fan/2')" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">反转</button>
-      <button @click="cmd('fan/0')" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">停</button>
+      <button @click="cmd('fan/1', {fan:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted">正转</button>
+      <button @click="cmd('fan/2', {fan:2})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">反转</button>
+      <button @click="cmd('fan/0', {fan:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted">停</button>
     </div>
 
     <div class="flex items-center gap-2 border-b border-muted py-3">
@@ -116,7 +116,7 @@ tailwind.config = {
 
   <p class="mt-3 text-center text-xs text-muted-foreground">
     LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V)<br>
-    页面在电脑上 · 板子只提供 JSON 接口 · 按需请求（点刷新/操作后才发）
+    页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准
   </p>
 </div>
 
@@ -145,13 +145,20 @@ createApp({ setup() {
     }
   }
 
-  async function cmd(p) {
+  /* 点一下：先本地改状态（立刻出效果，不等网络），再发一个请求，
+     用板子回来的真实状态校准。动作接口现在直接回完整状态，
+     所以不用再拉一次 /data —— 一次请求搞定，延迟减半 */
+  async function cmd(p, patch) {
+    if (patch) Object.assign(s.value, patch);
     try {
-      await fetch(base() + '/' + p, { cache: 'no-store' });
-      await load();
+      const r = await fetch(base() + '/' + p, { cache: 'no-store' });
+      s.value = await r.json();
+      online.value = true;
+      err.value = '';
     } catch (e) {
       online.value = false;
       err.value = e.message || String(e);
+      await load();
     }
   }
 

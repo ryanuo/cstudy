@@ -12,11 +12,14 @@
  *   /data              {"led0":0,"led1":1,"led3":1,"led4":0,"fan":0,
  *                       "light":1234,"pot":2048,"req":12}
  *                      （led0/led1/led3/led4/fan 都是直接读引脚回推的真实状态）
- *   /led0/1 /led0/0    板子丝印 LED0（PF9）开/关 -> {"ok":1}
- *   /led1/1 /led1/0    板子丝印 LED1（PF10）开/关 -> {"ok":1}
- *   /led4/1 /led4/0    板子丝印 FSMC_D11（PE14）开/关 -> {"ok":1}
- *   /fan/0 /fan/1 /fan/2  风扇 L9110H（PC6/PC7）：停 / 正转 / 反转 -> {"ok":1}
- *   /beep              蜂鸣器响 200ms          -> {"ok":1}
+ *   /led0/1 /led0/0    板子丝印 LED0（PF9）开/关
+ *   /led1/1 /led1/0    板子丝印 LED1（PF10）开/关
+ *   /led4/1 /led4/0    板子丝印 FSMC_D11（PE14）开/关
+ *   /fan/0 /fan/1 /fan/2  风扇 L9110H（PC6/PC7）：停 / 正转 / 反转
+ *   /beep              蜂鸣器响 200ms
+ *
+ *   动作接口统一回 {"ok":1,  + 最新状态}（和 /data 同样的字段），
+ *   所以页面点一下只发一个请求就能顺便刷新界面，不用再拉一次 /data。
  *   OPTIONS 任意路径   204 + CORS 头（跨域预检）
  */
 
