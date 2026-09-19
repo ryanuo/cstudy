@@ -66,6 +66,8 @@ static uint16_t BuildStateJson(char *json)
         (unsigned)req_n);
 }
 
+static void ReplyJson(uint8_t link, const char *body, uint16_t blen);   /* 定义在下面 */
+
 /* 动作接口的回复：{"ok":1, + 最新状态}
    这样页面点一下只发一个请求就能顺便把界面刷新，不用再拉一次 /data */
 static void ReplyOkState(uint8_t link)
@@ -78,7 +80,6 @@ static void ReplyOkState(uint8_t link)
     ReplyJson(link, out, (uint16_t)strlen(out));
 }
 
-static const char json_ok[]  = "{\"ok\":1}";   /* 仅少数地方用，动作接口见 ReplyOkState */
 static const char json_err[] = "{\"err\":1}";
 static const char json_api[] = "{\"api\":\"stm32f407-esp8266\",\"routes\":"
                                "[\"/data\",\"/led0/1\",\"/led0/0\",\"/led1/1\",\"/led1/0\","
