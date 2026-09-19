@@ -3,6 +3,11 @@
 
 #include "stm32f4xx.h"
 
+/* 访问令牌：真实请求必须带 ?k=<token> 才执行（OPTIONS 预检除外，否则浏览器连真实请求都发不出去）。
+   换口令就改这一行；客户端在页面顶部填一次（存 localStorage），serve.py 可以用 --token 带过去。
+   为什么用查询参数而不是自定义头：自定义头会触发 CORS 预检，在 ESP8266 上白多一轮往返 */
+#define WEB_TOKEN   "stm32-407"
+
 /*
  * 纯 JSON 接口层（不带网页）—— 页面放电脑/云上，跨域调用板子
  * 依赖：esp8266.c（USART3 上的 AT 指令）、LED/BEEP/ADC/LIGHTSENSOR

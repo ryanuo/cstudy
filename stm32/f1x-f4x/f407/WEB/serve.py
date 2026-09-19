@@ -68,13 +68,18 @@ def pick_port(preferred):
     return 0
 
 
-def check_board(ip):
+def check_board(ip, token=""):
     """用普通 HTTP 测一下板子（这里没有浏览器同源策略，通不通只看网络）"""
-    url = "http://%s/data" % ip
+    url = "http://%s/data%s" % (ip, ("?k=" + token) if token else "")
     print("  测试板子 %s ..." % url)
     try:
         with urllib.request.urlopen(url, timeout=3) as r:
-            print("  [OK] 板子有响应: %s" % r.read().decode("utf-8", "replace").strip())
+            body = r.read().decode("utf-8", "replace").strip()
+            if '"err"' in body:
+                print("  [OK] 板子有响应，但令牌不对: %s" % body)
+                print("       板子通了，只是 --token 没带或不对（web.h 里的 WEB_TOKEN）")
+                return True
+            print("  [OK] 板子有响应: %s" % body)
             return True
     except Exception as e:                                   # noqa: BLE001
         print("  [FAIL] 连不上: %s" % e)
@@ -92,6 +97,7 @@ def main():
     ap.add_argument("-d", "--dir", default=here, help="要服务的目录，默认就是本文件所在目录")
     ap.add_argument("-p", "--port", type=int, default=8000, help="端口，默认 8000")
     ap.add_argument("--board", help="顺便测一下板子，例如 192.168.1.101")
+    ap.add_argument("--token", help="板子令牌（web.h 里的 WEB_TOKEN），会带进页面 ?k= 并用于测板子")
     ap.add_argument("-o", "--open", action="store_true", help="起完自动打开浏览器")
     a = ap.parse_args()
 
@@ -113,11 +119,16 @@ def main():
     sys.stdout.flush()          # 重定向到文件时也能立刻看到（默认会缓冲）
 
     if a.board:
-        check_board(a.board)
+        check_board(a.board, a.token or "")
 
-    url = "http://localhost:%d/demo.html" % port
+    q = []
     if a.board:
-        url += "?ip=" + a.board
+        q.append("ip=" + a.board)
+    if a.token:
+        q.append("k=" + a.token)
+    url = "http://localhost:%d/demo.html" % port
+    if q:
+        url += "?" + "&".join(q)
     if a.open:
         webbrowser.open(url)
 

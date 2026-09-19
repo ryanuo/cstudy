@@ -46,8 +46,15 @@ tailwind.config = {
       <button :disabled="busy" @click="loadSoon" class="rounded-md border border-border bg-background px-3 py-1 text-xs">连接</button>
     </div>
 
-    <p v-if="err" class="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-      连不上：{{ err }}（检查电脑和板子是否同一网段、路由器有没有开 AP 隔离）
+    <div class="flex items-center gap-2 pt-2">
+      <span class="w-16 text-sm text-muted-foreground">令牌</span>
+      <input v-model="tok" @change="save" placeholder="web.h 里的 WEB_TOKEN"
+             class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
+      <span class="text-xs text-muted-foreground">?k=</span>
+    </div>
+
+        <p v-if="err" class="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+      {{ err }}<span v-if="!err.startsWith('令牌')">（检查电脑和板子是否同一网段、路由器有没有开 AP 隔离）</span>
     </p>
   </div>
 
@@ -116,27 +123,33 @@ tailwind.config = {
 
   <p class="mt-3 text-center text-xs text-muted-foreground">
     LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V)<br>
-    页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准 · 请求期间按钮置灰（防连点）
+    所有请求都带 ?k=令牌 · 页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准 · 请求期间按钮置灰（防连点）
   </p>
 </div>
 
 <script>
 const { createApp, ref, onMounted } = Vue;
 createApp({ setup() {
-  /* 支持 ?ip=192.168.1.101 预填（serve.py --board 会自动带上） */
-  const qs = new URLSearchParams(location.search).get('ip');
-  if (qs) localStorage.setItem('boardIp', qs);
-  const ip = ref(qs || localStorage.getItem('boardIp') || '192.168.1.101');
+  /* 支持 ?ip=192.168.1.101&k=令牌 预填（serve.py --board/--token 会自动带上） */
+  const q = new URLSearchParams(location.search);
+  if (q.get('ip')) localStorage.setItem('boardIp', q.get('ip'));
+  if (q.get('k'))  localStorage.setItem('boardToken', q.get('k'));
+  const ip  = ref(q.get('ip') || localStorage.getItem('boardIp') || '192.168.1.101');
+  const tok = ref(q.get('k')  || localStorage.getItem('boardToken') || '');
   const s = ref({});
   const online = ref(false);
   const err = ref('');
 
-  const base = () => 'http://' + ip.value.trim();
+  /* 每个请求都带上令牌：板子认 ?k=<WEB_TOKEN> 才执行 */
+  const url = (path) => 'http://' + ip.value.trim() + '/' + path +
+                        (tok.value.trim() ? '?k=' + encodeURIComponent(tok.value.trim()) : '');
 
   async function load() {
     try {
-      const r = await fetch(base() + '/data', { cache: 'no-store' });
-      s.value = await r.json();
+      const r = await fetch(url('data'), { cache: 'no-store' });
+      const j = await r.json();
+      if (j.err) { online.value = true; err.value = TOKEN_HINT; return; }   /* 板子回 err = 令牌不对 */
+      s.value = j;
       online.value = true;
       err.value = '';
     } catch (e) {
@@ -149,6 +162,7 @@ createApp({ setup() {
      连点 / 多人操作时会出现"我这边显示 ON、板上其实 OFF"。
      现在忙的时候把最后一次意图记下来，当前请求一回来立刻补发 ——
      点过的动作最终一定会到板子，不会凭空消失 */
+  const TOKEN_HINT = '令牌不对：页面顶部填 web.h 里 WEB_TOKEN 的值（默认 stm32-407）';
   const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
   const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
 
@@ -157,8 +171,10 @@ createApp({ setup() {
     busy.value = true;
     if (patch) Object.assign(s.value, patch);      /* 乐观更新：先亮 */
     try {
-      const r = await fetch(base() + '/' + p, { cache: 'no-store' });
-      s.value = await r.json();                    /* 再用板子的真实状态校准 */
+      const r = await fetch(url(p), { cache: 'no-store' });
+      const j = await r.json();                    /* 再用板子的真实状态校准 */
+      if (j.err) { online.value = true; err.value = TOKEN_HINT; return; }
+      s.value = j;
       online.value = true;
       err.value = '';
     } catch (e) {
@@ -188,7 +204,7 @@ createApp({ setup() {
 
   onMounted(load);          /* 打开时拉一次；之后点"刷新"或操作按钮才请求 */
 
-  return { ip, s, online, err, busy, load, loadSoon, cmd, save };
+  return { ip, tok, s, online, err, busy, load, loadSoon, cmd, save };
 } }).mount('#app');
 </script>
 </body>

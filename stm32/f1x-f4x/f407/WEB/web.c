@@ -20,6 +20,8 @@
  *   /led1/1  /led1/0     板子丝印 LED1（PF10）开/关 -> {"ok":1}
  *   /led4/1  /led4/0     板子丝印 FSMC_D11（PE14）开/关 -> {"ok":1}
  *   /fan/0  /fan/1  /fan/2   风扇 L9110H（PC6/PC7）：停 / 正转 / 反转 -> {"ok":1}
+ *
+ * 所有接口都要带 ?k=<WEB_TOKEN>（见 web.h），否则回 {"err":1,"need":"token"}
  *   /beep                蜂鸣器响 200ms        -> {"ok":1}
  *   OPTIONS 任意路径     返回 204 + CORS 头（浏览器跨域预检）
  *
@@ -80,7 +82,8 @@ static void ReplyOkState(uint8_t link)
     ReplyJson(link, out, (uint16_t)strlen(out));
 }
 
-static const char json_err[] = "{\"err\":1}";
+static const char json_err[]  = "{\"err\":1}";
+static const char json_deny[] = "{\"err\":1,\"need\":\"token\"}";   /* 令牌不对/没带 */
 static const char json_api[] = "{\"api\":\"stm32f407-esp8266\",\"routes\":"
                                "[\"/data\",\"/led0/1\",\"/led0/0\",\"/led1/1\",\"/led1/0\","
                                "\"/led4/1\",\"/led4/0\",\"/fan/0\",\"/fan/1\",\"/fan/2\",\"/beep\"]}";
@@ -246,6 +249,19 @@ static void SendDataJson(uint8_t link)
     ReplyJson(link, json, (uint16_t)strlen(json));
 }
 
+/* 令牌校验：请求里要有 "?k=<WEB_TOKEN>"（"?k=" 或 "&k=" 开头，避免 ?ak=xx 蒙混）
+   简单但够用：这是局域网小工具，防的是"别人扫到 IP 就能开你的灯"，不是防爆破 */
+static uint8_t TokenOk(char *req)
+{
+    char *p = strstr(req, "k=" WEB_TOKEN);
+    char *q;
+
+    if (p == 0) return 0;
+    if (p != req && p[-1] != '?' && p[-1] != '&') return 0;      /* 挡 ?ak=xxx 这种蒙混 */
+    q = p + 2 + (sizeof(WEB_TOKEN) - 1);                         /* 令牌后面的那个字符 */
+    return (uint8_t)(*q == '\0' || *q == '&' || *q == ' ' || *q == '\r');
+}
+
 /* 处理缓冲里的一个请求：返回 1 = 消费掉了一个请求块，0 = 没有请求了
    关键：用 ESP8266_TakeIp 只消费"这一个"块，别人排队等着的请求不会被清掉 */
 static uint8_t HandleOne(void)
@@ -261,10 +277,18 @@ static uint8_t HandleOne(void)
 
     req_n++;
 
-    /* 跨域预检：浏览器先发 OPTIONS，必须回 204 + CORS 头，否则真实请求不会被发出去 */
+    /* 跨域预检：浏览器先发 OPTIONS，必须回 204 + CORS 头，否则真实请求不会被发出去。
+       这一条不能要令牌：预检的 URL 由浏览器自己拼，带不带参数不受页面控制 */
     if (strstr(req, "OPTIONS") != 0)
     {
         ReplyNoContent(link);
+        return 1;
+    }
+
+    /* 令牌不对就不执行任何动作，只回一条说明 */
+    if (!TokenOk(req))
+    {
+        ReplyJson(link, json_deny, (uint16_t)(sizeof(json_deny) - 1));
         return 1;
     }
 
