@@ -14,7 +14,7 @@ static uint8_t  esp_rx_buf[ESP8266_RX_BUF_SIZE];
 static volatile uint16_t esp_rx_head = 0;   /* 中断写入位置 */
 static volatile uint16_t esp_rx_tail = 0;   /* 读取位置 */
 
-#define ESP8266_ACC_SIZE 384
+#define ESP8266_ACC_SIZE 1024
 static char     esp_acc[ESP8266_ACC_SIZE];  /* 累积文本（上次 ClearBuffer 之后收到的） */
 static uint16_t esp_acc_len = 0;
 
@@ -58,12 +58,11 @@ static void esp_pump(void)
 
     while (tail != head)
     {
-        if (esp_acc_len >= ESP8266_ACC_SIZE - 1)
+        if (esp_acc_len < ESP8266_ACC_SIZE - 1)
         {
-            memmove(esp_acc, esp_acc + esp_acc_len - 128, 128);
-            esp_acc_len = 128;
+            esp_acc[esp_acc_len++] = (char)esp_rx_buf[tail];
         }
-        esp_acc[esp_acc_len++] = (char)esp_rx_buf[tail];
+        /* 满了就丢掉后面的新字节，保住开头 —— HTTP 请求行/AT 回复的头都在前面 */
         tail = (tail + 1) % ESP8266_RX_BUF_SIZE;
     }
     esp_acc[esp_acc_len] = '\0';
