@@ -4,43 +4,93 @@
 #include "stm32f4xx.h"
 
 /*
- * 接收缓冲：USART3 中断里写，主循环里读。
- * 本驱动采用"只读不消费"策略：读的时候只把未读数据拷出来做字符串匹配，
- * 靠 ESP8266_ClearBuffer() 复位，这样跨包的 "OK" 也能匹配上。
+ * 接收路径分两级：
+ *   1) esp_rx_buf  —— USART3 中断里的环形缓冲（只负责把字节接住）
+ *   2) esp_acc     —— 主循环的累积文本缓冲（WaitResponse/Peek 都看它）
+ *
+ * 为什么要有第 2 级：早先的写法是"环形缓冲只读不消费"，每轮循环都把未读数据
+ * 整个拷进临时数组再 strstr。一旦模块开始吐数据（AT+CWJAP 会吐一堆进度和 URC），
+ * 每轮耗时从约 19 个周期暴涨到上千个周期，用循环次数当超时的 WaitResponse
+ * 就会把 15 秒变成十几分钟 —— 表现就是屏幕"卡住"。
+ * 现在改成：新字节只追加一次，读走就把 tail 推进（消费掉），循环里没有重复劳动。
  */
 static uint8_t  esp_rx_buf[ESP8266_RX_BUF_SIZE];
 static volatile uint16_t esp_rx_head = 0;   /* 中断写入位置 */
-static volatile uint16_t esp_rx_tail = 0;   /* 读取起点 */
+static volatile uint16_t esp_rx_tail = 0;   /* 读取位置 */
 static volatile uint16_t esp_rx_lost = 0;   /* 缓冲满丢弃的字节数 */
 
-/* 主循环用的快照缓冲：放静态区，避免在栈上开 512 字节
-   （启动文件 Stack_Size 只有 0x400 = 1KB） */
-static uint8_t  esp_snap_buf[ESP8266_RX_BUF_SIZE];
-static uint16_t esp_snap_len = 0;
+#define ESP8266_ACC_SIZE 384
+static char     esp_acc[ESP8266_ACC_SIZE];  /* 累积文本（上次 ClearBuffer 之后收到的） */
+static uint16_t esp_acc_len = 0;
+
+static volatile uint32_t esp_tick_ms = 0;   /* SysTick 1ms 滴答 */
+
+/* ---------- 时间基准 ---------- */
 
 /**
-  * @brief  把当前未读数据复制到快照缓冲并补 '\0'，返回字节数（不消费）
+  * @brief  SysTick 1ms 中断（启动文件里是弱符号，这里覆盖它）
   */
-static uint16_t esp_take_snapshot(void)
+void SysTick_Handler(void)
 {
-    uint16_t head = esp_rx_head;   /* 先取一次，避免复制途中被中断改动 */
-    uint16_t tail = esp_rx_tail;
-    uint16_t i = 0;
+    esp_tick_ms++;
+}
 
-    while (tail != head && i < ESP8266_RX_BUF_SIZE - 1)
+/**
+  * @brief  启动 1ms 滴答
+  */
+void ESP8266_TickInit(void)
+{
+    SysTick_Config(SystemCoreClock / 1000U);
+}
+
+/**
+  * @brief  取当前滴答（毫秒）
+  */
+uint32_t ESP8266_GetTick(void)
+{
+    return esp_tick_ms;
+}
+
+/**
+  * @brief  基于滴答的真实毫秒延时
+  */
+void ESP8266_DelayMs(uint32_t ms)
+{
+    uint32_t start = esp_tick_ms;
+    while ((uint32_t)(esp_tick_ms - start) < ms);
+}
+
+/* ---------- 接收缓冲 ---------- */
+
+/**
+  * @brief  把环形缓冲里"新收到"的字节追加到累积文本缓冲，并推进 tail（消费掉）
+  * @note   累积缓冲满时只保留最近 128 字节，避免丢掉"最新那句话"
+  */
+static void esp_pump(void)
+{
+    uint16_t head = esp_rx_head;
+    uint16_t tail = esp_rx_tail;
+
+    if (head == tail) return;
+
+    while (tail != head)
     {
-        esp_snap_buf[i++] = esp_rx_buf[tail];
+        if (esp_acc_len >= ESP8266_ACC_SIZE - 1)
+        {
+            memmove(esp_acc, esp_acc + esp_acc_len - 128, 128);
+            esp_acc_len = 128;
+        }
+        esp_acc[esp_acc_len++] = (char)esp_rx_buf[tail];
         tail = (tail + 1) % ESP8266_RX_BUF_SIZE;
     }
-    esp_snap_buf[i] = '\0';
-    esp_snap_len = i;
-    return i;
+    esp_acc[esp_acc_len] = '\0';
+    esp_rx_tail = head;          /* 已消费 */
 }
 
 /**
   * @brief  ESP8266 硬件初始化 (USART3 + GPIO)
-  *         接线（GEC-M4 板 P7 座 / UART3 排针，原理图 04-WIRELESS 页）：
-  *         STM32 PB10(TX) -> 模块 RX，PB11(RX) <- 模块 TX，共地，3.3V
+  *         接线（GEC-M4 板 P7 座 / UART3 排针）：模块 VCC=3.3V、GND=GND、
+  *         模块 TXD -> PB11(RXD3)、模块 RXD -> PB10(TXD3)、模块 EN -> 3.3V
   */
 void ESP8266_Init(void)
 {
@@ -83,6 +133,9 @@ void ESP8266_Init(void)
     /* 5. 使能接收中断和串口 */
     USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);
     USART_Cmd(USART3, ENABLE);
+
+    /* 6. 起 1ms 滴答（超时/延时都靠它） */
+    ESP8266_TickInit();
 }
 
 /**
@@ -109,8 +162,6 @@ void ESP8266_SetBaud(uint32_t baud)
 /**
   * @brief  片内回环自测（CR3 的 HDSEL 位）
   * @note   参考手册 RM0090 26.3.10：HDSEL 置 1 后 "TX 和 RX 线路从内部相连接"。
-  *         所以这条路测的是芯片 + 代码（USART3 发送/接收、RXNE 中断、NVIC、
-  *         环形缓冲、快照、字符串匹配），完全不需要外部接线。
   */
 uint8_t ESP8266_SelfLoopTest(char *expected, uint32_t timeout_ms)
 {
@@ -185,52 +236,57 @@ void ESP8266_SendData(uint8_t *data, uint16_t len)
 }
 
 /**
-  * @brief  清空接收缓冲区（丢弃已收到的数据）
+  * @brief  清空接收缓冲（发下一条命令前调用）
   */
 void ESP8266_ClearBuffer(void)
 {
-    esp_rx_tail = esp_rx_head;   /* tail 追上 head 即为空，比直接清零更安全 */
+    esp_rx_tail = esp_rx_head;
+    esp_acc_len = 0;
+    esp_acc[0] = '\0';
     esp_rx_lost = 0;
 }
 
 /**
-  * @brief  等待特定响应 (超时机制)
-  * @note   超时计数是按 168MHz 下约 19 个时钟/次空循环标定的，
-  *         timeout_ms = 1000 实际约 1.1 秒。
+  * @brief  等待特定响应（真实毫秒超时）
+  * @note   匹配成功后不清缓冲：调用方发命令前会 ClearBuffer，
+  *         这样成功后的 Peek() 还能把模块的回复（例如 IP）显示出来。
   */
 uint8_t ESP8266_WaitResponse(char *expected, uint32_t timeout_ms)
 {
-    uint32_t delay_cnt = 0;
+    uint32_t start = esp_tick_ms;
 
-    while (delay_cnt < timeout_ms * 10000)
+    while ((uint32_t)(esp_tick_ms - start) < timeout_ms)
     {
-        delay_cnt++;
-
         if (esp_rx_head != esp_rx_tail)
         {
-            esp_take_snapshot();
-            if (strstr((char *)esp_snap_buf, expected) != NULL)
-            {
-                ESP8266_ClearBuffer();
-                return 1;
-            }
+            esp_pump();
+            if (strstr(esp_acc, expected) != NULL) return 1;
         }
     }
     return 0;
 }
 
 /**
-  * @brief  看一眼当前收到的原始数据（不消费），用于诊断
-  * @param  dst     输出缓冲
-  * @param  max_len 最多复制多少字节
+  * @brief  目前累积收到的数据里是否包含 expected（不消费）
+  */
+uint8_t ESP8266_Contains(char *expected)
+{
+    esp_pump();
+    return (strstr(esp_acc, expected) != NULL) ? 1 : 0;
+}
+
+/**
+  * @brief  看一眼目前累积收到的原始数据（不消费），用于显示/诊断
   * @retval 实际复制到的字节数（0 = 一个字节都没收到）
   */
 uint16_t ESP8266_Peek(uint8_t *dst, uint16_t max_len)
 {
-    uint16_t len = esp_take_snapshot();
+    uint16_t len;
 
+    esp_pump();
+    len = esp_acc_len;
     if (len > max_len) len = max_len;
-    memcpy(dst, esp_snap_buf, len);
+    memcpy(dst, esp_acc, len);
     return len;
 }
 

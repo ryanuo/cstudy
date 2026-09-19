@@ -1,7 +1,6 @@
 #include "stm32f4xx.h"
 #include "OLED.h"
 #include "LED.h"
-#include "DELAY.h"
 #include "esp8266.h"
 
 /* ==========================================================================
@@ -18,12 +17,11 @@
  *   板子 LED1 (PF10) 常亮 = AT+CWMODE=1 成功
  *   PE13             常亮 = 连上热点并拿到 IP
  *   板子 LED1 慢闪           = AT 一直没通（查跳线帽/供电/接线）
- *   板子 LED1 快闪           = AT 通了但 WiFi 没连上（会每 10 秒自动重试）
+ *   板子 LED1 快闪           = AT 通了但 WiFi 没连上（每 10 秒自动重试）
  *
- * 接线要求（P7 座或杜邦线接 UART3 排针都要满足）：
- *   模块 VCC(8) -> 3.3V（不要接 UART3 排针上的 VCC5V，5V 会打死模块）
- *   模块 GND(1) -> GND，模块 TXD(5) -> PB11(RXD3)，模块 RXD(4) -> PB10(TXD3)
- *   模块 EN(6)  -> 3.3V，GPIO0(3)/GPIO2(2) 悬空或上拉
+ * 接线要求：模块 VCC->3.3V（不是排针上的 VCC5V！）、GND->GND、
+ *           模块 TXD->PB11(RXD3)、模块 RXD->PB10(TXD3)、模块 EN->3.3V，
+ *           GPIO0/GPIO2 悬空或上拉；VCC-GND 间并 100uF 抗发射瞬态跌落。
  * ========================================================================== */
 
 #define WIFI_SSID     "YQ-shixun7"    /* 必须是 2.4G 热点，大小写要和热点完全一致 */
@@ -51,7 +49,7 @@ static void OLED_ShowAscii(int16_t Y, uint8_t *buf, uint16_t len)
     OLED_ShowString(0, Y, s, OLED_6X8);
 }
 
-/* 显示最近一次收到的数据（两行 ASCII + 字节数） */
+/* 显示最近一次收到的数据（两行 ASCII） */
 static void OLED_ShowLastRx(void)
 {
     uint8_t  buf[40];
@@ -59,23 +57,30 @@ static void OLED_ShowLastRx(void)
 
     if (n == 0)
     {
-        OLED_ShowString(0, 48, "n=000 (no data)", OLED_6X8);
-        OLED_ShowString(0, 56, "                ", OLED_6X8);
+        OLED_ShowString(0, 48, "n=000 (no data)     ", OLED_6X8);
+        OLED_ShowString(0, 56, "                    ", OLED_6X8);
         return;
     }
     OLED_ShowAscii(48, buf, (n > 20) ? 20 : n);
     OLED_ShowAscii(56, buf + 20, (n > 20) ? ((n > 40) ? 20 : n - 20) : 0);
 }
 
-/* 连接 WiFi，成功返回 1 */
+/* 连 WiFi：15 秒内等到 "GOT IP" 或 "OK" 算成功；
+   出现 FAIL / ERROR 立刻返回，不用干等 15 秒。
+   超时/失败后用 OLED_ShowLastRx() 就能看到模块的原话。 */
 static uint8_t WIFI_Connect(void)
 {
+    uint32_t start;
+
     ESP8266_ClearBuffer();
     ESP8266_SendAT("AT+CWJAP=\"" WIFI_SSID "\",\"" WIFI_PASS "\"");
 
-    /* 连热点很慢，给 15 秒；不同版本固件返回 "WIFI GOT IP" 或直接 "OK" */
-    if (ESP8266_WaitResponse("GOT IP", 15000) || ESP8266_WaitResponse("OK", 1000))
-        return 1;
+    start = ESP8266_GetTick();
+    while ((uint32_t)(ESP8266_GetTick() - start) < 15000)
+    {
+        if (ESP8266_Contains("GOT IP") || ESP8266_Contains("OK"))  return 1;
+        if (ESP8266_Contains("FAIL")   || ESP8266_Contains("ERROR")) return 0;
+    }
     return 0;
 }
 
@@ -86,7 +91,7 @@ int main(void)
     uint8_t  tick = 0;
 
     LED_init();
-    ESP8266_Init();
+    ESP8266_Init();          /* 里面会把 USART3 和 1ms 滴答都起好 */
     OLED_Init();
     OLED_Clear();
 
@@ -95,8 +100,8 @@ int main(void)
     OLED_ShowString(0, 40, "SSID:" WIFI_SSID, OLED_6X8);
     OLED_Update();
 
-    /* ---------- 1. 等模块启动完成（必须是真实毫秒延时） ---------- */
-    DELAY_ms(1500);
+    /* ---------- 1. 等模块启动完成（ESP-01S 上电要 300ms~1s 才认 AT） ---------- */
+    ESP8266_DelayMs(1500);
 
     /* ---------- 2. 循环发 AT，直到收到 OK ---------- */
     for (i = 1; i <= AT_RETRY_NUM; i++)
@@ -150,12 +155,12 @@ int main(void)
                 /* 顺便把 IP 读出来显示（AT+CIFSR 的回复里有 STAIP） */
                 ESP8266_ClearBuffer();
                 ESP8266_SendAT("AT+CIFSR");
-                ESP8266_WaitResponse("OK", 2000);
+                ESP8266_WaitResponse("OK", 3000);
             }
             else
             {
                 OLED_ShowString(0, 32, "WIFI FAILED          ", OLED_6X8);
-                OLED_ShowString(0, 40, "SSID must be 2.4G", OLED_6X8);
+                OLED_ShowString(0, 40, "SSID must be 2.4G    ", OLED_6X8);
             }
             OLED_ShowLastRx();
         }
@@ -174,22 +179,22 @@ int main(void)
         {
             /* AT 都没通：板子 LED1 (PF10) 慢闪 */
             LED2_on();
-            DELAY_ms(300);
+            ESP8266_DelayMs(300);
             LED2_off();
-            DELAY_ms(300);
+            ESP8266_DelayMs(300);
         }
         else if (wifi_ok)
         {
             /* 全部成功：三颗灯常亮，什么都不用做 */
-            DELAY_ms(500);
+            ESP8266_DelayMs(500);
         }
         else
         {
             /* AT 通了但 WiFi 没连上：板子 LED1 快闪，每 10 秒重试一次 */
             LED2_on();
-            DELAY_ms(150);
+            ESP8266_DelayMs(150);
             LED2_off();
-            DELAY_ms(850);
+            ESP8266_DelayMs(850);
 
             tick++;
             if (tick >= 10)
@@ -201,6 +206,7 @@ int main(void)
                     LED2_on();
                     LED3_on();
                     OLED_ShowString(0, 32, "WIFI OK              ", OLED_6X8);
+                    OLED_ShowLastRx();
                     OLED_Update();
                 }
             }
