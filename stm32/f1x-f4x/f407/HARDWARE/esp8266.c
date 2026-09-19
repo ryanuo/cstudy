@@ -86,6 +86,27 @@ void ESP8266_Init(void)
 }
 
 /**
+  * @brief  重新设置 USART3 波特率（诊断用：扫描模块真实波特率）
+  * @note   USART_Init 会按 CR1_CLEAR_MASK 清 CR1，可能把 RXNEIE 一起清掉，
+  *         所以这里必须重新使能接收中断，否则改完波特率就再也收不到数据。
+  */
+void ESP8266_SetBaud(uint32_t baud)
+{
+    USART_InitTypeDef USART_InitStructure;
+
+    USART_InitStructure.USART_BaudRate            = baud;
+    USART_InitStructure.USART_WordLength          = USART_WordLength_8b;
+    USART_InitStructure.USART_StopBits            = USART_StopBits_1;
+    USART_InitStructure.USART_Parity              = USART_Parity_No;
+    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_InitStructure.USART_Mode                = USART_Mode_Rx | USART_Mode_Tx;
+    USART_Init(USART3, &USART_InitStructure);
+
+    USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);   /* 保住接收中断 */
+    USART_Cmd(USART3, ENABLE);
+}
+
+/**
   * @brief  发送 AT 指令 (自动添加 \r\n)
   */
 void ESP8266_SendAT(char *cmd)

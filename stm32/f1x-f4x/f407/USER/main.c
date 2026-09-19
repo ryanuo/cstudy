@@ -5,25 +5,26 @@
 #include "esp8266.h"
 
 /* ==========================================================================
- * ESP8266 (AT 固件) 上电测试
+ * USART3 / ESP8266 链路诊断固件（一次性把"谁的问题"分清）
  *
- * 两个必须注意的点：
- * 1) 模块上电后要 300ms ~ 1s 才响应 AT。所以上电先"真延时" 1.5s，
- *    然后【循环重发 AT】——只发一次是收不到 OK 的。
- * 2) ESP8266 只支持 2.4G 热点，SSID 不能填 5G 那个。
+ * 屏幕上每行含义：
+ *   REG:OK  BRR:016D   MCU 侧寄存器自检：GPIOB/USART3 时钟、PB10/PB11 复用模式、
+ *                      AFR=AF7、USART3 CR1(UE/TE/RE/RXNEIE)；BRR 是波特率分频值
+ *                      （168MHz 下 APB1=42MHz，115200 对应 0x016D）
+ *   LOOP:OK n=004      回环自测：拔掉模块、把 UART3 排针的 TXD3 与 RXD3 短接后
+ *                      应该显示 OK（收到自己刚发出去的 AT）。
+ *                      短接了还是 n=000  -> 问题在 MCU 侧（引脚/中断/代码）
+ *                      短接后 OK          -> MCU 侧没问题，问题在模块/座子
+ *   115200 / 74880 / 9600   模块在这三个波特率下各回了多少字节（OK = 回了 OK）
+ *   下面两行十六进制   第一个有数据的来源的前 20 字节
+ *   lost= 缓冲满丢掉的字节数（正常一直为 0）
  *
- * 板子丝印 与 代码函数 的对应（GEC-M4 原理图 02-KEY_LED 页，低电平点亮）：
- *   板子 LED0     = PF9  = LED1_on()   <-- 代码里叫 LED1，别和丝印串了
- *   板子 LED1     = PF10 = LED2_on()   <-- 代码里叫 LED2
- *   板子 FSMC_D10 = PE13 = LED3_on()
- *   板子 FSMC_D11 = PE14 = LED4_on()
+ * 板子 LED0(PF9，代码 LED1) 亮 = 回环自测通过
+ * 板子 LED1(PF10，代码 LED2) 亮 = 某个波特率下模块回了 OK
  * ========================================================================== */
 
-#define WIFI_SSID     "YQ-SHIXUN2G"   /* 改成实际的 2.4G 热点名 */
-#define WIFI_PASS     "88888888"
-#define AT_RETRY_NUM  10
+#define HEX_MAX 20
 
-/* 一行显示 10 个字节，每个字节占 2 个字符宽 (6x8 字体) */
 static void OLED_ShowHexLine(int16_t Y, uint8_t *buf, uint16_t len)
 {
     uint16_t i;
@@ -36,136 +37,121 @@ static void OLED_ShowHexLine(int16_t Y, uint8_t *buf, uint16_t len)
     }
 }
 
-/* 把接收到的原始数据（前 20 字节）+ 长度 + 丢字节数显示出来 */
-static void OLED_ShowRxDump(uint8_t *buf, uint16_t len)
+/* 回显一个波特率的结果：成功显示 OK，失败显示收到的字节数 */
+static void OLED_ShowBaudResult(int16_t X, int16_t Y, uint8_t ok, uint16_t n)
 {
-    OLED_ShowHexLine(24, buf, len > 10 ? 10 : len);
-    OLED_ShowHexLine(32, buf + 10, len > 10 ? (len - 10) : 0);
+    if (ok)
+        OLED_ShowString(X, Y, "OK ", OLED_6X8);
+    else
+        OLED_ShowNum(X, Y, n, 3, OLED_6X8);
+}
 
-    OLED_ShowString(0, 40, "n=", OLED_6X8);
-    OLED_ShowNum(18, 40, len, 3, OLED_6X8);
-    OLED_ShowString(54, 40, "lost=", OLED_6X8);
-    OLED_ShowNum(90, 40, ESP8266_LostCount(), 3, OLED_6X8);
+/* MCU 侧寄存器自检 */
+static uint8_t RegSelfCheck(void)
+{
+    uint8_t ok = 1;
+
+    if ((RCC->AHB1ENR & RCC_AHB1ENR_GPIOBEN) == 0)   ok = 0;   /* GPIOB 时钟 */
+    if ((RCC->APB1ENR & RCC_APB1ENR_USART3EN) == 0)  ok = 0;   /* USART3 时钟 */
+    if (((GPIOB->MODER >> 20) & 0x3) != 0x2)         ok = 0;   /* PB10 复用模式 */
+    if (((GPIOB->MODER >> 22) & 0x3) != 0x2)         ok = 0;   /* PB11 复用模式 */
+    if (((GPIOB->AFR[1] >> 8)  & 0xF) != 7)          ok = 0;   /* PB10 = AF7 */
+    if (((GPIOB->AFR[1] >> 12) & 0xF) != 7)          ok = 0;   /* PB11 = AF7 */
+    if ((USART3->CR1 & (USART_CR1_UE | USART_CR1_TE | USART_CR1_RE | USART_CR1_RXNEIE))
+        != (USART_CR1_UE | USART_CR1_TE | USART_CR1_RE | USART_CR1_RXNEIE)) ok = 0;
+    return ok;
 }
 
 int main(void)
 {
-    uint8_t  rx[32];
-    uint16_t rx_len = 0;
-    uint8_t  i;
-    uint8_t  at_ok = 0;
-    uint8_t  wifi_ok = 0;
+    uint8_t  rx[24];
+    uint8_t  dump[HEX_MAX];
+    uint16_t dump_len = 0;
+    uint16_t n[3] = {0, 0, 0};
+    uint8_t  okat[3] = {0, 0, 0};
+    uint16_t loop_n = 0;
+    uint8_t  loop_ok = 0;
+    uint8_t  reg_ok, i, k;
+    const uint32_t bauds[3] = {115200, 74880, 9600};
 
     LED_init();
     ESP8266_Init();
     OLED_Init();
     OLED_Clear();
 
-    OLED_ShowString(0, 0, "ESP8266 AT", OLED_8X16);
-    OLED_ShowString(0, 16, "wait mini boot", OLED_6X8);
+    OLED_ShowString(0, 0, "ESP8266 DIAG", OLED_8X16);
     OLED_Update();
 
-    /* ---------- 1. 等模块启动完成（必须是真实毫秒延时） ---------- */
-    DELAY_ms(1500);
+    /* ---------- 1. 寄存器自检（不需要模块、不需要接线） ---------- */
+    reg_ok = RegSelfCheck();
+    OLED_ShowString(0, 16, "REG:", OLED_6X8);
+    OLED_ShowString(24, 16, reg_ok ? "OK " : "BAD", OLED_6X8);
+    OLED_ShowString(54, 16, "BRR:", OLED_6X8);
+    OLED_ShowHexNum(78, 16, USART3->BRR, 4, OLED_6X8);
+    OLED_Update();
 
-    /* ---------- 2. 循环发 AT，直到收到 OK ---------- */
-    for (i = 1; i <= AT_RETRY_NUM; i++)
+    /* ---------- 2. 回环自测 ---------- */
+    ESP8266_ClearBuffer();
+    ESP8266_SendAT("AT");
+    DELAY_ms(200);
+    loop_n = ESP8266_Peek(rx, sizeof(rx));
+    for (k = 0; k + 1 < loop_n; k++)
     {
+        if (rx[k] == 'A' && rx[k + 1] == 'T') loop_ok = 1;
+    }
+    if (loop_n > 0)
+    {
+        dump_len = loop_n;
+        for (k = 0; k < loop_n; k++) dump[k] = rx[k];
+    }
+    if (loop_ok) LED1_on();
+
+    OLED_ShowString(0, 24, "LOOP:", OLED_6X8);
+    OLED_ShowString(30, 24, loop_ok ? "OK " : "-- ", OLED_6X8);
+    OLED_ShowString(54, 24, "n=", OLED_6X8);
+    OLED_ShowNum(66, 24, loop_n, 3, OLED_6X8);
+    OLED_Update();
+
+    /* ---------- 3. 三个常见波特率各发一次 AT ---------- */
+    for (i = 0; i < 3; i++)
+    {
+        ESP8266_SetBaud(bauds[i]);
         ESP8266_ClearBuffer();
         ESP8266_SendAT("AT");
 
-        OLED_ShowString(0, 16, "AT try:", OLED_6X8);
-        OLED_ShowNum(42, 16, i, 2, OLED_6X8);
-        OLED_ShowString(60, 16, "/10", OLED_6X8);
-        OLED_Update();
-
         if (ESP8266_WaitResponse("OK", 1000))
         {
-            at_ok = 1;
-            break;
-        }
-
-        /* 失败就显示收到的原始字节：
-           全是 0（n=0）      -> 物理链路问题（TX/RX 没交叉、供电、共地）
-           一堆乱码          -> 波特率不对（试 74880 / 9600）
-           有内容但没有 OK   -> 命令没发出去或时序问题 */
-        rx_len = ESP8266_Peek(rx, sizeof(rx));
-        OLED_ShowRxDump(rx, rx_len);
-        OLED_ShowString(0, 48, "no OK, retry", OLED_6X8);
-        OLED_Update();
-    }
-
-    /* ---------- 3. AT 结果 ---------- */
-    if (at_ok == 0)
-    {
-        OLED_ShowString(0, 48, "AT FAILED!", OLED_6X8);
-        OLED_ShowString(0, 56, "check wiring", OLED_6X8);
-        OLED_Update();
-    }
-    else
-    {
-        LED1_on();                                       /* 板子 LED0 (PF9) 亮 = 收到 OK */
-        OLED_ShowString(0, 48, "AT OK -> LED0", OLED_6X8);
-        OLED_ShowString(0, 56, "CWMODE=1 ...", OLED_6X8);
-        OLED_Update();
-
-        /* ---------- 4. 设置为 Station 模式 ---------- */
-        ESP8266_ClearBuffer();
-        ESP8266_SendAT("AT+CWMODE=1");
-        if (ESP8266_WaitResponse("OK", 2000))
-        {
-            LED2_on();                                   /* 板子 LED1 (PF10) 亮 = 模式设置成功 */
-            OLED_ShowString(0, 56, "CWMODE OK", OLED_6X8);
-            OLED_Update();
-
-            /* ---------- 5. 连接 WiFi（必须是 2.4G；连接很慢，给 15s） ---------- */
-            ESP8266_ClearBuffer();
-            ESP8266_SendAT("AT+CWJAP=\"" WIFI_SSID "\",\"" WIFI_PASS "\"");
-            if (ESP8266_WaitResponse("GOT IP", 15000) || ESP8266_WaitResponse("OK", 1000))
-            {
-                wifi_ok = 1;
-                LED3_on();                               /* PE13 亮 = 连上热点并拿到 IP */
-                OLED_ShowString(0, 56, "WIFI OK", OLED_6X8);
-                OLED_Update();
-            }
-            else
-            {
-                OLED_ShowString(0, 56, "WIFI FAILED", OLED_6X8);
-                rx_len = ESP8266_Peek(rx, sizeof(rx));
-                OLED_ShowRxDump(rx, rx_len);
-                OLED_Update();
-            }
+            okat[i] = 1;
+            LED2_on();
         }
         else
         {
-            OLED_ShowString(0, 56, "CWMODE FAILED", OLED_6X8);
-            OLED_Update();
+            n[i] = ESP8266_Peek(rx, sizeof(rx));
+            if (n[i] > 0 && dump_len == 0)
+            {
+                dump_len = (n[i] > HEX_MAX) ? HEX_MAX : n[i];
+                for (k = 0; k < dump_len; k++) dump[k] = rx[k];
+            }
         }
     }
 
-    /* ---------- 6. 主循环：用灯把状态一直显示出来，不要静默死等 ---------- */
+    /* ---------- 4. 汇总显示 ---------- */
+    OLED_ShowNum(0, 32, 115200, 6, OLED_6X8);
+    OLED_ShowBaudResult(42, 32, okat[0], n[0]);
+    OLED_ShowNum(66, 32, 74880, 5, OLED_6X8);
+    OLED_ShowBaudResult(102, 32, okat[1], n[1]);
+
+    OLED_ShowNum(0, 40, 9600, 4, OLED_6X8);
+    OLED_ShowBaudResult(30, 40, okat[2], n[2]);
+    OLED_ShowString(60, 40, "lost=", OLED_6X8);
+    OLED_ShowNum(90, 40, ESP8266_LostCount(), 3, OLED_6X8);
+
+    OLED_ShowHexLine(48, dump, dump_len > 10 ? 10 : dump_len);
+    OLED_ShowHexLine(56, dump + 10, dump_len > 10 ? (dump_len - 10) : 0);
+    OLED_Update();
+
+    /* ---------- 5. 停在这里，屏幕保持不动（改完接线按复位键重测） ---------- */
     while (1)
     {
-        if (at_ok == 0)
-        {
-            /* 连 AT 都没通过：板子 LED1 (PF10) 慢闪 */
-            LED2_on();
-            DELAY_ms(300);
-            LED2_off();
-            DELAY_ms(300);
-        }
-        else if (wifi_ok != 0)
-        {
-            /* 全部成功：板子 LED0/LED1/PE13 三颗常亮 */
-            DELAY_ms(500);
-        }
-        else
-        {
-            /* AT 通了但 WiFi 没连上：板子 LED1 (PF10) 快闪提示 */
-            LED2_on();
-            DELAY_ms(100);
-            LED2_off();
-            DELAY_ms(900);
-        }
     }
 }
