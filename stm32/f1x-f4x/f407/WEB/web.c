@@ -3,6 +3,7 @@
 #include <string.h>
 #include "LED.h"
 #include "BEEP.h"
+#include "FAN.h"
 #include "ADC.h"
 #include "LIGHTSENSOR.h"
 #include "esp8266.h"
@@ -12,11 +13,13 @@
  *
  * 接口（全部 GET，返回 application/json）：
  *   /                    接口清单
- *   /data                {"led0":0,"led1":1,"led3":1,"led4":0,"light":1234,"pot":2048,"req":12}
- *                        （led0/led1/led3/led4 是直接读引脚的硬件真实状态）
+ *   /data                {"led0":0,"led1":1,"led3":1,"led4":0,"fan":0,
+ *                         "light":1234,"pot":2048,"req":12}
+ *                        （led0/led1/led3/led4/fan 都是直接读引脚回推的真实状态）
  *   /led0/1  /led0/0     板子丝印 LED0（PF9）开/关 -> {"ok":1}
  *   /led1/1  /led1/0     板子丝印 LED1（PF10）开/关 -> {"ok":1}
  *   /led4/1  /led4/0     板子丝印 FSMC_D11（PE14）开/关 -> {"ok":1}
+ *   /fan/0  /fan/1  /fan/2   风扇 L9110H（PC6/PC7）：停 / 正转 / 反转 -> {"ok":1}
  *   /beep                蜂鸣器响 200ms        -> {"ok":1}
  *   OPTIONS 任意路径     返回 204 + CORS 头（浏览器跨域预检）
  *
@@ -37,11 +40,23 @@ static uint8_t LedOn(GPIO_TypeDef *port, uint16_t pin)
     return (GPIO_ReadOutputDataBit(port, pin) == Bit_RESET) ? 1 : 0;
 }
 
+/* 风扇状态也靠读引脚回推（电机没有回读）
+   0 = 停（PC6/PC7 都低）、1 = 正转（PC6 高）、2 = 反转（PC7 高） */
+static uint8_t FanState(void)
+{
+    uint8_t a = (GPIO_ReadOutputDataBit(GPIOC, GPIO_Pin_6) != Bit_RESET) ? 1 : 0;
+    uint8_t b = (GPIO_ReadOutputDataBit(GPIOC, GPIO_Pin_7) != Bit_RESET) ? 1 : 0;
+
+    if (a && !b) return 1;
+    if (b && !a) return 2;
+    return 0;
+}
+
 static const char json_ok[]  = "{\"ok\":1}";
 static const char json_err[] = "{\"err\":1}";
 static const char json_api[] = "{\"api\":\"stm32f407-esp8266\",\"routes\":"
                                "[\"/data\",\"/led0/1\",\"/led0/0\",\"/led1/1\",\"/led1/0\","
-                               "\"/led4/1\",\"/led4/0\",\"/beep\"]}";
+                               "\"/led4/1\",\"/led4/0\",\"/fan/0\",\"/fan/1\",\"/fan/2\",\"/beep\"]}";
 
 /* CORS：普通请求只要 ACAO；预检(OPTIONS)还要方法/头 */
 #define CORS_HDR "Access-Control-Allow-Origin: *\r\n"
@@ -193,14 +208,15 @@ uint8_t Web_OpenServer(uint16_t port)
 
 static void SendDataJson(uint8_t link)
 {
-    char json[96];
+    char json[128];
 
-    sprintf(json, "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,"
+    sprintf(json, "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,\"fan\":%u,"
                   "\"light\":%u,\"pot\":%u,\"req\":%u}",
             (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* 板子丝印 LED0 */
             (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* 板子丝印 LED1 */
             (unsigned)LedOn(GPIOE, GPIO_Pin_13),   /* 板子丝印 FSMC_D10：服务器指示灯 */
             (unsigned)LedOn(GPIOE, GPIO_Pin_14),   /* 板子丝印 FSMC_D11 */
+            (unsigned)FanState(),                  /* 风扇：0 停 / 1 正转 / 2 反转 */
             (unsigned)LIGHT_GetValue(), (unsigned)ADC1ConvertedValue,
             (unsigned)req_n);
 
@@ -253,6 +269,9 @@ void Web_Task(void)
     else if (strcmp(path, "led1/0") == 0)         { LED2_off(); ReplyJson(link, json_ok, 8); }
     else if (strcmp(path, "led4/1") == 0)         { LED4_on();  ReplyJson(link, json_ok, 8); }  /* 板子 FSMC_D11 = PE14 */
     else if (strcmp(path, "led4/0") == 0)         { LED4_off(); ReplyJson(link, json_ok, 8); }
+    else if (strcmp(path, "fan/1") == 0)          { FAN_forwardrotation(); ReplyJson(link, json_ok, 8); }  /* 正转 */
+    else if (strcmp(path, "fan/2") == 0)          { FAN_reverserotation();  ReplyJson(link, json_ok, 8); }  /* 反转 */
+    else if (strcmp(path, "fan/0") == 0)          { FAN_off();              ReplyJson(link, json_ok, 8); }  /* 停 */
     else if (strcmp(path, "beep")  == 0)          { BEEP_on(); ESP8266_DelayMs(200); BEEP_off(); ReplyJson(link, json_ok, 8); }
     else if (strcmp(path, "favicon.ico") == 0)    CloseLink(link);
     else                                          ReplyJson(link, json_err, (uint16_t)(sizeof(json_err) - 1));

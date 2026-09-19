@@ -4,6 +4,7 @@
 #include "web.h"
 #include "esp8266.h"
 #include "BEEP.h"
+#include "FAN.h"
 #include "ADC.h"
 #include "LIGHTSENSOR.h"
 
@@ -66,6 +67,7 @@ int main(void)
 
     LED_init();
     BEEP_init();                    /* 蜂鸣器 PF8 */
+    FAN_init();                     /* 风扇 L9110H: PC6/PC7 */
     ADC1PA5_Init();                 /* 电位器 PA5 / ADC1 + DMA */
     LIGHT_Init();                   /* 光敏 PF7 / ADC3 */
     ESP8266_Init();                 /* USART3 + 1ms 滴答 */
