@@ -4,33 +4,26 @@
 #include "esp8266.h"
 
 /* ==========================================================================
- * ESP8266 (ESP-01S, AT 固件) 连 WiFi
+ * ESP8266 (ESP-01S) 连 WiFi —— 带诊断版
  *
- * 板子丝印 与 代码函数 的对应（GEC-M4 原理图 02-KEY_LED 页，低电平点亮）：
- *   板子 LED0     = PF9  = LED1_on()/LED1_off()   <-- 代码里叫 LED1
- *   板子 LED1     = PF10 = LED2_on()/LED2_off()   <-- 代码里叫 LED2
- *   板子 FSMC_D10 = PE13 = LED3_on()/LED3_off()
- *   板子 FSMC_D11 = PE14 = LED4_on()/LED4_off()
+ * 屏幕各行含义：
+ *   y16  AT version:xxxx   模块的 AT 固件版本（读 AT+GMR）
+ *   y24  SCAN n=08 MODE:OK 扫描到几个热点（AT+CWLAP 的条数）+ CWMODE=1 是否成功
+ *   y32  SSID FOUND        目标 SSID 在 2.4G 扫描结果里出现了（说明：名字对、是 2.4G、在范围内）
+ *        SSID NOT FOUND    模块压根没扫到这个名字 -> 多半是 5G 热点 / 名字大小写不对 / 太远
+ *   y40  CWJAP OK / FAIL   连接结果
+ *   y48/56 原始回复的 ASCII（不可打印显示为 .）
  *
- * 灯语：
- *   板子 LED0 (PF9)  常亮 = 收到 AT 的 OK（串口通了）
- *   板子 LED1 (PF10) 常亮 = AT+CWMODE=1 成功
- *   PE13             常亮 = 连上热点并拿到 IP
- *   板子 LED1 慢闪           = AT 一直没通（查跳线帽/供电/接线）
- *   板子 LED1 快闪           = AT 通了但 WiFi 没连上（每 10 秒自动重试）
- *
- * 接线要求：模块 VCC->3.3V（不是排针上的 VCC5V！）、GND->GND、
- *           模块 TXD->PB11(RXD3)、模块 RXD->PB10(TXD3)、模块 EN->3.3V，
- *           GPIO0/GPIO2 悬空或上拉；VCC-GND 间并 100uF 抗发射瞬态跌落。
+ * 板子丝印 LED0(PF9) 亮 = AT 通了；板子 LED1(PF10) 亮 = CWMODE 成功；
+ * PE13 亮 = 连上并拿到 IP
  * ========================================================================== */
 
-#define WIFI_SSID     "YQ-shixun7"    /* 必须是 2.4G 热点，大小写要和热点完全一致 */
+#define WIFI_SSID     "YQ-shixun7"    /* 必须 2.4G，大小写要和热点完全一致 */
 #define WIFI_PASS     "88888888"
 #define AT_RETRY_NUM  10
 
 static uint8_t wifi_ok = 0;
 
-/* 把收到的原始数据按 ASCII 显示（不可打印字符显示为 .），一行 20 个字 */
 static void OLED_ShowAscii(int16_t Y, uint8_t *buf, uint16_t len)
 {
     char s[22];
@@ -52,8 +45,8 @@ static void OLED_ShowAscii(int16_t Y, uint8_t *buf, uint16_t len)
 /* 显示最近一次收到的数据（两行 ASCII） */
 static void OLED_ShowLastRx(void)
 {
-    uint8_t  buf[40];
-    uint16_t n = ESP8266_Peek(buf, sizeof(buf));
+    uint8_t  buf[42];
+    uint16_t n = ESP8266_Peek(buf, 40);
 
     if (n == 0)
     {
@@ -65,9 +58,18 @@ static void OLED_ShowLastRx(void)
     OLED_ShowAscii(56, buf + 20, (n > 20) ? ((n > 40) ? 20 : n - 20) : 0);
 }
 
-/* 连 WiFi：15 秒内等到 "GOT IP" 或 "OK" 算成功；
-   出现 FAIL / ERROR 立刻返回，不用干等 15 秒。
-   超时/失败后用 OLED_ShowLastRx() 就能看到模块的原话。 */
+/* 把 src 的前 20 个字符拷进 dst 并补 '\0'
+   （OLED_ShowString 会一直画到 '\0' 为止，直接从累积缓冲传指针会把几百个字符全画到屏上） */
+static void Copy20(char *dst, char *src)
+{
+    uint8_t k = 0;
+
+    if (src == 0) { dst[0] = '\0'; return; }
+    while (k < 20 && src[k] != '\0') { dst[k] = src[k]; k++; }
+    dst[k] = '\0';
+}
+
+/* 连 WiFi：15 秒内等到 "GOT IP" 或 "OK" 算成功；FAIL/ERROR 立刻返回 */
 static uint8_t WIFI_Connect(void)
 {
     uint32_t start;
@@ -78,7 +80,7 @@ static uint8_t WIFI_Connect(void)
     start = ESP8266_GetTick();
     while ((uint32_t)(ESP8266_GetTick() - start) < 15000)
     {
-        if (ESP8266_Contains("GOT IP") || ESP8266_Contains("OK"))  return 1;
+        if (ESP8266_Contains("GOT IP") || ESP8266_Contains("OK"))    return 1;
         if (ESP8266_Contains("FAIL")   || ESP8266_Contains("ERROR")) return 0;
     }
     return 0;
@@ -86,111 +88,111 @@ static uint8_t WIFI_Connect(void)
 
 int main(void)
 {
-    uint8_t  at_ok = 0;
-    uint8_t  i;
-    uint8_t  tick = 0;
+    uint8_t  at_ok = 0, mode_ok = 0, ssid_ok = 0;
+    uint8_t  scan_txt[42];
+    uint16_t scan_len = 0, ap_n = 0;
+    uint8_t  i, tick = 0;
+    char     verbuf[24];
 
     LED_init();
-    ESP8266_Init();          /* 里面会把 USART3 和 1ms 滴答都起好 */
+    ESP8266_Init();                 /* USART3 + 1ms 滴答都起好 */
     OLED_Init();
     OLED_Clear();
 
-    OLED_ShowString(0, 0, "ESP8266 WIFI", OLED_8X16);
-    OLED_ShowString(0, 16, "wait boot 1.5s       ", OLED_6X8);
+    OLED_ShowString(0, 0, "WIFI DIAG", OLED_8X16);
+    OLED_ShowString(0, 16, "wait boot 1.5s      ", OLED_6X8);
     OLED_ShowString(0, 40, "SSID:" WIFI_SSID, OLED_6X8);
     OLED_Update();
 
-    /* ---------- 1. 等模块启动完成（ESP-01S 上电要 300ms~1s 才认 AT） ---------- */
-    ESP8266_DelayMs(1500);
+    ESP8266_DelayMs(1500);          /* ESP-01S 上电要 300ms~1s 才认 AT */
 
-    /* ---------- 2. 循环发 AT，直到收到 OK ---------- */
+    /* ---------- 1. 循环发 AT ---------- */
     for (i = 1; i <= AT_RETRY_NUM; i++)
     {
         ESP8266_ClearBuffer();
         ESP8266_SendAT("AT");
-
-        OLED_ShowString(0, 16, "AT try:", OLED_6X8);
-        OLED_ShowNum(42, 16, i, 2, OLED_6X8);
-        OLED_ShowString(60, 16, "/10", OLED_6X8);
-        OLED_Update();
-
-        if (ESP8266_WaitResponse("OK", 1000))
-        {
-            at_ok = 1;
-            break;
-        }
+        if (ESP8266_WaitResponse("OK", 1000)) { at_ok = 1; break; }
     }
 
     if (at_ok == 0)
     {
-        OLED_ShowString(0, 16, "AT FAILED!           ", OLED_6X8);
-        OLED_ShowString(0, 24, "check jumper/pwr     ", OLED_6X8);
+        OLED_ShowString(0, 16, "AT FAILED!          ", OLED_6X8);
+        OLED_ShowString(0, 24, "check jumper/pwr    ", OLED_6X8);
         OLED_ShowLastRx();
         OLED_Update();
+        while (1) { LED2_on(); ESP8266_DelayMs(300); LED2_off(); ESP8266_DelayMs(300); }
+    }
+
+    LED1_on();                                            /* 板子 LED0 (PF9) 亮 */
+    OLED_ShowString(0, 16, "AT OK               ", OLED_6X8);
+    OLED_Update();
+
+    /* ---------- 2. 关回显（回复更干净，后面显示版本/扫描结果都省地方） ---------- */
+    ESP8266_ClearBuffer();
+    ESP8266_SendAT("ATE0");
+    ESP8266_WaitResponse("OK", 2000);
+
+    /* ---------- 3. 读 AT 固件版本 ---------- */
+    ESP8266_ClearBuffer();
+    ESP8266_SendAT("AT+GMR");
+    ESP8266_WaitResponse("OK", 3000);
+    Copy20(verbuf, ESP8266_Find("AT version:"));          /* 从累积文本里截出版本串 */
+    if (verbuf[0] == '\0') Copy20(verbuf, "AT version: n/a");
+    OLED_ShowString(0, 16, verbuf, OLED_6X8);
+    OLED_Update();
+
+    /* ---------- 4. Station 模式 ---------- */
+    ESP8266_ClearBuffer();
+    ESP8266_SendAT("AT+CWMODE=1");
+    mode_ok = ESP8266_WaitResponse("OK", 2000);
+    if (mode_ok) LED2_on();                               /* 板子 LED1 (PF10) 亮 */
+
+    /* ---------- 5. 扫描附近热点，看目标 SSID 在不在 2.4G 里 ---------- */
+    ESP8266_ClearBuffer();
+    ESP8266_SendAT("AT+CWLAP");
+    ESP8266_WaitResponse("OK", 20000);                    /* 扫描一般 2~8 秒 */
+    ap_n    = ESP8266_Count("+CWLAP:");
+    ssid_ok = ESP8266_Contains(WIFI_SSID);
+    if (ssid_ok == 0) scan_len = ESP8266_Peek(scan_txt, 40);   /* 没扫到就把列表留一份 */
+
+    OLED_ShowString(0, 24, "SCAN n=   MODE:     ", OLED_6X8);
+    OLED_ShowNum(48, 24, ap_n, 2, OLED_6X8);
+    OLED_ShowString(78, 24, mode_ok ? "OK" : "--", OLED_6X8);
+    OLED_ShowString(0, 32, ssid_ok ? "SSID FOUND          " : "SSID NOT FOUND      ", OLED_6X8);
+    OLED_Update();
+
+    /* ---------- 6. 连接 ---------- */
+    wifi_ok = WIFI_Connect();
+    if (wifi_ok)
+    {
+        LED3_on();                                        /* PE13 亮 = 连上并拿到 IP */
+        OLED_ShowString(0, 40, "CWJAP OK            ", OLED_6X8);
+        ESP8266_ClearBuffer();
+        ESP8266_SendAT("AT+CIFSR");
+        ESP8266_WaitResponse("OK", 3000);
+        OLED_ShowLastRx();                                /* 显示 IP */
     }
     else
     {
-        LED1_on();                                        /* 板子 LED0 (PF9) 亮 = 串口通了 */
-        OLED_ShowString(0, 16, "AT OK                ", OLED_6X8);
-
-        /* ---------- 3. 设置 Station 模式 ---------- */
-        ESP8266_ClearBuffer();
-        ESP8266_SendAT("AT+CWMODE=1");
-        if (ESP8266_WaitResponse("OK", 2000))
+        OLED_ShowString(0, 40, "CWJAP FAIL          ", OLED_6X8);
+        if (ssid_ok)
         {
-            LED2_on();                                    /* 板子 LED1 (PF10) 亮 = 模式设置成功 */
-            OLED_ShowString(0, 24, "CWMODE OK            ", OLED_6X8);
-            OLED_Update();
-
-            /* ---------- 4. 连接 WiFi ---------- */
-            OLED_ShowString(0, 32, "connecting...        ", OLED_6X8);
-            OLED_Update();
-
-            if (WIFI_Connect())
-            {
-                wifi_ok = 1;
-                LED3_on();                                /* PE13 亮 = 连上并拿到 IP */
-                OLED_ShowString(0, 32, "WIFI OK              ", OLED_6X8);
-
-                /* 顺便把 IP 读出来显示（AT+CIFSR 的回复里有 STAIP） */
-                ESP8266_ClearBuffer();
-                ESP8266_SendAT("AT+CIFSR");
-                ESP8266_WaitResponse("OK", 3000);
-            }
-            else
-            {
-                OLED_ShowString(0, 32, "WIFI FAILED          ", OLED_6X8);
-                OLED_ShowString(0, 40, "SSID must be 2.4G    ", OLED_6X8);
-            }
-            OLED_ShowLastRx();
+            OLED_ShowLastRx();                            /* 显示 CWJAP 的原始回复 */
         }
         else
         {
-            OLED_ShowString(0, 24, "CWMODE FAILED        ", OLED_6X8);
-            OLED_ShowLastRx();
+            /* 没扫到目标 SSID：显示模块能看见的热点，方便对比名字/频段 */
+            OLED_ShowAscii(48, scan_txt, (scan_len > 20) ? 20 : scan_len);
+            OLED_ShowAscii(56, scan_txt + 20, (scan_len > 20) ? (scan_len - 20) : 0);
         }
-        OLED_Update();
     }
+    OLED_Update();
 
-    /* ---------- 5. 主循环：灯语 + 失败自动重试 ---------- */
+    /* ---------- 7. 失败就每 10 秒自动重试（成功则常亮不改屏） ---------- */
     while (1)
     {
-        if (at_ok == 0)
+        if (wifi_ok == 0 && ssid_ok)
         {
-            /* AT 都没通：板子 LED1 (PF10) 慢闪 */
-            LED2_on();
-            ESP8266_DelayMs(300);
-            LED2_off();
-            ESP8266_DelayMs(300);
-        }
-        else if (wifi_ok)
-        {
-            /* 全部成功：三颗灯常亮，什么都不用做 */
-            ESP8266_DelayMs(500);
-        }
-        else
-        {
-            /* AT 通了但 WiFi 没连上：板子 LED1 快闪，每 10 秒重试一次 */
             LED2_on();
             ESP8266_DelayMs(150);
             LED2_off();
@@ -205,11 +207,15 @@ int main(void)
                     wifi_ok = 1;
                     LED2_on();
                     LED3_on();
-                    OLED_ShowString(0, 32, "WIFI OK              ", OLED_6X8);
+                    OLED_ShowString(0, 40, "CWJAP OK            ", OLED_6X8);
                     OLED_ShowLastRx();
                     OLED_Update();
                 }
             }
+        }
+        else
+        {
+            ESP8266_DelayMs(500);
         }
     }
 }

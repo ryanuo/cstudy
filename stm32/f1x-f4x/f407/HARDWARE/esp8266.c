@@ -276,6 +276,36 @@ uint8_t ESP8266_Contains(char *expected)
 }
 
 /**
+  * @brief  累积文本里 pattern 出现的次数（不消费）
+  */
+uint16_t ESP8266_Count(char *pattern)
+{
+    uint16_t n = 0;
+    char *p;
+
+    if (*pattern == '\0') return 0;
+
+    esp_pump();
+    p = esp_acc;
+    while ((p = strstr(p, pattern)) != NULL)
+    {
+        n++;
+        p += strlen(pattern);
+    }
+    return n;
+}
+
+/**
+  * @brief  在累积文本里找子串，返回指向它的指针（找不到返回 NULL）
+  *         拿到的指针可直接交给 OLED_ShowString 显示
+  */
+char *ESP8266_Find(char *pattern)
+{
+    esp_pump();
+    return strstr(esp_acc, pattern);
+}
+
+/**
   * @brief  看一眼目前累积收到的原始数据（不消费），用于显示/诊断
   * @retval 实际复制到的字节数（0 = 一个字节都没收到）
   */
