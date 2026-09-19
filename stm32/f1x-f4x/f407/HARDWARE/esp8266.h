@@ -15,6 +15,7 @@ void     ESP8266_ClearBuffer(void);
 uint8_t  ESP8266_Contains(char *expected);
 uint16_t ESP8266_Count(char *pattern);      /* 累积文本里出现次数（数 +CWLAP: 有几条） */
 char    *ESP8266_Find(char *pattern);       /* 返回指向累积文本里子串的指针（可直接显示） */
+uint8_t  ESP8266_GetSsid(uint8_t idx, char *dst, uint8_t max_len);  /* 取扫描结果里第 idx 个热点名 */
 
 /* ---- 时间基准（SysTick 1ms 滴答）----
    用循环次数当超时会随"循环里干了多少活"而变，收数据时能把 15 秒拖成十几分钟；

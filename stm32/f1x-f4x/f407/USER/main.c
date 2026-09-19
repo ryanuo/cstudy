@@ -4,15 +4,19 @@
 #include "esp8266.h"
 
 /* ==========================================================================
- * ESP8266 (ESP-01S) 连 WiFi —— 带诊断版
+ * ESP8266 (ESP-01S) 连 WiFi —— 带诊断版 v3
  *
  * 屏幕各行含义：
  *   y16  AT version:xxxx   模块的 AT 固件版本（读 AT+GMR）
  *   y24  SCAN n=08 MODE:OK 扫描到几个热点（AT+CWLAP 的条数）+ CWMODE=1 是否成功
- *   y32  SSID FOUND        目标 SSID 在 2.4G 扫描结果里出现了（说明：名字对、是 2.4G、在范围内）
- *        SSID NOT FOUND    模块压根没扫到这个名字 -> 多半是 5G 热点 / 名字大小写不对 / 太远
+ *   y32  SSID FOUND        目标 SSID 在 2.4G 扫描结果里出现了
+ *        SSID NOT FOUND    模块没扫到这个名字 -> 多半是 5G / 名字大小写不对 / 太远 /
+ *                          热点当时没开 / 隐藏了 SSID
  *   y40  CWJAP OK / FAIL   连接结果
  *   y48/56 原始回复的 ASCII（不可打印显示为 .）
+ *
+ *   若 SSID NOT FOUND：屏幕进入循环模式，把模块能看见的热点名字一个个显示出来
+ *   （1.5 秒一个，编号 1: 2: 3: ...），照着重填 WIFI_SSID 即可。
  *
  * 板子丝印 LED0(PF9) 亮 = AT 通了；板子 LED1(PF10) 亮 = CWMODE 成功；
  * PE13 亮 = 连上并拿到 IP
@@ -24,6 +28,7 @@
 
 static uint8_t wifi_ok = 0;
 
+/* 把收到的原始数据按 ASCII 显示（不可打印字符显示为 .），一行 20 个字 */
 static void OLED_ShowAscii(int16_t Y, uint8_t *buf, uint16_t len)
 {
     char s[22];
@@ -59,7 +64,7 @@ static void OLED_ShowLastRx(void)
 }
 
 /* 把 src 的前 20 个字符拷进 dst 并补 '\0'
-   （OLED_ShowString 会一直画到 '\0' 为止，直接从累积缓冲传指针会把几百个字符全画到屏上） */
+   （OLED_ShowString 会一直画到 '\0'，直接传累积缓冲里的指针会把几百个字符全画到屏上） */
 static void Copy20(char *dst, char *src)
 {
     uint8_t k = 0;
@@ -89,10 +94,10 @@ static uint8_t WIFI_Connect(void)
 int main(void)
 {
     uint8_t  at_ok = 0, mode_ok = 0, ssid_ok = 0;
-    uint8_t  scan_txt[42];
-    uint16_t scan_len = 0, ap_n = 0;
-    uint8_t  i, tick = 0;
+    uint16_t ap_n = 0;
+    uint8_t  i, j, tick = 0;
     char     verbuf[24];
+    char     name[24];
 
     LED_init();
     ESP8266_Init();                 /* USART3 + 1ms 滴答都起好 */
@@ -127,7 +132,7 @@ int main(void)
     OLED_ShowString(0, 16, "AT OK               ", OLED_6X8);
     OLED_Update();
 
-    /* ---------- 2. 关回显（回复更干净，后面显示版本/扫描结果都省地方） ---------- */
+    /* ---------- 2. 关回显（回复更干净） ---------- */
     ESP8266_ClearBuffer();
     ESP8266_SendAT("ATE0");
     ESP8266_WaitResponse("OK", 2000);
@@ -153,7 +158,6 @@ int main(void)
     ESP8266_WaitResponse("OK", 20000);                    /* 扫描一般 2~8 秒 */
     ap_n    = ESP8266_Count("+CWLAP:");
     ssid_ok = ESP8266_Contains(WIFI_SSID);
-    if (ssid_ok == 0) scan_len = ESP8266_Peek(scan_txt, 40);   /* 没扫到就把列表留一份 */
 
     OLED_ShowString(0, 24, "SCAN n=   MODE:     ", OLED_6X8);
     OLED_ShowNum(48, 24, ap_n, 2, OLED_6X8);
@@ -161,7 +165,39 @@ int main(void)
     OLED_ShowString(0, 32, ssid_ok ? "SSID FOUND          " : "SSID NOT FOUND      ", OLED_6X8);
     OLED_Update();
 
-    /* ---------- 6. 连接 ---------- */
+    /* ---------- 6. 没扫到目标名字：把模块能看见的热点名字循环显示 ---------- */
+    if (ssid_ok == 0)
+    {
+        OLED_ShowString(0, 40, "AP list ->          ", OLED_6X8);
+        OLED_ShowString(0, 56, "edit WIFI_SSID      ", OLED_6X8);
+        OLED_Update();
+
+        while (1)
+        {
+            for (j = 0; j < ap_n && j < 20; j++)
+            {
+                char nm[16];
+                uint8_t k;
+
+                OLED_ShowString(0, 48, "                    ", OLED_6X8);   /* 清行 */
+                OLED_ShowNum(0, 48, j + 1, 2, OLED_6X8);                /* 编号 01 02 ... */
+                OLED_ShowString(12, 48, ":", OLED_6X8);
+
+                nm[0] = '\0';
+                if (ESP8266_GetSsid(j, name, sizeof(name)))
+                {
+                    for (k = 0; k < 15 && name[k] != '\0'; k++) nm[k] = name[k];
+                    nm[k] = '\0';
+                }
+                OLED_ShowString(18, 48, nm, OLED_6X8);
+                OLED_Update();
+                ESP8266_DelayMs(1500);
+            }
+            ESP8266_DelayMs(500);
+        }
+    }
+
+    /* ---------- 7. SSID 扫到了：正式连接 ---------- */
     wifi_ok = WIFI_Connect();
     if (wifi_ok)
     {
@@ -175,23 +211,14 @@ int main(void)
     else
     {
         OLED_ShowString(0, 40, "CWJAP FAIL          ", OLED_6X8);
-        if (ssid_ok)
-        {
-            OLED_ShowLastRx();                            /* 显示 CWJAP 的原始回复 */
-        }
-        else
-        {
-            /* 没扫到目标 SSID：显示模块能看见的热点，方便对比名字/频段 */
-            OLED_ShowAscii(48, scan_txt, (scan_len > 20) ? 20 : scan_len);
-            OLED_ShowAscii(56, scan_txt + 20, (scan_len > 20) ? (scan_len - 20) : 0);
-        }
+        OLED_ShowLastRx();                                /* 显示模块的原话 */
     }
     OLED_Update();
 
-    /* ---------- 7. 失败就每 10 秒自动重试（成功则常亮不改屏） ---------- */
+    /* ---------- 8. 失败就每 10 秒自动重试 ---------- */
     while (1)
     {
-        if (wifi_ok == 0 && ssid_ok)
+        if (wifi_ok == 0)
         {
             LED2_on();
             ESP8266_DelayMs(150);

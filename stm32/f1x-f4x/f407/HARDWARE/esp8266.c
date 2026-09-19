@@ -276,6 +276,45 @@ uint8_t ESP8266_Contains(char *expected)
 }
 
 /**
+  * @brief  从累积文本里取第 idx 个双引号字段
+  * @note   AT+CWLAP 每条形如 +CWLAP:(3,"SSID",-45,"aa:bb:cc:dd:ee:ff",1)，
+  *         引号字段是"SSID / MAC"交替出现
+  */
+static uint8_t esp_quoted(uint8_t idx, char *dst, uint8_t max_len)
+{
+    char *p = esp_acc;
+    char *q;
+    uint8_t n = 0, k = 0;
+
+    while ((p = strchr(p, '"')) != 0)
+    {
+        q = strchr(p + 1, '"');
+        if (q == 0) break;
+
+        if (n == idx)
+        {
+            while (p + 1 + k < q && k < (uint8_t)(max_len - 1)) { dst[k] = p[1 + k]; k++; }
+            dst[k] = '\0';
+            return 1;
+        }
+        n++;
+        p = q + 1;
+    }
+    dst[0] = '\0';
+    return 0;
+}
+
+/**
+  * @brief  取扫描结果里第 idx 个热点的名字（SSID）
+  * @retval 1 = 取到了；0 = 没有第 idx 个
+  */
+uint8_t ESP8266_GetSsid(uint8_t idx, char *dst, uint8_t max_len)
+{
+    esp_pump();
+    return esp_quoted((uint8_t)(idx * 2), dst, max_len);
+}
+
+/**
   * @brief  累积文本里 pattern 出现的次数（不消费）
   */
 uint16_t ESP8266_Count(char *pattern)
