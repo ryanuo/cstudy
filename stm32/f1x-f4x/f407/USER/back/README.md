@@ -2,11 +2,10 @@
 
 这里放**改动前**的旧文件。项目 `.gitignore` 里写了 `*.bak`，所以这些文件**只存在本机、不进仓库**。
 
-- 想用某一版：`cp main.c.wifi-web2.bak ../main.c`，然后回 Keil 重新 Rebuild + Download
-- **2026-09-20 整理**：模块类备份（`esp8266.c/h.*`、`web.c.html版`、`web.h.html版`、`OLED.c.bak`）已清掉
-  —— 它们在 git 历史里都能取回（见文末），只保留 main 相关的
+- 想用某一版：`cp main.c.esp-fixed.bak ../main.c`，然后回 Keil 重新 Rebuild + Download
+- 清历史：2026-09-20 删过两批（模块类备份 19 个；WiFi 迭代版 8 个），都只是**挪进废纸篓**，见文末
 
-## 一、ESP8266 WiFi + 手机网页 那一轮（9-19）
+## 一、ESP8266 WiFi 那轮（9-19，只留 4 个关键节点）
 
 | 文件 | 行数 | 时间 | 是什么 |
 |---|---|---|---|
@@ -14,14 +13,10 @@
 | `main.c.diag1.bak` | 157 | 09-19 15:41 | 诊断固件 v2：OLED 显示收到的原始字节（hex）+ 长度，用来分清「模块不说话」还是「我们收不到」 |
 | `main.c.diag3.bak` | 189 | 09-19 15:58 | 诊断固件 v3：加 SELF（片内回环自测）/ PIN（读引脚电平）/ BOOT（74880 抓模块启动信息） |
 | `main.c.esp-fixed.bak` | 171 | 09-19 15:37 | 修好延时与重试后的正式 WiFi 固件（AT → CWMODE → CWJAP → CIFSR） |
-| `main.c.wifi-v1.bak` | 209 | 09-19 16:02 | 连 WiFi 迭代 1 |
-| `main.c.wifi-v2.bak` | 215 | 09-19 16:05 | 迭代 2：超时改 SysTick 真实毫秒、接收改两级缓冲 |
-| `main.c.wifi-v3.bak` | 221 | 09-19 16:07 | 迭代 3：加 AT+CWLAP 扫描 + ATE0 关回显 |
-| `main.c.wifi-v4.bak` | 248 | 09-19 16:11 | 迭代 4：用扫描到的名字去连（SSID 大小写对齐） |
-| `main.c.wifi-v5.bak` | 292 | 09-19 16:13 | 迭代 5：内容最多的一版（293 行，诊断代码都还在） |
-| `main.c.wifi-v6.bak` | 187 | 09-19 16:14 | 清掉诊断代码后的精简版（188 行） |
-| `main.c.wifi-web.bak` | 189 | 09-19 16:19 | 修好 no ip 之后（ESP8266_FindIp 抓 STAIP），手机网页还没加进来 |
-| `main.c.wifi-web2.bak` | 354 | 09-19 16:36 | 手机网页控制那一版：CIPSERVER + 手拼 HTTP + 光敏/电位器 JSON（355 行，模块化前最后的大 main） |
+
+> 中间的 `main.c.wifi-v1~v6` / `wifi-web` / `wifi-web2`（连 WiFi 的 6 次迭代、加手机网页那一版）
+> 已于 2026-09-20 清掉；它们对应的是每次改动前的 `USER/main.c`，需要时用
+> `git log --oneline -- stm32/f1x-f4x/f407/USER/main.c` 找当时的提交即可。
 
 ## 二、各外设实验（9-11 ~ 9-18）
 
@@ -39,14 +34,15 @@
 | `main.c5.low-power.bak` | 57 | 09-18 11:44 | 低功耗：PWR + EXTI，flag 2/3/4 → SLEEP / STOP / STANDBY |
 | `main.c6.adc-dma.bak` | 41 | 09-18 16:05 | ADC1 + DMA 采样，串口打印 ADC1ConvertedValue |
 
-## 已清掉的模块备份（9-20）
+## 已清掉的文件（2026-09-20）
 
 | 清掉的文件 | 想找回来怎么办 |
 |---|---|
-| `esp8266.c.*`（9 个）/ `esp8266.h.*`（7 个） | `git log --oneline -- stm32/f1x-f4x/f407/HARDWARE/esp8266.c` 找到对应时间的提交，再 `git show <commit>:<路径>` |
+| `esp8266.c.*`（9）/ `esp8266.h.*`（7） | `git log --oneline -- stm32/f1x-f4x/f407/HARDWARE/esp8266.c` 找对应时间的提交，再 `git show <commit>:<路径>` |
 | `web.c.html版.bak` / `web.h.html版.bak`（板子自己发网页那版） | `git show 2eb8d09~1:stm32/f1x-f4x/f407/WEB/web.c` |
 | `OLED.c.bak`（9-11 老驱动，迁移前） | `git log --oneline -- stm32/f1x-f4x/f407/HARDWARE/OLED.c` |
-| 上面这 19 个文件本体 | 在**废纸篓**里：`~/.Trash/back_bak_20260920/`（拖回来即可还原） |
+| `main.c.wifi-v1~v6/wifi-web/wifi-web2.bak`（8 个） | 同上，`git log` 查 `USER/main.c` 的历史 |
+| 上面这些文件本体 | 在**废纸篓**里：`~/.Trash/back_bak_20260920/`（拖回来即可还原） |
 
 ## 怎么从 git 取回任意旧版本
 
@@ -56,7 +52,7 @@ git log --oneline -- stm32/f1x-f4x/f407/HARDWARE/esp8266.c        # 看历史
 git show <commit>:stm32/f1x-f4x/f407/HARDWARE/esp8266.c > /tmp/x.c # 导出某一版
 ```
 
-`main.c1`~`main.c6` 也能取（它们是 2026-09-20 才从仓库移除的）：
+`main.c1`~`main.c6` 也能取（2026-09-20 才从仓库移除）：
 
 ```bash
 git show 39eb173~1:stm32/f1x-f4x/f407/USER/main.c1 > /tmp/main.c1
