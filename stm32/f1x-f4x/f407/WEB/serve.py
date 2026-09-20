@@ -24,7 +24,6 @@ import sys
 import urllib.request
 import webbrowser
 
-
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     """静态文件服务 + 禁用缓存"""
 

@@ -25,8 +25,8 @@
  *       VCC-GND 间并 100uF。
  * ========================================================================== */
 
-#define WIFI_SSID  "YQ-shixun5"   /* 必须 2.4G，大小写要和热点一致 */
-#define WIFI_PASS  "88888888"
+#define WIFI_SSID  "Magic7"   /* 必须 2.4G，大小写要和热点一致 */
+#define WIFI_PASS  "121qweqwe"
 #define HTTP_PORT  80
 
 /* 把收到的原始数据按 ASCII 显示（不可打印字符显示为 .），一行 20 个字 */
