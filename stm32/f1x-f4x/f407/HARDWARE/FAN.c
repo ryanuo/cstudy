@@ -1,4 +1,5 @@
 #include "stm32f4xx.h"                  // Device header
+#include "esp8266.h"
 
 void FAN_init(void)
 {

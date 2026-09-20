@@ -7,6 +7,7 @@
 #include "FAN.h"
 #include "ADC.h"
 #include "LIGHTSENSOR.h"
+#include "DHT11.h"
 
 /* ==========================================================================
  * STM32F407 + ESP8266 (ESP-01S, AT 固件) —— 手机网页控制
@@ -82,6 +83,7 @@ int main(void)
     FAN_init();                     /* 风扇 L9110H: PC6/PC7 */
     ADC1PA5_Init();                 /* 电位器 PA5 / ADC1 + DMA */
     LIGHT_Init();                   /* 光敏 PF7 / ADC3 */
+    DHT11_Init();                   /* 温湿度 DHT11: PG9 (板载 U6 座) */
     ESP8266_Init();                 /* USART3 + 1ms 滴答 */
     OLED_Init();
     OLED_Clear();
@@ -176,7 +178,9 @@ int main(void)
         }
 
         /* 在线：处理网页请求，顺便刷新计数 */
+        DHT11_Task();                /* 每 2 秒读一次温湿度（读一次约 25ms）*/
         Web_Task();
+        BEEP_Task();
         ESP8266_DelayMs(5);          /* 5ms 轮一次：点按钮到出效果更快（原来 50ms）*/
 
         if (++ui >= 100)             /* 每 500ms 刷一次 OLED */

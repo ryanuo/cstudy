@@ -114,6 +114,8 @@ tailwind.config = {
     </div>
     <div class="flex items-center gap-2 border-b border-muted py-3">
       <span class="w-16 text-sm text-muted-foreground">电位器</span><b class="text-sm">{{ s.pot }}</b>
+      <span class="w-16 text-sm text-muted-foreground">温度</span><b class="text-sm">{{ s.temp ? s.temp + ' ℃' : '--' }}</b>
+      <span class="w-16 text-sm text-muted-foreground">湿度</span><b class="text-sm">{{ s.humi ? s.humi + ' %' : '--' }}</b>
     </div>
     <div class="flex items-center gap-2 pt-3">
       <span class="w-16 text-sm text-muted-foreground">请求数</span><b class="text-sm">{{ s.req }}</b>
@@ -122,7 +124,7 @@ tailwind.config = {
   </div>
 
   <p class="mt-3 text-center text-xs text-muted-foreground">
-    LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V)<br>
+    LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V) · 温湿度=DHT11@PG9<br>
     所有请求都带 ?k=令牌 · 页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准 · 请求期间按钮置灰（防连点）
   </p>
 </div>

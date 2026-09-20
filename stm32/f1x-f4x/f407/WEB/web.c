@@ -6,6 +6,7 @@
 #include "FAN.h"
 #include "ADC.h"
 #include "LIGHTSENSOR.h"
+#include "DHT11.h"
 #include "esp8266.h"
 
 /* ==========================================================================
@@ -58,13 +59,14 @@ static uint16_t BuildStateJson(char *json)
 {
     return (uint16_t)sprintf(json,
         "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,\"fan\":%u,"
-        "\"light\":%u,\"pot\":%u,\"req\":%u}",
+        "\"light\":%u,\"pot\":%u,\"temp\":%u,\"humi\":%u,\"req\":%u}",
         (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* °å×ÓË¿Ó¡ LED0 */
         (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* °å×ÓË¿Ó¡ LED1 */
         (unsigned)LedOn(GPIOE, GPIO_Pin_13),   /* °å×ÓË¿Ó¡ FSMC_D10£º·þÎñÆ÷Ö¸Ê¾µÆ */
         (unsigned)LedOn(GPIOE, GPIO_Pin_14),   /* °å×ÓË¿Ó¡ FSMC_D11 */
         (unsigned)FanState(),                  /* ·çÉÈ£º0 Í£ / 1 Õý×ª / 2 ·´×ª */
         (unsigned)LIGHT_GetValue(), (unsigned)ADC1ConvertedValue,
+        (unsigned)DHT11_GetTemp(), (unsigned)DHT11_GetHumi(),   /* ÎÂÊª¶È£¨DHT11_Task Ã¿ 2 ÃëË¢£©*/
         (unsigned)req_n);
 }
 
@@ -74,8 +76,8 @@ static void ReplyJson(uint8_t link, const char *body, uint16_t blen);   /* ¶¨ÒåÔ
    ÕâÑùÒ³ÃæµãÒ»ÏÂÖ»·¢Ò»¸öÇëÇó¾ÍÄÜË³±ã°Ñ½çÃæË¢ÐÂ£¬²»ÓÃÔÙÀ­Ò»´Î /data */
 static void ReplyOkState(uint8_t link)
 {
-    static char tmp[144];
-    static char out[160];
+    static char tmp[192];
+    static char out[224];
 
     BuildStateJson(tmp);                        /* {...} */
     sprintf(out, "{\"ok\":1,%s", tmp + 1);      /* °Ñ¿ªÍ·µÄ '{' »»³É '{"ok":1,' */
@@ -242,7 +244,7 @@ uint8_t Web_OpenServer(uint16_t port)
 
 static void SendDataJson(uint8_t link)
 {
-    static char json[144];
+    static char json[192];
 
     BuildStateJson(json);
 
@@ -325,7 +327,8 @@ static uint8_t HandleOne(void)
     else if (strcmp(path, "fan/1") == 0)          { FAN_forwardrotation(); ReplyOkState(link); }  /* Õý×ª */
     else if (strcmp(path, "fan/2") == 0)          { FAN_reverserotation();  ReplyOkState(link); }  /* ·´×ª */
     else if (strcmp(path, "fan/0") == 0)          { FAN_off();              ReplyOkState(link); }  /* Í£ */
-    else if (strcmp(path, "beep")  == 0)          { BEEP_on(); ESP8266_DelayMs(200); BEEP_off(); ReplyOkState(link); }
+    else if (strcmp(path, "beep")  == 0)          { 
+        BEEP_TriggerNonBlocking(200); ReplyOkState(link); }
     else if (strcmp(path, "favicon.ico") == 0)    CloseLink(link);
     else                                          ReplyJson(link, json_err, (uint16_t)(sizeof(json_err) - 1));
     return 1;
