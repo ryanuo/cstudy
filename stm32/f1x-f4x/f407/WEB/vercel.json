@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "https://grove-concern-departure-emails.trycloudflare.com/$1"
+      "destination": "https://board.ryanuo.cc/$1"
     }
   ]
 }
