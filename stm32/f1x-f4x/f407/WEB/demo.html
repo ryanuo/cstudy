@@ -191,11 +191,10 @@ createApp({ setup() {
     if (!v.value.temp) return '--';
     return (Number(v.value.temp) + Number(v.value.tdec || 0) / 10).toFixed(2) + ' ℃';
   });
-  /* 湿度同理（d[1] 是湿度小数）；小数位是 0 就不显示 .0，免得假装精确 */
+  /* 湿度和温度一样：整数字节 + 小数字节/10（d[1] 是湿度小数），统一保留两位 */
   const fmtHumi = computed(() => {
     if (!v.value.humi) return '--';
-    const d = Number(v.value.hdec || 0);
-    return (d ? (Number(v.value.humi) + d / 10).toFixed(1) : v.value.humi) + ' %';
+    return (Number(v.value.humi) + Number(v.value.hdec || 0) / 10).toFixed(2) + ' %';
   });
 
   const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
