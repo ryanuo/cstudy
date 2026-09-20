@@ -11,7 +11,7 @@
 注意：
   * 页面要跑在 http:// 上；别用 https 页面去请求 http 板子（混合内容会被浏览器拦掉）
   * 服务绑在 0.0.0.0，所以手机也能用"局域网"那行的地址打开（手机需和板子同一 WiFi）
-  * 响应带 no-store，改完 demo.html 刷新就能看到，不用清缓存
+  * 响应带 no-store，改完 index.html 刷新就能看到，不用清缓存
 """
 
 import argparse
@@ -111,9 +111,9 @@ def main():
 
     print("前端服务已启动")
     print("  目录:     %s" % a.dir)
-    print("  本机:     http://localhost:%d/demo.html" % port)
+    print("  本机:     http://localhost:%d/" % port)
     for ip in lan_ips():
-        print("  局域网:   http://%s:%d/demo.html" % (ip, port))
+        print("  局域网:   http://%s:%d/" % (ip, port))
     print("  Ctrl+C 停止\n")
     sys.stdout.flush()          # 重定向到文件时也能立刻看到（默认会缓冲）
 
@@ -125,7 +125,7 @@ def main():
         q.append("ip=" + a.board)
     if a.token:
         q.append("k=" + a.token)
-    url = "http://localhost:%d/demo.html" % port
+    url = "http://localhost:%d/" % port
     if q:
         url += "?" + "&".join(q)
     if a.open:

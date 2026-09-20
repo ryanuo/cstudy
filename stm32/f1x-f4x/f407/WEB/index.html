@@ -6,7 +6,7 @@
 <title>STM32F407 控制台（跨域调用板子）</title>
 <!--
   这个页面放在电脑/云上跑，通过 HTTP + CORS 调用板子的 JSON 接口。
-  用法：在电脑上 `python3 -m http.server 8000`，浏览器开 http://localhost:8000/demo.html
+  用法：在电脑上 `python3 serve.py`（默认 8000），浏览器开 http://localhost:8000/
         （或直接双击用 file:// 打开，多数浏览器也能跨域 GET）
   不再自动轮询：打开时拉一次，之后点「刷新」或操作按钮才请求板子。
   注意：页面本身要跑在 http(s):// 上，别用 https 页面去请求 http 板子（混合内容会被拦）。
