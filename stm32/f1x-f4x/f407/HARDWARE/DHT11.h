@@ -18,6 +18,11 @@ void    DHT11_Task(void);
 uint8_t DHT11_Read(uint8_t *temp, uint8_t *humi);   /* 1 = 成功（手动读，Task 内部就是调它）*/
 uint8_t DHT11_GetTemp(void);
 uint8_t DHT11_GetHumi(void);
+
+/* DHT11 数据第 2 字节 = 湿度小数、第 4 字节 = 温度小数（规格书标为保留、多数读出 0，
+   但也有模块会给值）——把原始字节报出来，是 0 还是真小数一眼可见 */
+uint8_t DHT11_GetTempDec(void);
+uint8_t DHT11_GetHumiDec(void);
 uint8_t DHT11_Ok(void);                             /* 最近一次读是否成功 */
 
 #endif

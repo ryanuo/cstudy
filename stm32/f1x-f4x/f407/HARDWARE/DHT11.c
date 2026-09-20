@@ -12,6 +12,7 @@
 #define DHT11_THRESH_US 40U     /* 用 40us 当 0/1 的分界 */
 
 static uint8_t  dht_temp = 0, dht_humi = 0, dht_ok = 0;
+static uint8_t  dht_tdec = 0, dht_hdec = 0;   /* d[3] 温度小数、d[1] 湿度小数（原始字节）*/
 static uint32_t dht_last = 0;
 
 /* ============ DWT 微秒计时（不碰 SysTick，避免和 1ms 滴答/其他模块的延时打架）============ */
@@ -135,8 +136,10 @@ uint8_t DHT11_Read(uint8_t *temp, uint8_t *humi)
     /* 4. 校验：前 4 字节之和 == 第 5 字节 */
     if ((uint8_t)(d[0] + d[1] + d[2] + d[3]) != d[4]) return 0;
 
-    *humi = d[0];       /* DHT11 的小数位恒为 0，取整数字节就够 */
+    *humi = d[0];       /* d[0]=湿度整数 d[1]=湿度小数 d[2]=温度整数 d[3]=温度小数 */
     *temp = d[2];
+    dht_hdec = d[1];    /* 小数字节原样留着，给页面自己判断是不是真小数 */
+    dht_tdec = d[3];
     return 1;
 }
 
@@ -160,5 +163,7 @@ void DHT11_Task(void)
 }
 
 uint8_t DHT11_GetTemp(void) { return dht_temp; }
+uint8_t DHT11_GetTempDec(void) { return dht_tdec; }
+uint8_t DHT11_GetHumiDec(void) { return dht_hdec; }
 uint8_t DHT11_GetHumi(void) { return dht_humi; }
 uint8_t DHT11_Ok(void)      { return dht_ok; }

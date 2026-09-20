@@ -59,7 +59,8 @@ static uint16_t BuildStateJson(char *json)
 {
     return (uint16_t)sprintf(json,
         "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,\"fan\":%u,"
-        "\"light\":%u,\"pot\":%u,\"temp\":%u,\"humi\":%u,\"req\":%u}",
+        "\"light\":%u,\"pot\":%u,\"temp\":%u,\"humi\":%u,"
+        "\"tdec\":%u,\"hdec\":%u,\"req\":%u}",
         (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* 板子丝印 LED0 */
         (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* 板子丝印 LED1 */
         (unsigned)LedOn(GPIOE, GPIO_Pin_13),   /* 板子丝印 FSMC_D10：服务器指示灯 */
@@ -67,6 +68,7 @@ static uint16_t BuildStateJson(char *json)
         (unsigned)FanState(),                  /* 风扇：0 停 / 1 正转 / 2 反转 */
         (unsigned)LIGHT_GetValue(), (unsigned)ADC1ConvertedValue,
         (unsigned)DHT11_GetTemp(), (unsigned)DHT11_GetHumi(),   /* 温湿度（DHT11_Task 每 2 秒刷）*/
+        (unsigned)DHT11_GetTempDec(), (unsigned)DHT11_GetHumiDec(),  /* 小数字节原样上报：是 0 还是真小数，页面上一眼可见 */
         (unsigned)req_n);
 }
 

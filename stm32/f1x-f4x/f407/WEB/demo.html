@@ -131,7 +131,7 @@ tailwind.config = {
   </div>
 
   <p class="mt-3 text-center text-xs text-muted-foreground">
-    LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V) · 温湿度=DHT11@PG9(1℃ 分辨率，小数位补零)<br>
+    LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V) · 温湿度=DHT11@PG9(小数位用原始字节 d[3]/d[1]，规格书标为保留·多为 0)<br>
     所有请求都带 ?k=令牌 · 页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准 · 请求期间按钮置灰（防连点）
   </p>
 </div>
@@ -185,8 +185,18 @@ createApp({ setup() {
 
   /* 温度保留两位小数。注意：DHT11 的分辨率就是 1℃，小数位其实是在补零（看着精确而已）；
      以后换成 DS18B20（0.0625℃）就是真小数，页面这边不用改 */
-  const fmtTemp = computed(() => (v.value.temp ? Number(v.value.temp).toFixed(2) + ' ℃' : '--'));
-  const fmtHumi = computed(() => (v.value.humi ? v.value.humi + ' %' : '--'));
+  /* 温度 = 整数字节 + 小数字节/10。d[3] 就是温度小数：它是 0 就显示 29.00，
+     传感器真给小数（比如 d[3]=3）就显示 29.30 —— 到底有没有小数，看这个显示/看 /data 里的 tdec 就知道 */
+  const fmtTemp = computed(() => {
+    if (!v.value.temp) return '--';
+    return (Number(v.value.temp) + Number(v.value.tdec || 0) / 10).toFixed(2) + ' ℃';
+  });
+  /* 湿度同理（d[1] 是湿度小数）；小数位是 0 就不显示 .0，免得假装精确 */
+  const fmtHumi = computed(() => {
+    if (!v.value.humi) return '--';
+    const d = Number(v.value.hdec || 0);
+    return (d ? (Number(v.value.humi) + d / 10).toFixed(1) : v.value.humi) + ' %';
+  });
 
   const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
   const paused = ref(false);        /* 点了"断开"：不再和板子通信（HTTP 是无状态的，
