@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "https://cleaners-turbo-household-boc.trycloudflare.com/$1"
+      "destination": "https://grove-concern-departure-emails.trycloudflare.com/$1"
     }
   ]
 }
