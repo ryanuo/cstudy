@@ -28,6 +28,9 @@ tailwind.config = {
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
 <body class="bg-muted text-foreground font-sans">
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body class="bg-muted text-foreground font-sans">
 <div id="app" class="mx-auto max-w-md p-4">
 
   <div class="rounded-lg border border-border bg-background p-4">
@@ -64,55 +67,50 @@ tailwind.config = {
   </div>
 
   <div class="mt-4 rounded-lg border border-border bg-background p-4">
-    <div class="flex items-center gap-2 border-b border-muted pb-2.5">
+    <div class="flex items-center gap-2 border-b border-muted py-2.5">
       <span class="w-16 text-sm text-muted-foreground">LED0</span>
-      <span class="rounded-md px-2 py-0.5 text-xs"
-            :class="s.led0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-        {{ s.led0 ? 'ON' : 'OFF' }}</span>
-      <button :disabled="locked" @click="cmd('led0/1', {led0:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">开</button>
-      <button :disabled="locked" @click="cmd('led0/0', {led0:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">关</button>
+      <button :disabled="locked" @click="cmd('led0/1', {led0:1})"
+              :class="[btnBase, 'ml-auto', v.led0 === 1 ? btnOn : btnOff]">开</button>
+      <button :disabled="locked" @click="cmd('led0/0', {led0:0})"
+              :class="[btnBase, v.led0 === 0 ? btnOn : btnOff]">关</button>
     </div>
-
     <div class="flex items-center gap-2 border-b border-muted py-2.5">
       <span class="w-16 text-sm text-muted-foreground">LED1</span>
-      <span class="rounded-md px-2 py-0.5 text-xs"
-            :class="s.led1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-        {{ s.led1 ? 'ON' : 'OFF' }}</span>
-      <button :disabled="locked" @click="cmd('led1/1', {led1:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">开</button>
-      <button :disabled="locked" @click="cmd('led1/0', {led1:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">关</button>
+      <button :disabled="locked" @click="cmd('led1/1', {led1:1})"
+              :class="[btnBase, 'ml-auto', v.led1 === 1 ? btnOn : btnOff]">开</button>
+      <button :disabled="locked" @click="cmd('led1/0', {led1:0})"
+              :class="[btnBase, v.led1 === 0 ? btnOn : btnOff]">关</button>
     </div>
 
     <div class="flex items-center gap-2 border-b border-muted py-2.5">
       <span class="w-16 text-sm text-muted-foreground">LED4</span>
-      <span class="rounded-md px-2 py-0.5 text-xs"
-            :class="s.led4 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-        {{ s.led4 ? 'ON' : 'OFF' }}</span>
-      <button :disabled="locked" @click="cmd('led4/1', {led4:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">开</button>
-      <button :disabled="locked" @click="cmd('led4/0', {led4:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">关</button>
+      <button :disabled="locked" @click="cmd('led4/1', {led4:1})"
+              :class="[btnBase, 'ml-auto', v.led4 === 1 ? btnOn : btnOff]">开</button>
+      <button :disabled="locked" @click="cmd('led4/0', {led4:0})"
+              :class="[btnBase, v.led4 === 0 ? btnOn : btnOff]">关</button>
     </div>
 
     <div class="flex items-center gap-2 border-b border-muted py-2.5">
       <span class="w-16 text-sm text-muted-foreground">风扇</span>
-      <span class="rounded-md px-2 py-0.5 text-xs"
-            :class="s.fan ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-        {{ ['停','正转','反转'][s.fan || 0] }}</span>
-      <button :disabled="locked" @click="cmd('fan/1', {fan:1})" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">正转</button>
-      <button :disabled="locked" @click="cmd('fan/2', {fan:2})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">反转</button>
-      <button :disabled="locked" @click="cmd('fan/0', {fan:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">停</button>
+      <button :disabled="locked" @click="cmd('fan/1', {fan:1})"
+              :class="[btnBase, 'ml-auto', v.fan === 1 ? btnOn : btnOff]">正转</button>
+      <button :disabled="locked" @click="cmd('fan/2', {fan:2})"
+              :class="[btnBase, v.fan === 2 ? btnOn : btnOff]">反转</button>
+      <button :disabled="locked" @click="cmd('fan/0', {fan:0})"
+              :class="[btnBase, v.fan === 0 ? btnOn : btnOff]">停</button>
     </div>
-
 
     <div class="flex items-center gap-2 py-2.5">
       <span class="w-16 text-sm text-muted-foreground">蜂鸣器</span>
       <button :disabled="locked" @click="cmd('beep')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">响一下</button>
     </div>
 
-    <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-muted pt-3">
+    <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-muted pt-3" :class="paused ? 'opacity-50' : ''">
       <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">光敏</span><b class="text-sm tabular-nums">{{ s.light ?? '--' }}</b>
+        <span class="text-sm text-muted-foreground">光敏</span><b class="text-sm tabular-nums">{{ v.light ?? '--' }}</b>
       </div>
       <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">电位器</span><b class="text-sm tabular-nums">{{ s.pot ?? '--' }}</b>
+        <span class="text-sm text-muted-foreground">电位器</span><b class="text-sm tabular-nums">{{ v.pot ?? '--' }}</b>
       </div>
       <div class="flex items-center justify-between">
         <span class="text-sm text-muted-foreground">温度</span><b class="text-sm tabular-nums">{{ fmtTemp }}</b>
@@ -123,11 +121,11 @@ tailwind.config = {
       <div class="flex items-center justify-between">
         <span class="text-sm text-muted-foreground">服务器灯</span>
         <span class="rounded-md px-2 py-0.5 text-xs"
-              :class="s.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-          {{ s.led3 ? 'ON' : 'OFF' }}</span>
+              :class="v.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
+          {{ paused ? '--' : (v.led3 ? 'ON' : 'OFF') }}</span>
       </div>
       <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">请求数</span><b class="text-sm tabular-nums">{{ s.req ?? '--' }}</b>
+        <span class="text-sm text-muted-foreground">请求数</span><b class="text-sm tabular-nums">{{ v.req ?? '--' }}</b>
       </div>
     </div>
   </div>
@@ -177,18 +175,27 @@ createApp({ setup() {
   const TOKEN_HINT = '令牌不对：页面顶部填 web.h 里 WEB_TOKEN 的值（默认 stm32-407）';
   /* 板子的两种 err 要分开报：{"err":1,"need":"token"} = 令牌；纯 {"err":1} = 路由不认识（固件旧了）*/
   const ROUTE_HINT = '板子回了 err（不认识这个接口）：固件可能不是最新版，重新 Rebuild + Download 一次';
+  /* 按钮外观：btnBase 通用、btnOn = 高亮（就是当前状态）、btnOff = 普通描边。
+     高亮那个用 disabled:opacity-100，所以"断开"置灰时仍看得出板子当时的状态 */
+  const btnBase = 'rounded-md border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed';
+  const btnOn   = 'border-primary bg-primary text-primary-foreground disabled:opacity-100';
+  const btnOff  = 'border-border';
+
   const DEBOUNCE = 300;             /* 刷新/连接按钮的尾沿防抖窗口（毫秒）*/
 
   /* 温度保留两位小数。注意：DHT11 的分辨率就是 1℃，小数位其实是在补零（看着精确而已）；
      以后换成 DS18B20（0.0625℃）就是真小数，页面这边不用改 */
-  const fmtTemp = computed(() => (s.value.temp ? Number(s.value.temp).toFixed(2) + ' ℃' : '--'));
-  const fmtHumi = computed(() => (s.value.humi ? s.value.humi + ' %' : '--'));
+  const fmtTemp = computed(() => (v.value.temp ? Number(v.value.temp).toFixed(2) + ' ℃' : '--'));
+  const fmtHumi = computed(() => (v.value.humi ? v.value.humi + ' %' : '--'));
 
   const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
   const paused = ref(false);        /* 点了"断开"：不再和板子通信（HTTP 是无状态的，
                                        所以"断开"= 停止请求；要真关服务器得 AT+CIPSERVER=0，
                                        那就再也连不回来了，不做）*/
   const locked = computed(() => busy.value || paused.value);   /* 按钮置灰的判据 */
+  /* 断开了就等于"没有数据"：v 在断开时是空对象，于是数值显示 --、按钮不再高亮
+     （就像未连接/404 那种状态），不会拿旧值骗人 */
+  const v = computed(() => (paused.value ? {} : s.value));
   const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
 
   /* 真正发请求（串行，不并发）；发完如果期间又点过，补发最后一次 */
@@ -240,7 +247,8 @@ createApp({ setup() {
 
   onMounted(load);          /* 打开时拉一次；之后点"刷新"或操作按钮才请求 */
 
-  return { ip, tok, s, online, err, busy, paused, locked, load, loadSoon, cmd, save, toggleLink, fmtTemp, fmtHumi };
+  return { ip, tok, s, v, online, err, busy, paused, locked, btnBase, btnOn, btnOff,
+           load, loadSoon, cmd, save, toggleLink, fmtTemp, fmtHumi };
 } }).mount('#app');
 </script>
 </body>
