@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/*",
-      "destination": "https://cleaners-turbo-household-boc.trycloudflare.com/:path*"
+      "source": "/(.*)",
+      "destination": "https://cleaners-turbo-household-boc.trycloudflare.com/$1"
     }
   ]
 }
