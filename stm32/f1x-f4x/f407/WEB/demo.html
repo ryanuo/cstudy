@@ -44,6 +44,7 @@ tailwind.config = {
       <input v-model="ip" @change="save" placeholder="192.168.1.101"
              class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
       <button :disabled="busy" @click="loadSoon" class="rounded-md border border-border bg-background px-3 py-1 text-xs">连接</button>
+      <button :disabled="busy" @click="loadSoon" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">刷新</button>
     </div>
 
     <div class="flex items-center gap-2 pt-2">
@@ -59,7 +60,7 @@ tailwind.config = {
   </div>
 
   <div class="mt-4 rounded-lg border border-border bg-background p-4">
-    <div class="flex items-center gap-2 border-b border-muted pb-3">
+    <div class="flex items-center gap-2 border-b border-muted pb-2.5">
       <span class="w-16 text-sm text-muted-foreground">LED0</span>
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.led0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
@@ -68,7 +69,7 @@ tailwind.config = {
       <button :disabled="busy" @click="cmd('led0/0', {led0:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">关</button>
     </div>
 
-    <div class="flex items-center gap-2 border-b border-muted py-3">
+    <div class="flex items-center gap-2 border-b border-muted py-2.5">
       <span class="w-16 text-sm text-muted-foreground">LED1</span>
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.led1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
@@ -77,7 +78,7 @@ tailwind.config = {
       <button :disabled="busy" @click="cmd('led1/0', {led1:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">关</button>
     </div>
 
-    <div class="flex items-center gap-2 border-b border-muted py-3">
+    <div class="flex items-center gap-2 border-b border-muted py-2.5">
       <span class="w-16 text-sm text-muted-foreground">LED4</span>
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.led4 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
@@ -86,7 +87,7 @@ tailwind.config = {
       <button :disabled="busy" @click="cmd('led4/0', {led4:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">关</button>
     </div>
 
-    <div class="flex items-center gap-2 border-b border-muted py-3">
+    <div class="flex items-center gap-2 border-b border-muted py-2.5">
       <span class="w-16 text-sm text-muted-foreground">风扇</span>
       <span class="rounded-md px-2 py-0.5 text-xs"
             :class="s.fan ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
@@ -96,41 +97,45 @@ tailwind.config = {
       <button :disabled="busy" @click="cmd('fan/0', {fan:0})" class="rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">停</button>
     </div>
 
-    <div class="flex items-center gap-2 border-b border-muted py-3">
-      <span class="w-16 text-sm text-muted-foreground">服务器灯</span>
-      <span class="rounded-md px-2 py-0.5 text-xs"
-            :class="s.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-        {{ s.led3 ? 'ON' : 'OFF' }}</span>
-      <span class="ml-auto text-xs text-muted-foreground">PE13·服务器已开就亮</span>
-    </div>
 
-    <div class="flex items-center gap-2 border-b border-muted py-3">
+    <div class="flex items-center gap-2 py-2.5">
       <span class="w-16 text-sm text-muted-foreground">蜂鸣器</span>
       <button :disabled="busy" @click="cmd('beep')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">响一下</button>
     </div>
 
-    <div class="flex items-center gap-2 border-b border-muted py-3">
-      <span class="w-16 text-sm text-muted-foreground">光敏</span><b class="text-sm">{{ s.light }}</b>
-    </div>
-    <div class="flex items-center gap-2 border-b border-muted py-3">
-      <span class="w-16 text-sm text-muted-foreground">电位器</span><b class="text-sm">{{ s.pot }}</b>
-      <span class="w-16 text-sm text-muted-foreground">温度</span><b class="text-sm">{{ s.temp ? s.temp + ' ℃' : '--' }}</b>
-      <span class="w-16 text-sm text-muted-foreground">湿度</span><b class="text-sm">{{ s.humi ? s.humi + ' %' : '--' }}</b>
-    </div>
-    <div class="flex items-center gap-2 pt-3">
-      <span class="w-16 text-sm text-muted-foreground">请求数</span><b class="text-sm">{{ s.req }}</b>
-      <button :disabled="busy" @click="loadSoon" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">刷新</button>
+    <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-muted pt-3">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-muted-foreground">光敏</span><b class="text-sm tabular-nums">{{ s.light ?? '--' }}</b>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-muted-foreground">电位器</span><b class="text-sm tabular-nums">{{ s.pot ?? '--' }}</b>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-muted-foreground">温度</span><b class="text-sm tabular-nums">{{ fmtTemp }}</b>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-muted-foreground">湿度</span><b class="text-sm tabular-nums">{{ fmtHumi }}</b>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-muted-foreground">服务器灯</span>
+        <span class="rounded-md px-2 py-0.5 text-xs"
+              :class="s.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
+          {{ s.led3 ? 'ON' : 'OFF' }}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-muted-foreground">请求数</span><b class="text-sm tabular-nums">{{ s.req ?? '--' }}</b>
+      </div>
     </div>
   </div>
 
   <p class="mt-3 text-center text-xs text-muted-foreground">
-    LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V) · 温湿度=DHT11@PG9<br>
+    LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V) · 温湿度=DHT11@PG9(1℃ 分辨率，小数位补零)<br>
     所有请求都带 ?k=令牌 · 页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准 · 请求期间按钮置灰（防连点）
   </p>
 </div>
 
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 createApp({ setup() {
   /* 支持 ?ip=192.168.1.101&k=令牌 预填（serve.py --board/--token 会自动带上） */
   const q = new URLSearchParams(location.search);
@@ -167,6 +172,13 @@ createApp({ setup() {
   const TOKEN_HINT = '令牌不对：页面顶部填 web.h 里 WEB_TOKEN 的值（默认 stm32-407）';
   /* 板子的两种 err 要分开报：{"err":1,"need":"token"} = 令牌；纯 {"err":1} = 路由不认识（固件旧了）*/
   const ROUTE_HINT = '板子回了 err（不认识这个接口）：固件可能不是最新版，重新 Rebuild + Download 一次';
+  const DEBOUNCE = 300;             /* 刷新/连接按钮的尾沿防抖窗口（毫秒）*/
+
+  /* 温度保留两位小数。注意：DHT11 的分辨率就是 1℃，小数位其实是在补零（看着精确而已）；
+     以后换成 DS18B20（0.0625℃）就是真小数，页面这边不用改 */
+  const fmtTemp = computed(() => (s.value.temp ? Number(s.value.temp).toFixed(2) + ' ℃' : '--'));
+  const fmtHumi = computed(() => (s.value.humi ? s.value.humi + ' %' : '--'));
+
   const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
   const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
 
@@ -204,11 +216,15 @@ createApp({ setup() {
     loadTimer = setTimeout(load, DEBOUNCE);
   }
 
-  function save() { localStorage.setItem('boardIp', ip.value.trim()); load(); }
+  function save() {
+    localStorage.setItem('boardIp', ip.value.trim());
+    localStorage.setItem('boardToken', tok.value.trim());
+    load();
+  }
 
   onMounted(load);          /* 打开时拉一次；之后点"刷新"或操作按钮才请求 */
 
-  return { ip, tok, s, online, err, busy, load, loadSoon, cmd, save };
+  return { ip, tok, s, online, err, busy, load, loadSoon, cmd, save, fmtTemp, fmtHumi };
 } }).mount('#app');
 </script>
 </body>
