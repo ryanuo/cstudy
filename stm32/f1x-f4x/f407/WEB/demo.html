@@ -37,13 +37,13 @@ tailwind.config = {
     <div class="mb-3 flex items-center gap-2">
       <h1 class="text-base font-semibold">STM32F407 控制台</h1>
       <span class="ml-auto h-1.5 w-1.5 rounded-full"
-            :class="online && !paused ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
-            :title="paused ? '已断开' : (online ? '通信正常' : '没连上')"></span>
+            :class="linked ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+            :title="paused ? '已断开' : (linked ? '通信正常' : '没连上')"></span>
       <button :disabled="busy" @click="toggleLink"
               class="rounded-md px-2 py-0.5 text-xs disabled:opacity-40"
-              :class="paused ? 'border border-border bg-background text-muted-foreground'
-                             : 'bg-primary text-primary-foreground'">
-        {{ paused ? '连接' : '断开' }}
+              :class="linked ? 'bg-primary text-primary-foreground'
+                             : 'border border-border bg-background text-muted-foreground'">
+        {{ linkText }}
       </button>
     </div>
 
@@ -105,7 +105,7 @@ tailwind.config = {
       <button :disabled="locked" @click="cmd('beep')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">响一下</button>
     </div>
 
-    <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-muted pt-3" :class="paused ? 'opacity-50' : ''">
+    <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-muted pt-3" :class="linked ? '' : 'opacity-50'">
       <div class="flex items-center justify-between">
         <span class="text-sm text-muted-foreground">光敏</span><b class="text-sm tabular-nums">{{ v.light ?? '--' }}</b>
       </div>
@@ -122,7 +122,7 @@ tailwind.config = {
         <span class="text-sm text-muted-foreground">服务器灯</span>
         <span class="rounded-md px-2 py-0.5 text-xs"
               :class="v.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-          {{ paused ? '--' : (v.led3 ? 'ON' : 'OFF') }}</span>
+          {{ linked ? (v.led3 ? 'ON' : 'OFF') : '--' }}</span>
       </div>
       <div class="flex items-center justify-between">
         <span class="text-sm text-muted-foreground">请求数</span><b class="text-sm tabular-nums">{{ v.req ?? '--' }}</b>
@@ -164,7 +164,7 @@ createApp({ setup() {
       err.value = '';
     } catch (e) {
       online.value = false;
-      err.value = e.message || String(e);
+      err.value = '连不上板子：' + (e.message || e);
     }
   }
 
@@ -202,9 +202,17 @@ createApp({ setup() {
                                        所以"断开"= 停止请求；要真关服务器得 AT+CIPSERVER=0，
                                        那就再也连不回来了，不做）*/
   const locked = computed(() => busy.value || paused.value);   /* 按钮置灰的判据 */
-  /* 断开了就等于"没有数据"：v 在断开时是空对象，于是数值显示 --、按钮不再高亮
-     （就像未连接/404 那种状态），不会拿旧值骗人 */
-  const v = computed(() => (paused.value ? {} : s.value));
+  /* 真的连着 = 上次请求成功 且 没点断开。三种情况要分开：
+       IP 写错 / 板子没开 / 网段不对 -> online=false
+       用户点了"断开"                 -> paused=true
+     只要不是"真的连着"，就当没有数据：数值显示 --、按钮不高亮（不拿旧值骗人）*/
+  const linked = computed(() => online.value && !paused.value);
+  const v      = computed(() => (linked.value ? s.value : {}));
+  /* 按钮文字跟着真实状态走：连上了才叫"断开"，没连上应该是"重试/连接" */
+  const linkText = computed(() => {
+    if (linked.value) return '断开';
+    return (paused.value || !err.value) ? '连接' : '重试';
+  });
   const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
 
   /* 真正发请求（串行，不并发）；发完如果期间又点过，补发最后一次 */
@@ -221,7 +229,7 @@ createApp({ setup() {
       err.value = '';
     } catch (e) {
       online.value = false;
-      err.value = e.message || String(e);
+      err.value = '连不上板子：' + (e.message || e);
     } finally {
       busy.value = false;
       const nxt = Object.keys(pending)[0];
@@ -242,10 +250,10 @@ createApp({ setup() {
     loadTimer = setTimeout(load, DEBOUNCE);
   }
 
-  /* 断开 = 停止通信并把按钮置灰；连接 = 恢复并立刻拉一次状态 */
+  /* 连着 -> 断开（停止通信、按钮置灰）；没连着 -> 连接/重试（清掉 paused 再拉一次）*/
   function toggleLink() {
-    if (paused.value) { paused.value = false; load(); }
-    else              { paused.value = true; online.value = false; }
+    if (linked.value) { paused.value = true; online.value = false; }
+    else              { paused.value = false; load(); }
   }
 
   function save() {
@@ -256,7 +264,7 @@ createApp({ setup() {
 
   onMounted(load);          /* 打开时拉一次；之后点"刷新"或操作按钮才请求 */
 
-  return { ip, tok, s, v, online, err, busy, paused, locked, btnBase, btnOn, btnOff,
+  return { ip, tok, s, v, online, err, busy, paused, linked, linkText, locked, btnBase, btnOn, btnOff,
            load, loadSoon, cmd, save, toggleLink, fmtTemp, fmtHumi };
 } }).mount('#app');
 </script>
