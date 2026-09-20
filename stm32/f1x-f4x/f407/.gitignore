@@ -15,3 +15,7 @@ EventRecorderStub.scvd
 *.bak
 *.orig
 .DS_Store
+
+# Python 缓存（serve.py 跑起来会生成）
+__pycache__/
+*.pyc
