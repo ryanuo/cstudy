@@ -49,7 +49,7 @@ tailwind.config = {
 
     <div class="flex items-center gap-2 border-t border-muted pt-3">
       <span class="w-16 text-sm text-muted-foreground">板子地址</span>
-      <input v-model="ip" @change="save" placeholder="192.168.15.20 或 xxx.trycloudflare.com"
+      <input v-model="ip" @change="save" placeholder="192.168.15.20 或 / （同源代理）或 域名"
              class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
       <button :disabled="locked" @click="loadSoon" class="rounded-md border border-border bg-background px-3 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed">刷新</button>
     </div>
@@ -143,7 +143,12 @@ createApp({ setup() {
   const q = new URLSearchParams(location.search);
   if (q.get('ip')) localStorage.setItem('boardIp', q.get('ip'));
   if (q.get('k'))  localStorage.setItem('boardToken', q.get('k'));
-  const ip  = ref(q.get('ip') || localStorage.getItem('boardIp') || '192.168.1.101');
+  /* 页面跑在本机(localhost/file) -> 默认填板子 IP（局域网直连）；
+     页面部署到公网(Vercel)     -> 默认填 "/"，也就是同源根：
+       请求 /data、/led0/1 由 vercel.json 的 rewrites "/*" 反向代理到隧道，
+       浏览器眼里始终是自己域名 —— 没有跨域、没有混合内容，也不用管隧道地址变了 */
+  const pageIsLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname) || location.protocol === 'file:';
+  const ip  = ref(q.get('ip') || localStorage.getItem('boardIp') || (pageIsLocal ? '192.168.15.20' : '/'));
   const tok = ref(q.get('k')  || localStorage.getItem('boardToken') || '');
   const s = ref({});
   const online = ref(false);
@@ -158,7 +163,10 @@ createApp({ setup() {
      末尾再拼令牌 ?k=<WEB_TOKEN>，板子认这个才执行 */
   const hostOf = () => {
     let host = ip.value.trim().replace(/\/+$/, '');                 /* 去掉结尾多余的 / */
+    if (host === '') return '';                                      /* 只填了 "/"（或留空）= 同源根 */
     if (/^https?:\/\//i.test(host)) return host;                   /* 写全了就照办 */
+    if (host.startsWith('/')) return host;                           /* "/" 或 "/xxx" = 同源（走 Vercel rewrites 代理），
+                                                                       交给 Vercel 的 rewrites 去转发（浏览器根本不做跨域检查）*/
     const isIp   = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/.test(host);    /* IPv4，可带端口 */
     const isLoc  = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host);
     return (isIp || isLoc ? 'http://' : 'https://') + host;
