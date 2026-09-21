@@ -262,8 +262,11 @@
           const isLoc = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host);
           return (isIp || isLoc ? 'http://' : 'https://') + host;
         };
-        const url = (path) => hostOf() + '/' + path +
-          (tok.value.trim() ? '?k=' + encodeURIComponent(tok.value.trim()) : '');
+        const url = (path) => {
+    const t = tok.value.trim();
+    const sep = (path.indexOf('?') >= 0) ? '&' : '?';   /* 路径自带查询串时用 & 接令牌 */
+    return hostOf() + '/' + path + (t ? sep + 'k=' + encodeURIComponent(t) : '');
+  };
 
         /* 超时封装：默认 4 秒。超时/网络错误都走 catch，保证 busy 能复位，页面不会卡死。
            局域网可调到 3000；走 Cloudflare/ngrok 隧道可放宽到 6000~8000 */
@@ -380,7 +383,7 @@
             const l = parseInt(flash.value.len, 10) || 256;
             const j = await fetchJSON(`flash/read?addr=${a}&len=${l}`, 8000); // 读 Flash 慢，超时放宽
             if (j.err) { err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
-            flash.value.hex = formatHex(j.addr, j.data);
+            flash.value.hex = formatHex(j.addr, j.data || hexToBytes(j.hex));  /* 固件回的是 hex 字符串 */
             err.value = '';
           } catch (e) {
             err.value = '读取失败：' + (e.message || e);
@@ -411,6 +414,14 @@
           } catch (e) {
             err.value = '读状态失败：' + (e.message || e);
           } finally { busy.value = false; }
+        }
+
+        /* 固件的 /flash/read 回的是 "000102A1..." 这种 hex 字符串，转成字节数组 */
+        function hexToBytes(s) {
+          const out = [];
+          const t = s || '';
+          for (let i = 0; i + 1 < t.length; i += 2) out.push(parseInt(t.substr(i, 2), 16));
+          return out;
         }
 
         /* 把字节数组排成经典 Hex 视图：地址 + 16 进制 + ASCII */
