@@ -34,6 +34,8 @@
 #define RTE_DEVICE_STDPERIPH_PWR
 /*  Keil::Device:StdPeriph Drivers:RCC:1.3.0 */
 #define RTE_DEVICE_STDPERIPH_RCC
+/*  Keil::Device:StdPeriph Drivers:SPI:1.3.0 */
+#define RTE_DEVICE_STDPERIPH_SPI
 /*  Keil::Device:StdPeriph Drivers:SYSCFG:1.3.0 */
 #define RTE_DEVICE_STDPERIPH_SYSCFG
 /*  Keil::Device:StdPeriph Drivers:TIM:1.3.0 */

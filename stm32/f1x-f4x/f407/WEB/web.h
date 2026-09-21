@@ -3,43 +3,51 @@
 
 #include "stm32f4xx.h"
 
-/* 访问令牌：真实请求必须带 ?k=<token> 才执行（OPTIONS 预检除外，否则浏览器连真实请求都发不出去）。
-   换口令就改这一行；客户端在页面顶部填一次（存 localStorage），serve.py 可以用 --token 带过去。
-   为什么用查询参数而不是自定义头：自定义头会触发 CORS 预检，在 ESP8266 上白多一轮往返 */
-#define WEB_TOKEN   "stm32-407"
+/* 令牌：和原来一样，改这里即可 */
+#define WEB_TOKEN  "stm32-407"
 
-/*
- * 纯 JSON 接口层（不带网页）—— 页面放电脑/云上，跨域调用板子
- * 依赖：esp8266.c（USART3 上的 AT 指令）、LED/BEEP/ADC/LIGHTSENSOR
- *
- * 接口（GET，返回 application/json；所有响应都带 Access-Control-Allow-Origin: *）：
- *   /                  接口清单
- *   /data              {"led1":0,"led2":1,"led3":1,"led4":0,"fan":0,
- *                       "light":1234,"pot":2048,"req":12}
- *                      （led1/led2/led3/led4/fan 都是直接读引脚回推的真实状态）
- *   /led1/1 /led1/0    板子丝印 LED1（PF10）开/关
- *   /led2/1 /led2/0    板子丝印 LED2（PF11）开/关
- *   /led3/1 /led3/0    板子丝印 LED3（PE13）开/关
- *   /led4/1 /led4/0    板子丝印 FSMC_D11（PE14）开/关
- *   /fan/0 /fan/1 /fan/2  风扇 L9110H（PC6/PC7）：停 / 正转 / 反转
- *   /beep              蜂鸣器响 200ms
- *
- *   动作接口统一回 {"ok":1,  + 最新状态}（和 /data 同样的字段），
- *   所以页面点一下只发一个请求就能顺便刷新界面，不用再拉一次 /data。
- *   OPTIONS 任意路径   204 + CORS 头（跨域预检）
- */
+/* ================= 基础设施 API（业务模块只用这些） ================= */
 
-/* 串口通了（AT 重试 + CWMODE=1）返回 1 */
+/* 请求解析 */
+uint8_t  Web_TokenOk(char *req);
+uint8_t  Web_PathOf(char *req, char *path, uint8_t max);
+uint32_t Web_GetParamU32(char *req, const char *key, uint32_t def);
+
+/* 回复 */
+void     Web_ReplyJson(uint8_t link, const char *body, uint16_t blen);
+void     Web_ReplyOk(uint8_t link);              /* {"ok":1} */
+void     Web_ReplyOkState(uint8_t link);         /* {"ok":1, + 全状态} */
+void     Web_ReplyErr(uint8_t link);             /* {"err":1} */
+void     Web_CloseLink(uint8_t link);
+
+/* /data 聚合 */
+void     Web_StateReset(void);
+void     Web_StateAppend(const char *fmt, ...);
+void     Web_StateSend(uint8_t link);
+void     Web_SendAllState(uint8_t link);
+
+/* 生命周期 */
 uint8_t  Web_Init(void);
-/* 连热点，成功返回 1 */
 uint8_t  Web_Connect(char *ssid, char *pass);
-/* 读 IP（兼容 AT+CIFSR 新旧格式），成功返回 1 */
 uint8_t  Web_GetIp(char *ip, uint8_t max_len);
-/* 开 TCP 服务器（AT+CIPMUX=1 + AT+CIPSERVER=1,port），成功返回 1 */
 uint8_t  Web_OpenServer(uint16_t port);
-/* 主循环里周期调用：处理一次请求 */
 void     Web_Task(void);
-/* 已处理的请求数（给 OLED 显示） */
 uint16_t Web_ReqCount(void);
+
+/* ================= 业务模块注册（各模块实现） ================= */
+
+void    Led_WebState(void);
+uint8_t Led_WebRoute(uint8_t link, const char *path, char *req);
+
+void    Fan_WebState(void);
+uint8_t Fan_WebRoute(uint8_t link, const char *path, char *req);
+
+void    Sensor_WebState(void);
+uint8_t Sensor_WebRoute(uint8_t link, const char *path, char *req);
+
+void    Beep_WebState(void);
+uint8_t Beep_WebRoute(uint8_t link, const char *path, char *req);
+
+uint8_t Flash_WebRoute(uint8_t link, const char *path, char *req);
 
 #endif

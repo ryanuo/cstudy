@@ -8,6 +8,7 @@
 #include "ADC.h"
 #include "LIGHTSENSOR.h"
 #include "DHT11.h"
+#include "SPI.h"
 
 /* ==========================================================================
  * STM32F407 + ESP8266 (ESP-01S, AT ???) ???? ??????????
@@ -96,6 +97,8 @@ int main(void)
     LIGHT_Init();   /* ???? PF7 / ADC3 */
     DHT11_Init();   /* ????? DHT11: PG9 (???? U6 ??) */
     ESP8266_Init(); /* USART3 + 1ms ?¦Ä? */
+    SPI1_init();   /* SPI1 + GPIOB 3/4/5/14 */
+
     OLED_Init();
     OLED_Clear();
 

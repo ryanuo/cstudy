@@ -113,7 +113,7 @@ void LED_FlowEnable(uint8_t en)
 		LED1_off();
 		LED2_off();
 		LED3_off();
-		LED4_off(); /* ¹ØµôÊ±È«Ãð */
+		LED4_on();
 	}
 }
 
