@@ -165,7 +165,7 @@
 
       <div class="flex items-center gap-2 border-t border-muted pt-3">
         <span class="w-12 text-xs text-muted-foreground">地址</span>
-        <input v-model="flash.addr" placeholder="0x000000"
+        <input v-model="flash.addr" placeholder="0x000000；填 0x08000000 读内部 flash"
           class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-xs tabular-nums outline-none">
         <span class="text-xs text-muted-foreground">长度</span>
         <input v-model="flash.len" placeholder="256"
@@ -381,8 +381,10 @@
           try {
             const a = parseInt(flash.value.addr, 16) || 0;
             const l = parseInt(flash.value.len, 10) || 256;
-            const j = await fetchJSON(`flash/read?addr=${a}&len=${l}`, 8000); // 读 Flash 慢，超时放宽
-            if (j.err) { err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
+            /* 0x08000000 起是 STM32 内部 flash（外挂 W25Q 是"指令+偏移"访问，没有地址映射）→ 自动换路由 */
+            const route = (a >= 0x08000000) ? 'flash/mcu' : 'flash/read';
+            const j = await fetchJSON(`${route}?addr=${a}&len=${l}`, 8000); // 读 Flash 慢，超时放宽
+            if (j.err) { err.value = j.why || (j.need ? TOKEN_HINT : ROUTE_HINT); return; }
             flash.value.hex = formatHex(j.addr, j.data || hexToBytes(j.hex));  /* 固件回的是 hex 字符串 */
             err.value = '';
           } catch (e) {

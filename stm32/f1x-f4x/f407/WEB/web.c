@@ -304,7 +304,7 @@ static const char json_api[]  = "{\"api\":\"stm32f407-esp8266\",\"routes\":["
     "\"/data\",\"/led1/1\",\"/led1/0\",\"/led2/1\",\"/led2/0\","
     "\"/led3/1\",\"/led3/0\",\"/flow/1\",\"/flow/0\","
     "\"/fan/0\",\"/fan/1\",\"/fan/2\",\"/beep\","
-    "\"/flash/id\",\"/flash/read\",\"/flash/erase\",\"/flash/status\"]}";
+    "\"/flash/id\",\"/flash/read\",\"/flash/mcu\",\"/flash/erase\",\"/flash/status\"]}";
 
 static uint8_t HandleOne(void)
 {
