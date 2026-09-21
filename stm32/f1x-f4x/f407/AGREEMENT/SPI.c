@@ -112,3 +112,23 @@ void W25QXX_ReadID(uint8_t *id)
     id[2] = SPI1_sendbyte(0xFF);
     GPIO_SetBits(GPIOB, GPIO_Pin_14);
 }
+
+
+void W25QXX_Read(uint8_t *buf, uint32_t addr, uint16_t len)
+{
+    uint16_t i;
+
+    GPIO_ResetBits(GPIOB, GPIO_Pin_14);
+
+
+    SPI1_sendbyte(0x03);               /* ② 发 0x03 */
+    SPI1_sendbyte((uint8_t)(addr >> 16));       /* ③ 地址高 8 位 A23~A16 */
+    SPI1_sendbyte((uint8_t)(addr >> 8));        /* ④ 地址中 8 位 A15~A8  */
+    SPI1_sendbyte((uint8_t)(addr));             /* ⑤ 地址低 8 位 A7~A0  */
+
+    for (i = 0; i < len; i++) {
+        buf[i] = SPI1_sendbyte(0xFF);           /* ⑥ 逐字节读 */
+    }
+
+    GPIO_SetBits(GPIOB, GPIO_Pin_14);
+}
