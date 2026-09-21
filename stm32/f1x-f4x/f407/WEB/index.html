@@ -267,7 +267,7 @@
 
         /* 超时封装：默认 4 秒。超时/网络错误都走 catch，保证 busy 能复位，页面不会卡死。
            局域网可调到 3000；走 Cloudflare/ngrok 隧道可放宽到 6000~8000 */
-        const TIMEOUT = 4000;
+        const TIMEOUT = 7000;
 
         async function fetchJSON(path, timeout = TIMEOUT) {
           const ctrl = new AbortController();
