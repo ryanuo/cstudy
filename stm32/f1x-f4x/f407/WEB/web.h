@@ -14,11 +14,12 @@
  *
  * 接口（GET，返回 application/json；所有响应都带 Access-Control-Allow-Origin: *）：
  *   /                  接口清单
- *   /data              {"led0":0,"led1":1,"led3":1,"led4":0,"fan":0,
+ *   /data              {"led1":0,"led2":1,"led3":1,"led4":0,"fan":0,
  *                       "light":1234,"pot":2048,"req":12}
- *                      （led0/led1/led3/led4/fan 都是直接读引脚回推的真实状态）
- *   /led0/1 /led0/0    板子丝印 LED0（PF9）开/关
+ *                      （led1/led2/led3/led4/fan 都是直接读引脚回推的真实状态）
  *   /led1/1 /led1/0    板子丝印 LED1（PF10）开/关
+ *   /led2/1 /led2/0    板子丝印 LED2（PF11）开/关
+ *   /led3/1 /led3/0    板子丝印 LED3（PE13）开/关
  *   /led4/1 /led4/0    板子丝印 FSMC_D11（PE14）开/关
  *   /fan/0 /fan/1 /fan/2  风扇 L9110H（PC6/PC7）：停 / 正转 / 反转
  *   /beep              蜂鸣器响 200ms

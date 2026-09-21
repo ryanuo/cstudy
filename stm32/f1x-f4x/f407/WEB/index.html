@@ -1,293 +1,341 @@
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>STM32F407 控制台（跨域调用板子）</title>
-<!--
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>STM32F407 控制台（跨域调用板子）</title>
+  <!--
   这个页面放在电脑/云上跑，通过 HTTP + CORS 调用板子的 JSON 接口。
   用法：在电脑上 `python3 serve.py`（默认 8000），浏览器开 http://localhost:8000/
         （或直接双击用 file:// 打开，多数浏览器也能跨域 GET）
   不再自动轮询：打开时拉一次，之后点「刷新」或操作按钮才请求板子。
   注意：页面本身要跑在 http(s):// 上，别用 https 页面去请求 http 板子（混合内容会被拦）。
+  所有请求带超时（AbortController），超时/断网不会卡死页面。
 -->
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-/* shadcn 的 token 名配成 Tailwind 颜色，class 写法和 shadcn 一致 */
-tailwind.config = {
-  theme: { extend: {
-    colors: {
-      border: "#e4e4e7", background: "#ffffff", foreground: "#18181b",
-      muted: "#f4f4f5", "muted-foreground": "#71717a",
-      primary: "#18181b", "primary-foreground": "#fafafa"
-    },
-    borderRadius: { lg: "12px", md: "8px" }
-  } }
-};
-</script>
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    /* shadcn 的 token 名配成 Tailwind 颜色，class 写法和 shadcn 一致 */
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            border: "#e4e4e7", background: "#ffffff", foreground: "#18181b",
+            muted: "#f4f4f5", "muted-foreground": "#71717a",
+            primary: "#18181b", "primary-foreground": "#fafafa"
+          },
+          borderRadius: { lg: "12px", md: "8px" }
+        }
+      }
+    };
+  </script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
+
 <body class="bg-muted text-foreground font-sans">
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-</head>
-<body class="bg-muted text-foreground font-sans">
-<div id="app" class="mx-auto max-w-md p-4">
+  <div id="app" class="mx-auto max-w-md p-4">
 
-  <div class="rounded-lg border border-border bg-background p-4">
-    <div class="mb-3 flex items-center gap-2">
-      <h1 class="text-base font-semibold">STM32F407 控制台</h1>
-      <span class="ml-auto h-1.5 w-1.5 rounded-full"
-            :class="linked ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
-            :title="paused ? '已断开' : (linked ? '通信正常' : '没连上')"></span>
-      <button :disabled="busy" @click="toggleLink"
-              class="rounded-md px-2 py-0.5 text-xs disabled:opacity-40"
-              :class="linked ? 'bg-primary text-primary-foreground'
-                             : 'border border-border bg-background text-muted-foreground'">
-        {{ linkText }}
-      </button>
+    <div class="rounded-lg border border-border bg-background p-4">
+      <div class="mb-3 flex items-center gap-2">
+        <h1 class="text-base font-semibold flex gap-2">STM32F407 控制台 
+          <!-- 请求中：小转圈 + 文案；不请求时不占位 -->
+          <span v-if="busy" class="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+            <svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25" />
+              <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+            </svg>
+            请求中
+          </span>
+        </h1>
+        <span class="ml-auto h-1.5 w-1.5 rounded-full" :class="linked ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+          :title="paused ? '已断开' : (linked ? '通信正常' : '没连上')"></span>
+        <button :disabled="busy" @click="toggleLink" class="rounded-md px-2 py-0.5 text-xs disabled:opacity-40" :class="linked ? 'bg-primary text-primary-foreground'
+                           : 'border border-border bg-background text-muted-foreground'">
+          {{ linkText }}
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2 border-t border-muted pt-3">
+        <span class="w-16 text-sm text-muted-foreground">板子地址</span>
+        <input v-model="ip" @change="save" placeholder="192.168.15.20 或 / （同源代理）或 域名"
+          class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
+        <button :disabled="locked" @click="loadSoon"
+          class="rounded-md border border-border bg-background px-3 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed">刷新</button>
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <span class="w-16 text-sm text-muted-foreground">令牌</span>
+        <input v-model="tok" @change="save" placeholder="web.h 里的 WEB_TOKEN"
+          class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
+        <span class="text-xs text-muted-foreground">?k=</span>
+      </div>
+
+      <p v-if="err" class="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+        {{ err }}<span v-if="err.startsWith('连不')">（检查电脑和板子是否同一网段、路由器有没有开 AP 隔离）</span>
+      </p>
     </div>
 
-    <div class="flex items-center gap-2 border-t border-muted pt-3">
-      <span class="w-16 text-sm text-muted-foreground">板子地址</span>
-      <input v-model="ip" @change="save" placeholder="192.168.15.20 或 / （同源代理）或 域名"
-             class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
-      <button :disabled="locked" @click="loadSoon" class="rounded-md border border-border bg-background px-3 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed">刷新</button>
+    <div class="mt-4 rounded-lg border border-border bg-background p-4">
+      <div class="flex items-center gap-2 border-b border-muted py-2.5">
+        <span class="w-16 text-sm text-muted-foreground">LED1</span>
+        <button :disabled="locked" @click="cmd('led1/1', {led1:1})"
+          :class="[btnBase, 'ml-auto', v.led1 === 1 ? btnOn : btnOff]">开</button>
+        <button :disabled="locked" @click="cmd('led1/0', {led1:0})"
+          :class="[btnBase, v.led1 === 0 ? btnOn : btnOff]">关</button>
+      </div>
+      <div class="flex items-center gap-2 border-b border-muted py-2.5">
+        <span class="w-16 text-sm text-muted-foreground">LED2</span>
+        <button :disabled="locked" @click="cmd('led2/1', {led2:1})"
+          :class="[btnBase, 'ml-auto', v.led2 === 1 ? btnOn : btnOff]">开</button>
+        <button :disabled="locked" @click="cmd('led2/0', {led2:0})"
+          :class="[btnBase, v.led2 === 0 ? btnOn : btnOff]">关</button>
+      </div>
+
+      <div class="flex items-center gap-2 border-b border-muted py-2.5">
+        <span class="w-16 text-sm text-muted-foreground">LED3</span>
+        <button :disabled="locked" @click="cmd('led3/1', {led3:1})"
+          :class="[btnBase, 'ml-auto', v.led3 === 1 ? btnOn : btnOff]">开</button>
+        <button :disabled="locked" @click="cmd('led3/0', {led3:0})"
+          :class="[btnBase, v.led3 === 0 ? btnOn : btnOff]">关</button>
+      </div>
+
+      <div class="flex items-center gap-2 border-b border-muted py-2.5">
+        <span class="w-16 text-sm text-muted-foreground">流水灯</span>
+        <button :disabled="locked" @click="cmd('flow/1', {flow:1})"
+          :class="[btnBase, 'ml-auto', v.flow === 1 ? btnOn : btnOff]">开</button>
+        <button :disabled="locked" @click="cmd('flow/0', {flow:0})"
+          :class="[btnBase, v.flow === 0 ? btnOn : btnOff]">关</button>
+      </div>
+
+      <div class="flex items-center gap-2 border-b border-muted py-2.5">
+        <span class="w-16 text-sm text-muted-foreground">风扇</span>
+        <button :disabled="locked" @click="cmd('fan/1', {fan:1})"
+          :class="[btnBase, 'ml-auto', v.fan === 1 ? btnOn : btnOff]">正转</button>
+        <button :disabled="locked" @click="cmd('fan/2', {fan:2})"
+          :class="[btnBase, v.fan === 2 ? btnOn : btnOff]">反转</button>
+        <button :disabled="locked" @click="cmd('fan/0', {fan:0})"
+          :class="[btnBase, v.fan === 0 ? btnOn : btnOff]">停</button>
+      </div>
+
+      <div class="flex items-center gap-2 py-2.5">
+        <span class="w-16 text-sm text-muted-foreground">蜂鸣器</span>
+        <button :disabled="locked" @click="cmd('beep')"
+          class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">响一下</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-muted pt-3" :class="linked ? '' : 'opacity-50'">
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-muted-foreground">光敏</span><b class="text-sm tabular-nums">{{ v.light ?? '--'
+            }}</b>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-muted-foreground">电位器</span><b class="text-sm tabular-nums">{{ v.pot ?? '--'
+            }}</b>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-muted-foreground">温度</span><b class="text-sm tabular-nums">{{ fmtTemp }}</b>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-muted-foreground">湿度</span><b class="text-sm tabular-nums">{{ fmtHumi }}</b>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-muted-foreground">服务器灯</span>
+          <span class="rounded-md px-2 py-0.5 text-xs"
+            :class="v.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
+            {{ linked ? (v.led3 ? 'ON' : 'OFF') : '--' }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-muted-foreground">请求数</span><b class="text-sm tabular-nums">{{ v.req ?? '--'
+            }}</b>
+        </div>
+      </div>
     </div>
 
-    <div class="flex items-center gap-2 pt-2">
-      <span class="w-16 text-sm text-muted-foreground">令牌</span>
-      <input v-model="tok" @change="save" placeholder="web.h 里的 WEB_TOKEN"
-             class="min-w-0 flex-1 rounded-md border border-border px-2 py-1 text-sm outline-none">
-      <span class="text-xs text-muted-foreground">?k=</span>
-    </div>
-
-        <p v-if="err" class="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-      {{ err }}<span v-if="err.startsWith('连不')">（检查电脑和板子是否同一网段、路由器有没有开 AP 隔离）</span>
+    <p class="mt-3 text-center text-xs text-muted-foreground">
+      LED1=PF9 · LED2=PF10 · LED3=PE13 · LED4=PE14 · 流水灯=4 灯循环（开流水后单灯控制会自动关流水）· 服务器灯=PE14 · 风扇=PC6/PC7(需 VM 5V) ·
+      温湿度=DHT11@PG9(小数位用原始字节
+      d[3]/d[1]，规格书标为保留·多为 0)<br>
+      所有请求都带 ?k=令牌 · 页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准 · 请求期间按钮置灰（防连点）· 请求超时自动报错不卡死
     </p>
   </div>
 
-  <div class="mt-4 rounded-lg border border-border bg-background p-4">
-    <div class="flex items-center gap-2 border-b border-muted py-2.5">
-      <span class="w-16 text-sm text-muted-foreground">LED0</span>
-      <button :disabled="locked" @click="cmd('led0/1', {led0:1})"
-              :class="[btnBase, 'ml-auto', v.led0 === 1 ? btnOn : btnOff]">开</button>
-      <button :disabled="locked" @click="cmd('led0/0', {led0:0})"
-              :class="[btnBase, v.led0 === 0 ? btnOn : btnOff]">关</button>
-    </div>
-    <div class="flex items-center gap-2 border-b border-muted py-2.5">
-      <span class="w-16 text-sm text-muted-foreground">LED1</span>
-      <button :disabled="locked" @click="cmd('led1/1', {led1:1})"
-              :class="[btnBase, 'ml-auto', v.led1 === 1 ? btnOn : btnOff]">开</button>
-      <button :disabled="locked" @click="cmd('led1/0', {led1:0})"
-              :class="[btnBase, v.led1 === 0 ? btnOn : btnOff]">关</button>
-    </div>
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+    createApp({
+      setup() {
+        /* 支持 ?ip=192.168.1.101&k=令牌 预填（serve.py --board/--token 会自动带上） */
+        const q = new URLSearchParams(location.search);
+        if (q.get('ip')) localStorage.setItem('boardIp', q.get('ip'));
+        if (q.get('k')) localStorage.setItem('boardToken', q.get('k'));
+        /* 页面跑在本机(localhost/file) -> 默认填板子 IP（局域网直连）；
+           页面部署到公网(Vercel)     -> 默认填 "/"，也就是同源根：
+             请求 /data、/led1/1 由 vercel.json 的 rewrites "/*" 反向代理到隧道，
+             浏览器眼里始终是自己域名 —— 没有跨域、没有混合内容，也不用管隧道地址变了 */
+        const pageIsLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname) || location.protocol === 'file:';
+        const ip = ref(q.get('ip') || localStorage.getItem('boardIp') || (pageIsLocal ? '192.168.15.20' : '/'));
+        const tok = ref(q.get('k') || localStorage.getItem('boardToken') || '');
+        const s = ref({});
+        const online = ref(false);
+        const err = ref('');
 
-    <div class="flex items-center gap-2 border-b border-muted py-2.5">
-      <span class="w-16 text-sm text-muted-foreground">LED4</span>
-      <button :disabled="locked" @click="cmd('led4/1', {led4:1})"
-              :class="[btnBase, 'ml-auto', v.led4 === 1 ? btnOn : btnOff]">开</button>
-      <button :disabled="locked" @click="cmd('led4/0', {led4:0})"
-              :class="[btnBase, v.led4 === 0 ? btnOn : btnOff]">关</button>
-    </div>
+        /* 拼请求地址：
+             - 填 IP（192.168.15.20 / 192.168.15.20:80）或 localhost -> http（局域网里本来就是明文）
+             - 填域名（xxx.trycloudflare.com、abc.ngrok.io…）        -> https
+               （隧道域名基本只认 https，用 http 会被 301 到 https，
+                 拿回来的是 HTML 跳转页而不是 JSON，页面上就表现为"连不上"）
+             - 已经手写了 http:// 或 https:// 的，按你写的来（原样保留，含路径前缀）
+           末尾再拼令牌 ?k=<WEB_TOKEN>，板子认这个才执行 */
+        const hostOf = () => {
+          let host = ip.value.trim().replace(/\/+$/, '');                 /* 去掉结尾多余的 / */
+          if (host === '') return '';                                      /* 只填了 "/"（或留空）= 同源根 */
+          if (/^https?:\/\//i.test(host)) return host;                   /* 写全了就照办 */
+          if (host.startsWith('/')) return host;                           /* "/" 或 "/xxx" = 同源（走 Vercel rewrites 代理），
+                                                                     交给 Vercel 的 rewrites 去转发（浏览器根本不做跨域检查）*/
+          const isIp = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/.test(host);    /* IPv4，可带端口 */
+          const isLoc = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host);
+          return (isIp || isLoc ? 'http://' : 'https://') + host;
+        };
+        const url = (path) => hostOf() + '/' + path +
+          (tok.value.trim() ? '?k=' + encodeURIComponent(tok.value.trim()) : '');
 
-    <div class="flex items-center gap-2 border-b border-muted py-2.5">
-      <span class="w-16 text-sm text-muted-foreground">风扇</span>
-      <button :disabled="locked" @click="cmd('fan/1', {fan:1})"
-              :class="[btnBase, 'ml-auto', v.fan === 1 ? btnOn : btnOff]">正转</button>
-      <button :disabled="locked" @click="cmd('fan/2', {fan:2})"
-              :class="[btnBase, v.fan === 2 ? btnOn : btnOff]">反转</button>
-      <button :disabled="locked" @click="cmd('fan/0', {fan:0})"
-              :class="[btnBase, v.fan === 0 ? btnOn : btnOff]">停</button>
-    </div>
+        /* 超时封装：默认 4 秒。超时/网络错误都走 catch，保证 busy 能复位，页面不会卡死。
+           局域网可调到 3000；走 Cloudflare/ngrok 隧道可放宽到 6000~8000 */
+        const TIMEOUT = 4000;
 
-    <div class="flex items-center gap-2 py-2.5">
-      <span class="w-16 text-sm text-muted-foreground">蜂鸣器</span>
-      <button :disabled="locked" @click="cmd('beep')" class="ml-auto rounded-md border border-border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed">响一下</button>
-    </div>
+        async function fetchJSON(path, timeout = TIMEOUT) {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), timeout);
+          try {
+            const r = await fetch(url(path), { cache: 'no-store', signal: ctrl.signal });
+            return await r.json();
+          } finally {
+            clearTimeout(timer);
+          }
+        }
 
-    <div class="grid grid-cols-2 gap-x-6 gap-y-2 border-t border-muted pt-3" :class="linked ? '' : 'opacity-50'">
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">光敏</span><b class="text-sm tabular-nums">{{ v.light ?? '--' }}</b>
-      </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">电位器</span><b class="text-sm tabular-nums">{{ v.pot ?? '--' }}</b>
-      </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">温度</span><b class="text-sm tabular-nums">{{ fmtTemp }}</b>
-      </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">湿度</span><b class="text-sm tabular-nums">{{ fmtHumi }}</b>
-      </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">服务器灯</span>
-        <span class="rounded-md px-2 py-0.5 text-xs"
-              :class="v.led3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
-          {{ linked ? (v.led3 ? 'ON' : 'OFF') : '--' }}</span>
-      </div>
-      <div class="flex items-center justify-between">
-        <span class="text-sm text-muted-foreground">请求数</span><b class="text-sm tabular-nums">{{ v.req ?? '--' }}</b>
-      </div>
-    </div>
-  </div>
+        const TOKEN_HINT = '令牌不对：页面顶部填 web.h 里 WEB_TOKEN 的值（默认 stm32-407）';
+        /* 板子的两种 err 要分开报：{"err":1,"need":"token"} = 令牌；纯 {"err":1} = 路由不认识（固件旧了）*/
+        const ROUTE_HINT = '板子回了 err（不认识这个接口）：固件可能不是最新版，重新 Rebuild + Download 一次';
+        /* 按钮外观：btnBase 通用、btnOn = 高亮（就是当前状态）、btnOff = 普通描边。
+           高亮那个用 disabled:opacity-100，所以"断开"置灰时仍看得出板子当时的状态 */
+        const btnBase = 'rounded-md border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed';
+        const btnOn = 'border-primary bg-primary text-primary-foreground disabled:opacity-100';
+        const btnOff = 'border-border';
 
-  <p class="mt-3 text-center text-xs text-muted-foreground">
-    LED0=PF9 · LED1=PF10 · LED4=PE14 · 服务器灯=PE13 · 风扇=PC6/PC7(需 VM 5V) · 温湿度=DHT11@PG9(小数位用原始字节 d[3]/d[1]，规格书标为保留·多为 0)<br>
-    所有请求都带 ?k=令牌 · 页面在电脑上 · 点一下=一个请求 · 按钮先本地变再按板子回的真实状态校准 · 请求期间按钮置灰（防连点）
-  </p>
-</div>
+        const DEBOUNCE = 300;             /* 刷新/连接按钮的尾沿防抖窗口（毫秒）*/
 
-<script>
-const { createApp, ref, computed, onMounted } = Vue;
-createApp({ setup() {
-  /* 支持 ?ip=192.168.1.101&k=令牌 预填（serve.py --board/--token 会自动带上） */
-  const q = new URLSearchParams(location.search);
-  if (q.get('ip')) localStorage.setItem('boardIp', q.get('ip'));
-  if (q.get('k'))  localStorage.setItem('boardToken', q.get('k'));
-  /* 页面跑在本机(localhost/file) -> 默认填板子 IP（局域网直连）；
-     页面部署到公网(Vercel)     -> 默认填 "/"，也就是同源根：
-       请求 /data、/led0/1 由 vercel.json 的 rewrites "/*" 反向代理到隧道，
-       浏览器眼里始终是自己域名 —— 没有跨域、没有混合内容，也不用管隧道地址变了 */
-  const pageIsLocal = /^(localhost|127\.0\.0\.1)$/i.test(location.hostname) || location.protocol === 'file:';
-  const ip  = ref(q.get('ip') || localStorage.getItem('boardIp') || (pageIsLocal ? '192.168.15.20' : '/'));
-  const tok = ref(q.get('k')  || localStorage.getItem('boardToken') || '');
-  const s = ref({});
-  const online = ref(false);
-  const err = ref('');
+        async function load() {
+          if (paused.value) return;                      /* 断开状态：不打扰板子 */
+          busy.value = true;                             /* 让刷新期间也置灰，避免手快叠加 */
+          try {
+            const j = await fetchJSON('data');
+            if (j.err) { online.value = true; err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
+            s.value = j;
+            online.value = true;
+            err.value = '';
+          } catch (e) {
+            online.value = false;
+            err.value = (e.name === 'AbortError')
+              ? `板子 ${TIMEOUT / 1000}s 没响应（超时）：检查 IP / 供电 / 是否同一网段`
+              : '连不上板子：' + (e.message || e);
+          } finally {
+            busy.value = false;
+          }
+        }
 
-  /* 拼请求地址：
-       - 填 IP（192.168.15.20 / 192.168.15.20:80）或 localhost -> http（局域网里本来就是明文）
-       - 填域名（xxx.trycloudflare.com、abc.ngrok.io…）        -> https
-         （隧道域名基本只认 https，用 http 会被 301 到 https，
-           拿回来的是 HTML 跳转页而不是 JSON，页面上就表现为"连不上"）
-       - 已经手写了 http:// 或 https:// 的，按你写的来（原样保留，含路径前缀）
-     末尾再拼令牌 ?k=<WEB_TOKEN>，板子认这个才执行 */
-  const hostOf = () => {
-    let host = ip.value.trim().replace(/\/+$/, '');                 /* 去掉结尾多余的 / */
-    if (host === '') return '';                                      /* 只填了 "/"（或留空）= 同源根 */
-    if (/^https?:\/\//i.test(host)) return host;                   /* 写全了就照办 */
-    if (host.startsWith('/')) return host;                           /* "/" 或 "/xxx" = 同源（走 Vercel rewrites 代理），
-                                                                       交给 Vercel 的 rewrites 去转发（浏览器根本不做跨域检查）*/
-    const isIp   = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/.test(host);    /* IPv4，可带端口 */
-    const isLoc  = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host);
-    return (isIp || isLoc ? 'http://' : 'https://') + host;
-  };
-  const url = (path) => hostOf() + '/' + path +
-                        (tok.value.trim() ? '?k=' + encodeURIComponent(tok.value.trim()) : '');
+        /* 防抖改成"保留最后一次意图"：原来忙或点太密就直接把点击丢掉，
+           连点 / 多人操作时会出现"我这边显示 ON、板上其实 OFF"。
+           现在忙的时候把最后一次意图记下来，当前请求一回来立刻补发 ——
+           点过的动作最终一定会到板子，不会凭空消失 */
+        /* 温度保留两位小数。注意：DHT11 的分辨率就是 1℃，小数位其实是在补零（看着精确而已）；
+           以后换成 DS18B20（0.0625℃）就是真小数，页面这边不用改 */
+        /* 温度 = 整数字节 + 小数字节/10。d[3] 就是温度小数：它是 0 就显示 29.00，
+           传感器真给小数（比如 d[3]=3）就显示 29.30 —— 到底有没有小数，看这个显示/看 /data 里的 tdec 就知道 */
+        const fmtTemp = computed(() => {
+          if (!v.value.temp) return '--';
+          return (Number(v.value.temp) + Number(v.value.tdec || 0) / 10).toFixed(2) + ' ℃';
+        });
+        /* 湿度和温度一样：整数字节 + 小数字节/10（d[1] 是湿度小数），统一保留两位 */
+        const fmtHumi = computed(() => {
+          if (!v.value.humi) return '--';
+          return (Number(v.value.humi) + Number(v.value.hdec || 0) / 10).toFixed(2) + ' %';
+        });
 
-  async function load() {
-    if (paused.value) return;                      /* 断开状态：不打扰板子 */
-    try {
-      const r = await fetch(url('data'), { cache: 'no-store' });
-      const j = await r.json();
-      if (j.err) { online.value = true; err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
-      s.value = j;
-      online.value = true;
-      err.value = '';
-    } catch (e) {
-      online.value = false;
-      err.value = '连不上板子：' + (e.message || e);
-    }
-  }
+        const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
+        const paused = ref(false);        /* 点了"断开"：不再和板子通信（HTTP 是无状态的，
+                                     所以"断开"= 停止请求；要真关服务器得 AT+CIPSERVER=0，
+                                     那就再也连不回来了，不做）*/
+        const locked = computed(() => busy.value || paused.value);   /* 按钮置灰的判据 */
+        /* 真的连着 = 上次请求成功 且 没点断开。三种情况要分开：
+             IP 写错 / 板子没开 / 网段不对 -> online=false
+             用户点了"断开"                 -> paused=true
+           只要不是"真的连着"，就当没有数据：数值显示 --、按钮不高亮（不拿旧值骗人）*/
+        const linked = computed(() => online.value && !paused.value);
+        const v = computed(() => (linked.value ? s.value : {}));
+        /* 按钮文字跟着真实状态走：连上了才叫"断开"，没连上应该是"重试/连接" */
+        const linkText = computed(() => {
+          if (linked.value) return '断开';
+          return (paused.value || !err.value) ? '连接' : '重试';
+        });
+        const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
 
-  /* 防抖改成"保留最后一次意图"：原来忙或点太密就直接把点击丢掉，
-     连点 / 多人操作时会出现"我这边显示 ON、板上其实 OFF"。
-     现在忙的时候把最后一次意图记下来，当前请求一回来立刻补发 ——
-     点过的动作最终一定会到板子，不会凭空消失 */
-  const TOKEN_HINT = '令牌不对：页面顶部填 web.h 里 WEB_TOKEN 的值（默认 stm32-407）';
-  /* 板子的两种 err 要分开报：{"err":1,"need":"token"} = 令牌；纯 {"err":1} = 路由不认识（固件旧了）*/
-  const ROUTE_HINT = '板子回了 err（不认识这个接口）：固件可能不是最新版，重新 Rebuild + Download 一次';
-  /* 按钮外观：btnBase 通用、btnOn = 高亮（就是当前状态）、btnOff = 普通描边。
-     高亮那个用 disabled:opacity-100，所以"断开"置灰时仍看得出板子当时的状态 */
-  const btnBase = 'rounded-md border px-3 py-1 text-xs active:bg-muted disabled:opacity-40 disabled:cursor-not-allowed';
-  const btnOn   = 'border-primary bg-primary text-primary-foreground disabled:opacity-100';
-  const btnOff  = 'border-border';
+        /* 真正发请求（串行，不并发）；发完如果期间又点过，补发最后一次 */
+        async function send(p, patch) {
+          if (paused.value) return;
+          busy.value = true;
+          if (patch) Object.assign(s.value, patch);      /* 乐观更新：先亮 */
+          try {
+            const j = await fetchJSON(p);                /* 再用板子的真实状态校准 */
+            if (j.err) { online.value = true; err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
+            s.value = j;
+            online.value = true;
+            err.value = '';
+          } catch (e) {
+            online.value = false;
+            err.value = (e.name === 'AbortError')
+              ? `板子 ${TIMEOUT / 1000}s 没响应（超时）：检查 IP / 供电 / 是否同一网段`
+              : '连不上板子：' + (e.message || e);
+          } finally {
+            busy.value = false;
+            const nxt = Object.keys(pending)[0];
+            if (nxt) { const q = pending[nxt]; delete pending[nxt]; send(nxt, q); }
+          }
+        }
 
-  const DEBOUNCE = 300;             /* 刷新/连接按钮的尾沿防抖窗口（毫秒）*/
+        /* 点一下：空闲就立刻发（保持跟手）；忙就只记下意图，等上一个回来补发 */
+        function cmd(p, patch) {
+          if (busy.value) pending[p] = patch;
+          else send(p, patch);
+        }
 
-  /* 温度保留两位小数。注意：DHT11 的分辨率就是 1℃，小数位其实是在补零（看着精确而已）；
-     以后换成 DS18B20（0.0625℃）就是真小数，页面这边不用改 */
-  /* 温度 = 整数字节 + 小数字节/10。d[3] 就是温度小数：它是 0 就显示 29.00，
-     传感器真给小数（比如 d[3]=3）就显示 29.30 —— 到底有没有小数，看这个显示/看 /data 里的 tdec 就知道 */
-  const fmtTemp = computed(() => {
-    if (!v.value.temp) return '--';
-    return (Number(v.value.temp) + Number(v.value.tdec || 0) / 10).toFixed(2) + ' ℃';
-  });
-  /* 湿度和温度一样：整数字节 + 小数字节/10（d[1] 是湿度小数），统一保留两位 */
-  const fmtHumi = computed(() => {
-    if (!v.value.humi) return '--';
-    return (Number(v.value.humi) + Number(v.value.hdec || 0) / 10).toFixed(2) + ' %';
-  });
+        /* 刷新/连接：尾沿防抖，狂点只在停下后发一次 */
+        let loadTimer = null;
+        function loadSoon() {
+          clearTimeout(loadTimer);
+          loadTimer = setTimeout(load, DEBOUNCE);
+        }
 
-  const busy = ref(false);          /* 有请求在飞：所有按钮置灰 */
-  const paused = ref(false);        /* 点了"断开"：不再和板子通信（HTTP 是无状态的，
-                                       所以"断开"= 停止请求；要真关服务器得 AT+CIPSERVER=0，
-                                       那就再也连不回来了，不做）*/
-  const locked = computed(() => busy.value || paused.value);   /* 按钮置灰的判据 */
-  /* 真的连着 = 上次请求成功 且 没点断开。三种情况要分开：
-       IP 写错 / 板子没开 / 网段不对 -> online=false
-       用户点了"断开"                 -> paused=true
-     只要不是"真的连着"，就当没有数据：数值显示 --、按钮不高亮（不拿旧值骗人）*/
-  const linked = computed(() => online.value && !paused.value);
-  const v      = computed(() => (linked.value ? s.value : {}));
-  /* 按钮文字跟着真实状态走：连上了才叫"断开"，没连上应该是"重试/连接" */
-  const linkText = computed(() => {
-    if (linked.value) return '断开';
-    return (paused.value || !err.value) ? '连接' : '重试';
-  });
-  const pending = {};               /* 忙的时候点过的动作（每个动作只留最后一次）*/
+        /* 连着 -> 断开（停止通信、按钮置灰）；没连着 -> 连接/重试（清掉 paused 再拉一次）*/
+        function toggleLink() {
+          if (linked.value) { paused.value = true; online.value = false; }
+          else { paused.value = false; load(); }
+        }
 
-  /* 真正发请求（串行，不并发）；发完如果期间又点过，补发最后一次 */
-  async function send(p, patch) {
-    if (paused.value) return;
-    busy.value = true;
-    if (patch) Object.assign(s.value, patch);      /* 乐观更新：先亮 */
-    try {
-      const r = await fetch(url(p), { cache: 'no-store' });
-      const j = await r.json();                    /* 再用板子的真实状态校准 */
-      if (j.err) { online.value = true; err.value = j.need ? TOKEN_HINT : ROUTE_HINT; return; }
-      s.value = j;
-      online.value = true;
-      err.value = '';
-    } catch (e) {
-      online.value = false;
-      err.value = '连不上板子：' + (e.message || e);
-    } finally {
-      busy.value = false;
-      const nxt = Object.keys(pending)[0];
-      if (nxt) { const q = pending[nxt]; delete pending[nxt]; send(nxt, q); }
-    }
-  }
+        function save() {
+          localStorage.setItem('boardIp', ip.value.trim());
+          localStorage.setItem('boardToken', tok.value.trim());
+          load();
+        }
 
-  /* 点一下：空闲就立刻发（保持跟手）；忙就只记下意图，等上一个回来补发 */
-  function cmd(p, patch) {
-    if (busy.value) pending[p] = patch;
-    else send(p, patch);
-  }
+        onMounted(load);          /* 打开时拉一次；之后点"刷新"或操作按钮才请求 */
 
-  /* 刷新/连接：尾沿防抖，狂点只在停下后发一次 */
-  let loadTimer = null;
-  function loadSoon() {
-    clearTimeout(loadTimer);
-    loadTimer = setTimeout(load, DEBOUNCE);
-  }
-
-  /* 连着 -> 断开（停止通信、按钮置灰）；没连着 -> 连接/重试（清掉 paused 再拉一次）*/
-  function toggleLink() {
-    if (linked.value) { paused.value = true; online.value = false; }
-    else              { paused.value = false; load(); }
-  }
-
-  function save() {
-    localStorage.setItem('boardIp', ip.value.trim());
-    localStorage.setItem('boardToken', tok.value.trim());
-    load();
-  }
-
-  onMounted(load);          /* 打开时拉一次；之后点"刷新"或操作按钮才请求 */
-
-  return { ip, tok, s, v, online, err, busy, paused, linked, linkText, locked, btnBase, btnOn, btnOff,
-           load, loadSoon, cmd, save, toggleLink, fmtTemp, fmtHumi };
-} }).mount('#app');
-</script>
+        return {
+          ip, tok, s, v, online, err, busy, paused, linked, linkText, locked, btnBase, btnOn, btnOff,
+          load, loadSoon, cmd, save, toggleLink, fmtTemp, fmtHumi
+        };
+      }
+    }).mount('#app');
+  </script>
 </body>
+
 </html>

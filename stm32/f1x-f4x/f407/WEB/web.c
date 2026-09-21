@@ -1,4 +1,4 @@
-#include "web.h"
+ #include "web.h"
 #include <stdio.h>
 #include <string.h>
 #include "LED.h"
@@ -14,12 +14,12 @@
  *
  * 接口（全部 GET，返回 application/json）：
  *   /                    接口清单
- *   /data                {"led0":0,"led1":1,"led3":1,"led4":0,"fan":0,
+ *   /data                {"led1":0,"led2":1,"led3":1,"led4":0,"fan":0,
  *                         "light":1234,"pot":2048,"req":12}
- *                        （led0/led1/led3/led4/fan 都是直接读引脚回推的真实状态）
- *   /led0/1  /led0/0     板子丝印 LED0（PF9）开/关 -> {"ok":1}
+ *                        （led1/led2/led3/led4/fan 都是直接读引脚回推的真实状态）
  *   /led1/1  /led1/0     板子丝印 LED1（PF10）开/关 -> {"ok":1}
- *   /led4/1  /led4/0     板子丝印 FSMC_D11（PE14）开/关 -> {"ok":1}
+ *   /led2/1  /led2/0     板子丝印 LED2（PF11）开/关 -> {"ok":1}
+ *   /led3/1  /led3/0     板子丝印 LED3（PF12）开/关 -> {"ok":1}
  *   /fan/0  /fan/1  /fan/2   风扇 L9110H（PC6/PC7）：停 / 正转 / 反转 -> {"ok":1}
  *
  * 所有接口都要带 ?k=<WEB_TOKEN>（见 web.h），否则回 {"err":1,"need":"token"}
@@ -29,7 +29,7 @@
  * 所有响应都带 Access-Control-Allow-Origin: *，所以页面可以从别的源调用
  * （例如电脑上的 http://localhost:5173 或 file://、云上的静态页）。
  *
- * 硬件：光敏 = PF7(ADC3)、电位器 = PA5(ADC1)、蜂鸣器 = PF8、LED0 = PF9、LED1 = PF10
+ * 硬件：光敏 = PF7(ADC3)、电位器 = PA5(ADC1)、蜂鸣器 = PF8、LED1 = PF9、LED2 = PF10
  * ========================================================================== */
 
 #define WEB_CHUNK 2048          /* AT+CIPSEND 单次上限就是 2048 字节 */
@@ -58,18 +58,18 @@ static uint8_t FanState(void)
 static uint16_t BuildStateJson(char *json)
 {
     return (uint16_t)sprintf(json,
-        "{\"led0\":%u,\"led1\":%u,\"led3\":%u,\"led4\":%u,\"fan\":%u,"
+        "{\"led1\":%u,\"led2\":%u,\"led3\":%u,\"led4\":%u,\"fan\":%u,"
         "\"light\":%u,\"pot\":%u,\"temp\":%u,\"humi\":%u,"
-        "\"tdec\":%u,\"hdec\":%u,\"req\":%u}",
-        (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* 板子丝印 LED0 */
-        (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* 板子丝印 LED1 */
+        "\"tdec\":%u,\"hdec\":%u,\"flow\":%u,\"req\":%u}",
+        (unsigned)LedOn(GPIOF, GPIO_Pin_9),    /* 板子丝印 LED1 */
+        (unsigned)LedOn(GPIOF, GPIO_Pin_10),   /* 板子丝印 LED2 */
         (unsigned)LedOn(GPIOE, GPIO_Pin_13),   /* 板子丝印 FSMC_D10：服务器指示灯 */
         (unsigned)LedOn(GPIOE, GPIO_Pin_14),   /* 板子丝印 FSMC_D11 */
         (unsigned)FanState(),                  /* 风扇：0 停 / 1 正转 / 2 反转 */
         (unsigned)LIGHT_GetValue(), (unsigned)ADC1ConvertedValue,
         (unsigned)DHT11_GetTemp(), (unsigned)DHT11_GetHumi(),   /* 温湿度（DHT11_Task 每 2 秒刷）*/
         (unsigned)DHT11_GetTempDec(), (unsigned)DHT11_GetHumiDec(),  /* 小数字节原样上报：是 0 还是真小数，页面上一眼可见 */
-        (unsigned)req_n);
+        (unsigned)LED_FlowIsEnabled(), (unsigned)req_n);
 }
 
 static void ReplyJson(uint8_t link, const char *body, uint16_t blen);   /* 定义在下面 */
@@ -89,8 +89,8 @@ static void ReplyOkState(uint8_t link)
 static const char json_err[]  = "{\"err\":1}";
 static const char json_deny[] = "{\"err\":1,\"need\":\"token\"}";   /* 令牌不对/没带 */
 static const char json_api[] = "{\"api\":\"stm32f407-esp8266\",\"routes\":"
-                               "[\"/data\",\"/led0/1\",\"/led0/0\",\"/led1/1\",\"/led1/0\","
-                               "\"/led4/1\",\"/led4/0\",\"/fan/0\",\"/fan/1\",\"/fan/2\",\"/beep\"]}";
+                               "[\"/data\",\"/led1/1\",\"/led1/0\",\"/led2/1\",\"/led2/0\","
+                               "\"/led3/1\",\"/led3/0\",\"/fan/0\",\"/fan/1\",\"/fan/2\",\"/beep\",\"/flow/1\",\"/flow/0\"]}";
 
 /* CORS：普通请求只要 ACAO；预检(OPTIONS)还要方法/头 */
 #define CORS_HDR "Access-Control-Allow-Origin: *\r\n"
@@ -320,12 +320,15 @@ static uint8_t HandleOne(void)
 
     if (path[0] == '\0')                          ReplyJson(link, json_api, (uint16_t)(sizeof(json_api) - 1));
     else if (strcmp(path, "data") == 0)           SendDataJson(link);
-    else if (strcmp(path, "led0/1") == 0)         { LED1_on();  ReplyOkState(link); }  /* 板子 LED0 = PF9 */
-    else if (strcmp(path, "led0/0") == 0)         { LED1_off(); ReplyOkState(link); }
-    else if (strcmp(path, "led1/1") == 0)         { LED2_on();  ReplyOkState(link); }  /* 板子 LED1 = PF10 */
-    else if (strcmp(path, "led1/0") == 0)         { LED2_off(); ReplyOkState(link); }
-    else if (strcmp(path, "led4/1") == 0)         { LED4_on();  ReplyOkState(link); }  /* 板子 FSMC_D11 = PE14 */
-    else if (strcmp(path, "led4/0") == 0)         { LED4_off(); ReplyOkState(link); }
+    else if (strcmp(path, "led1/1") == 0)         {  LED_FlowEnable(0); LED1_on();   ReplyOkState(link); }  /* 板子 LED1 = PF9 */
+    else if (strcmp(path, "led1/0") == 0)         {  LED_FlowEnable(0); LED1_off();  ReplyOkState(link); }
+    else if (strcmp(path, "led2/1") == 0)         {  LED_FlowEnable(0); LED2_on();   ReplyOkState(link); }  /* 板子 LED2 = PF10 */
+    else if (strcmp(path, "led2/0") == 0)         {  LED_FlowEnable(0); LED2_off();  ReplyOkState(link); }
+    else if (strcmp(path, "led3/1") == 0)         {  LED_FlowEnable(0); LED3_on();   ReplyOkState(link); }  /* 板子 LED3 = PF13 */
+    else if (strcmp(path, "led3/0") == 0)         {  LED_FlowEnable(0); LED3_off();  ReplyOkState(link); }
+    // 流水灯
+    else if (strcmp(path, "flow/1") == 0)         { LED_FlowEnable(1); ReplyOkState(link); }
+    else if (strcmp(path, "flow/0") == 0)         { LED_FlowEnable(0); ReplyOkState(link); }
     else if (strcmp(path, "fan/1") == 0)          { FAN_forwardrotation(); ReplyOkState(link); }  /* 正转 */
     else if (strcmp(path, "fan/2") == 0)          { FAN_reverserotation();  ReplyOkState(link); }  /* 反转 */
     else if (strcmp(path, "fan/0") == 0)          { FAN_off();              ReplyOkState(link); }  /* 停 */
