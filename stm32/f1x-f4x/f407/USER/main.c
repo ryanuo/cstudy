@@ -26,10 +26,10 @@
  *       VCC-GND</tool_call> 100uF
  * ========================================================================== */
 
-// #define WIFI_SSID  "Magic7"   /* ???? 2.4G????Сд????????? */
-// #define WIFI_PASS  "121qweqwe"
-#define WIFI_SSID "YQ-shixun5" /* ???? 2.4G????Сд????????? */
-#define WIFI_PASS "88888888"
+#define WIFI_SSID  "Magic7"   /* ???? 2.4G????Сд????????? */
+#define WIFI_PASS  "121qweqwe"
+// #define WIFI_SSID "YQ-shixun5" /* ???? 2.4G????Сд????????? */
+// #define WIFI_PASS "88888888"
 #define HTTP_PORT 80
 
 /* ?????????????? ASCII ?????????????????? .??????? 20 ???? */
@@ -88,6 +88,8 @@ int main(void)
     uint8_t wifi_ok = 0, srv_ok = 0, tick = 0, ui = 0;
     uint8_t rxb[24];
     uint16_t rxn;
+    uint16_t last_req = 0;          /* 自愈用：上次看到的请求计数 */
+    uint32_t last_req_tick = 0;     /* 自愈用：上次收到请求的时刻 */
 
     LED_init();
     LED_FlowInit();
@@ -155,6 +157,7 @@ int main(void)
             LED_Status(); /* PE13 ?? */
     }
     OLED_Status(ip, srv_ok);
+    last_req_tick = ESP8266_GetTick();
 
     /* ---------- 4. ????? ---------- */
     while (1)
@@ -207,6 +210,22 @@ int main(void)
         /* ????????????????????????? */
         DHT11_Task(); /* ? 2 ?????????????????? 25ms??*/
         Web_Task();
+
+        /* 静默自愈：连续 30 秒没有任何请求，就清掉所有残链接并重开服务器。
+           出现过"回复期间请求被丢 -> 那些连接没人关 -> 5 个槽位占满 -> 服务器不再 accept"，
+           那时 srv_ok 一直是 1、永远不会重开服务器，只能复位；有了这段就能自己爬起来。 */
+        if (Web_ReqCount() != last_req)
+        {
+            last_req      = Web_ReqCount();
+            last_req_tick = ESP8266_GetTick();
+        }
+        else if ((uint32_t)(ESP8266_GetTick() - last_req_tick) >= 30000U)
+        {
+            last_req_tick = ESP8266_GetTick();
+            srv_ok = Web_ResetServer(HTTP_PORT);
+            OLED_Status(ip, srv_ok);
+        }
+
         BEEP_Task();
         LED_FlowRun();
         ESP8266_DelayMs(5); /* 5ms ????Σ????????Ч????????? 50ms??*/

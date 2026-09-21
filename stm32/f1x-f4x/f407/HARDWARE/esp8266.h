@@ -16,6 +16,10 @@ void     ESP8266_SendAT(char *cmd);
 void     ESP8266_SendData(uint8_t *data, uint16_t len);
 /* 清空接收缓冲（发下一条命令前调用） */
 void     ESP8266_ClearBuffer(void);
+/* 只清 AT 回应噪声、保留排队中的 +IPD 请求块 —— 回复请求的过程中要用这个 */
+void     ESP8266_ClearNonIp(void);
+/* 关掉所有链接（link id=5 表示全部），用于自愈残连接 */
+uint8_t  ESP8266_CloseAllLinks(void);
 /* 等待响应，真实毫秒超时 */
 uint8_t  ESP8266_WaitResponse(char *expected, uint32_t timeout_ms);
 /* 已收到的数据里是否包含 expected（不消费） */

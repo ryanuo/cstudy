@@ -71,7 +71,9 @@ void Web_CloseLink(uint8_t link)
     char cmd[24];
 
     sprintf(cmd, "AT+CIPCLOSE=%u", (unsigned)link);
-    ESP8266_ClearBuffer();
+    /* 用 ClearNonIp 而不是 ClearBuffer：这里离下一个请求往往只差几毫秒，
+       整块清空会把刚排队进来的请求一起丢掉（就是"第一次能用、之后没反应"的那个坑） */
+    ESP8266_ClearNonIp();
     ESP8266_SendAT(cmd);
     ESP8266_WaitResponse("OK", 200);
 }
@@ -85,7 +87,7 @@ static void HttpSend(uint8_t link, const char *buf, uint16_t len)
         chunk = (len > WEB_CHUNK) ? WEB_CHUNK : len;
 
         sprintf(cmd, "AT+CIPSEND=%u,%u", (unsigned)link, (unsigned)chunk);
-        ESP8266_ClearBuffer();
+        ESP8266_ClearNonIp();      /* 同上：清 AT 噪声但留住排队中的请求 */
         ESP8266_SendAT(cmd);
         if (!ESP8266_WaitResponse(">", 2000)) return;
 
@@ -278,9 +280,21 @@ uint8_t Web_OpenServer(uint16_t port)
     ESP8266_WaitResponse("OK", 1000);
 
     sprintf(cmd, "AT+CIPSERVER=1,%u", (unsigned)port);
-    ESP8266_ClearBuffer();
+    ESP8266_ClearBuffer();       /* 启动/自愈期，此时没有要处理的请求，整块清是安全的 */
     ESP8266_SendAT(cmd);
     return ESP8266_WaitResponse("OK", 3000);
+}
+
+/**
+  * @brief  自愈：关掉所有残链接 + 重开 HTTP 服务器
+  * @note   只在"长时间没人访问"时调用。残连接会占满模块的 5 个 link 槽位，
+  *         占满后服务器就不再 accept 新连接（表现：连第一次请求都超时），
+  *         而 srv_ok 一旦为 1 不会自己复查 —— 靠这个函数把它拉回来
+  */
+uint8_t Web_ResetServer(uint16_t port)
+{
+    ESP8266_CloseAllLinks();
+    return Web_OpenServer(port);
 }
 
 /* ---------------- 路由分发 ---------------- */

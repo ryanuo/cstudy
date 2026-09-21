@@ -31,6 +31,8 @@ uint8_t  Web_Init(void);
 uint8_t  Web_Connect(char *ssid, char *pass);
 uint8_t  Web_GetIp(char *ip, uint8_t max_len);
 uint8_t  Web_OpenServer(uint16_t port);
+/* 自愈：清掉残链接并重开服务器（静默一段时间后调用一次） */
+uint8_t Web_ResetServer(uint16_t port);
 void     Web_Task(void);
 uint16_t Web_ReqCount(void);
 

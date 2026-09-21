@@ -145,6 +145,65 @@ void ESP8266_ClearBuffer(void)
     esp_acc[0] = '\0';
 }
 
+/* 只清 AT 的回应噪声（OK / > / SEND OK / ERROR 之类），把还在排队的 +IPD 请求块整块留下。
+   为什么不能直接 ClearBuffer：回复一个请求要几十~几百毫秒，这期间浏览器已经把下一个请求发过来了
+   （响应带 Connection: close，浏览器必然开新连接）。ClearBuffer 连"还没搬走的环形缓冲字节"一起丢，
+   那个请求就永远没人处理 —— 表现是"第一次能拿到数据，之后再请求就没反应"；
+   而且没人关的连接会占满模块的 5 个 link 槽位，最后连第一次请求都超时。 */
+void ESP8266_ClearNonIp(void)
+{
+    char     keep[ESP8266_ACC_SIZE];
+    uint16_t klen = 0;
+    char    *p = esp_acc;
+
+    esp_pump();                     /* 先把环形缓冲里已经到的字节搬过来，别丢 */
+    while (*p)
+    {
+        char    *q = strstr(p, "+IPD,"), *h, *d;
+        uint16_t id = 0, len = 0, total, have;
+
+        if (q == 0) break;          /* 后面没有请求块了，剩下的都是 AT 噪声 */
+
+        h = q + 5;
+        while (*h >= '0' && *h <= '9') { id = (uint16_t)(id * 10 + (uint16_t)(*h - '0')); h++; }
+        if (*h == ',') { h++; while (*h >= '0' && *h <= '9') { len = (uint16_t)(len * 10 + (uint16_t)(*h - '0')); h++; } }
+        else           { len = id; }
+
+        if (*h != ':') break;       /* 头还没收全，整块留到下一轮 */
+        d = h + 1;
+
+        have = (uint16_t)((esp_acc + esp_acc_len) - d);
+        if (have < len)             /* 数据没收全：头和已到的部分先留着 */
+        {
+            if ((uint16_t)(klen + (d - q) + have) < ESP8266_ACC_SIZE)
+            {
+                memcpy(keep + klen, q, (size_t)((d - q) + have));
+                klen = (uint16_t)(klen + (d - q) + have);
+            }
+            break;
+        }
+
+        total = (uint16_t)((d - q) + len);
+        if ((uint16_t)(klen + total) >= ESP8266_ACC_SIZE) break;
+        memcpy(keep + klen, q, (size_t)total);
+        klen = (uint16_t)(klen + total);
+        p = d + len;
+    }
+
+    memcpy(esp_acc, keep, (size_t)klen);
+    esp_acc_len = klen;
+    esp_acc[klen] = '\0';
+}
+
+/* 关掉所有已建立的链接（多连接模式里 link id=5 表示全部）。
+   模块的 link 槽位只有 5 个，被残连接占满后就再也不 accept 新连接 —— 这是"服务器哑掉"的常见原因 */
+uint8_t ESP8266_CloseAllLinks(void)
+{
+    ESP8266_ClearNonIp();           /* 别把刚到的请求清丢了 */
+    ESP8266_SendAT("AT+CIPCLOSE=5");
+    return ESP8266_WaitResponse("OK", 1000);
+}
+
 /* ---------- 按块取请求：只消费自己这一块，别人排队的请求留着 ---------- */
 
 /* 丢掉 mark 之前的已处理内容 */
