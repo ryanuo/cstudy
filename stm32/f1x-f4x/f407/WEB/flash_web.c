@@ -1,6 +1,6 @@
 #include "flash_web.h"
 #include "web.h"
-#include "SPI.h" /* W25QXX Çý¶¯ */
+#include "W25QXX.h" /* W25QXX Çý¶¯ */
 #include <string.h>
 #include <stdio.h>
 
