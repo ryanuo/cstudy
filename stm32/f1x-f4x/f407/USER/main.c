@@ -9,6 +9,7 @@
 #include "LIGHTSENSOR.h"
 #include "DHT11.h"
 #include "SPI.h"
+#include "CAN.h"
 
 /* ==========================================================================
  * STM32F407 + ESP8266 (ESP-01S, AT ???) ???? ??????????
@@ -88,8 +89,8 @@ int main(void)
     uint8_t wifi_ok = 0, srv_ok = 0, tick = 0, ui = 0;
     uint8_t rxb[24];
     uint16_t rxn;
-    uint16_t last_req = 0;          /* 自愈用：上次看到的请求计数 */
-    uint32_t last_req_tick = 0;     /* 自愈用：上次收到请求的时刻 */
+    uint16_t last_req = 0;      /* 自愈用：上次看到的请求计数 */
+    uint32_t last_req_tick = 0; /* 自愈用：上次收到请求的时刻 */
 
     LED_init();
     LED_FlowInit();
@@ -99,18 +100,9 @@ int main(void)
     LIGHT_Init();   /* ???? PF7 / ADC3 */
     DHT11_Init();   /* ????? DHT11: PG9 (???? U6 ??) */
     ESP8266_Init(); /* USART3 + 1ms ?δ? */
-    SPI1_init();   /* SPI1 + GPIOB 3/4/5/14 */
-
-    OLED_Init();
-    OLED_Clear();
-
-    OLED_ShowString(0, 0, "ESP8266 WEB", OLED_8X16);
-    OLED_ShowString(0, 16, "boot 1.5s           ", OLED_6X8);
-    OLED_ShowString(0, 40, "SSID:" WIFI_SSID, OLED_6X8);
-    OLED_Update();
-
-    ESP8266_DelayMs(1500); /* ESP-01S ???? 300ms~1s ???? AT */
-
+    SPI1_init();    /* SPI1 + GPIOB 3/4/5/14 */
+    CAN_init();     /* CAN1
+    
     /* ---------- 1. ???? + Station ?? ---------- */
     if (Web_Init() == 0)
     {
@@ -216,7 +208,7 @@ int main(void)
            那时 srv_ok 一直是 1、永远不会重开服务器，只能复位；有了这段就能自己爬起来。 */
         if (Web_ReqCount() != last_req)
         {
-            last_req      = Web_ReqCount();
+            last_req = Web_ReqCount();
             last_req_tick = ESP8266_GetTick();
         }
         else if ((uint32_t)(ESP8266_GetTick() - last_req_tick) >= 30000U)

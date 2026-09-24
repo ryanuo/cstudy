@@ -20,6 +20,8 @@
 #define RTE_DEVICE_STARTUP_STM32F4xx    /* Device Startup for STM32F4 */
 /*  Keil::Device:StdPeriph Drivers:ADC:1.3.0 */
 #define RTE_DEVICE_STDPERIPH_ADC
+/*  Keil::Device:StdPeriph Drivers:CAN:1.3.0 */
+#define RTE_DEVICE_STDPERIPH_CAN
 /*  Keil::Device:StdPeriph Drivers:DAC:1.3.0 */
 #define RTE_DEVICE_STDPERIPH_DAC
 /*  Keil::Device:StdPeriph Drivers:DMA:1.3.0 */

@@ -627,6 +627,36 @@
               <FileType>1</FileType>
               <FilePath>.\AGREEMENT\SPI.c</FilePath>
             </File>
+            <File>
+              <FileName>W25QXX.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\AGREEMENT\W25QXX.c</FilePath>
+            </File>
+            <File>
+              <FileName>W25QXX.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\AGREEMENT\W25QXX.h</FilePath>
+            </File>
+            <File>
+              <FileName>IIC.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\AGREEMENT\IIC.c</FilePath>
+            </File>
+            <File>
+              <FileName>IIC.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\AGREEMENT\IIC.h</FilePath>
+            </File>
+            <File>
+              <FileName>CAN.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\AGREEMENT\CAN.c</FilePath>
+            </File>
+            <File>
+              <FileName>CAN.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\AGREEMENT\CAN.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -720,6 +750,12 @@
         </targetInfos>
       </component>
       <component Cclass="Device" Cgroup="StdPeriph Drivers" Csub="ADC" Cvendor="Keil" Cversion="1.3.0" condition="STM32F4 STDPERIPH RCC">
+        <package name="STM32F4xx_DFP" schemaVersion="1.2" url="http://www.keil.com/pack" vendor="Keil" version="1.0.8"/>
+        <targetInfos>
+          <targetInfo name="Target 1"/>
+        </targetInfos>
+      </component>
+      <component Cclass="Device" Cgroup="StdPeriph Drivers" Csub="CAN" Cvendor="Keil" Cversion="1.3.0" condition="STM32F4 STDPERIPH RCC">
         <package name="STM32F4xx_DFP" schemaVersion="1.2" url="http://www.keil.com/pack" vendor="Keil" version="1.0.8"/>
         <targetInfos>
           <targetInfo name="Target 1"/>
