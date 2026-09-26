@@ -24,7 +24,7 @@ void CAN_init()
     CAN_InitStructure.CAN_RFLM = DISABLE;         // Disable receive FIFO locked mode
     CAN_InitStructure.CAN_TTCM = DISABLE;         // Disable time-triggered communication mode
     CAN_InitStructure.CAN_TXFP = DISABLE;         // Disable transmit FIFO priority
-    // 配置波特率 公式：BaudRate = Fpclk1 / (CAN_BS1 + CAN_BS2) * CAN_Prescaler 500k
+    // 配置波特率 公式：BaudRate = Fpclk1 / ((1 + BS1 + BS2) * Prescaler)
     CAN_InitStructure.CAN_Prescaler = 6;      // Set the prescaler value
     CAN_InitStructure.CAN_SJW = CAN_SJW_1tq;  // Set the synchronization jump width
     CAN_InitStructure.CAN_BS1 = CAN_BS1_11tq; // Set the time segment 1
@@ -54,7 +54,7 @@ void CAN_init()
 
 void CAN1_RX0_IRQHandler(void)
 {
-    if (CAN_GetFlagStatus(CAN1, CAN_FLAG_FMP0) != RESET) // Check if there is a message pending in FIFO 0
+    if (CAN_GetFlagStatus(CAN1, CAN_IT_FMP0) != RESET) // Check if there is a message pending in FIFO 0
     {
         CanRxMsg RxMessage;
         CAN_Receive(CAN1, CAN_FIFO0, &RxMessage); // Receive the message
@@ -65,6 +65,7 @@ void CAN1_RX0_IRQHandler(void)
 
 uint8_t CAN_send_message(uint32_t id, uint8_t *data, uint8_t length)
 {
+    if (length > 8) length = 8;
     CanTxMsg TxMessage;
     TxMessage.StdId = id;            // Set the standard identifier
     TxMessage.IDE = CAN_Id_Standard; // Standard identifier
