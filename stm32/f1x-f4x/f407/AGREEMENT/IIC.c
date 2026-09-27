@@ -1,215 +1,286 @@
 #include "IIC.h"
 #include "DELAY.h"
 
-#define SDA_PIN GPIO_Pin_9
-#define SCL_PIN GPIO_Pin_8
-#define IIC_ACK 0
-#define IIC_NACK 1
+/*
+ * STM32F407
+ *
+ * PB8 -> SCL
+ * PB9 -> SDA
+ */
 
-void IIC_setsdamode(GPIOMode_TypeDef mode)
+#define IIC_PORT        GPIOB
+#define IIC_SCL_PIN     GPIO_Pin_8
+#define IIC_SDA_PIN     GPIO_Pin_9
+
+
+/**
+ * @brief 设置 SDA 输入/输出模式
+ */
+static void IIC_SetSdaMode(GPIOMode_TypeDef mode)
 {
-    // Implementation for setting SDA mode
     GPIO_InitTypeDef GPIO_InitStructure;
-    GPIO_InitStructure.GPIO_Mode = mode;
-    GPIO_InitStructure.GPIO_Pin = SDA_PIN; // Assuming SDA is on Pin 9
+
+    GPIO_InitStructure.GPIO_Pin   = IIC_SDA_PIN;
+    GPIO_InitStructure.GPIO_Mode  = mode;
     GPIO_InitStructure.GPIO_OType = GPIO_OType_OD;
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+
+    GPIO_Init(IIC_PORT, &GPIO_InitStructure);
 }
 
-void IIC_init(void)
+
+/**
+ * @brief 初始化 I2C GPIO
+ */
+void IIC_Init(void)
 {
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    /* 开启 GPIOB 时钟 */
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
 
-    GPIO_InitTypeDef GPIO_InitStructure;
-    GPIO_InitStructure.GPIO_Pin = SCL_PIN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-    GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-    IIC_setsdamode(GPIO_Mode_OUT);
+    /*
+     * SCL
+     */
+    GPIO_InitStructure.GPIO_Pin   = IIC_SCL_PIN;
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
+    GPIO_InitStructure.GPIO_OType = GPIO_OType_OD;
+    GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 
-    GPIO_SetBits(GPIOB, SCL_PIN);
-    GPIO_SetBits(GPIOB, SDA_PIN);
+    GPIO_Init(IIC_PORT, &GPIO_InitStructure);
+
+    /*
+     * SDA
+     */
+    IIC_SetSdaMode(GPIO_Mode_OUT);
+
+    /*
+     * 总线空闲状态：
+     *
+     * SCL = 1
+     * SDA = 1
+     */
+    GPIO_SetBits(IIC_PORT, IIC_SCL_PIN);
+    GPIO_SetBits(IIC_PORT, IIC_SDA_PIN);
 }
 
-void IIC_start(void)
-{
-    IIC_setsdamode(GPIO_Mode_OUT);
-    GPIO_SetBits(GPIOB, SCL_PIN);
-    GPIO_SetBits(GPIOB, SDA_PIN);
 
-    GPIO_ResetBits(GPIOB, SDA_PIN);
-    DELAY_us(4);
-    GPIO_ResetBits(GPIOB, SCL_PIN);
-    DELAY_us(4);
+/**
+ * @brief I2C 起始信号
+ *
+ * SDA: 1 -> 0
+ * SCL: 1
+ */
+void IIC_Start(void)
+{
+    IIC_SetSdaMode(GPIO_Mode_OUT);
+
+    GPIO_SetBits(IIC_PORT, IIC_SCL_PIN);
+    GPIO_SetBits(IIC_PORT, IIC_SDA_PIN);
+
+    DELAY_us(2);
+
+    GPIO_ResetBits(IIC_PORT, IIC_SDA_PIN);
+
+    DELAY_us(2);
+
+    GPIO_ResetBits(IIC_PORT, IIC_SCL_PIN);
+
+    DELAY_us(2);
 }
 
-void IIC_stop(void)
-{
-    IIC_setsdamode(GPIO_Mode_OUT);
-    GPIO_ResetBits(GPIOB, SCL_PIN);
-    GPIO_ResetBits(GPIOB, SDA_PIN);
 
-    GPIO_SetBits(GPIOB, SCL_PIN);
-    DELAY_us(4);
-    GPIO_SetBits(GPIOB, SDA_PIN);
-    DELAY_us(4);
+/**
+ * @brief I2C 停止信号
+ *
+ * SDA: 0 -> 1
+ * SCL: 1
+ */
+void IIC_Stop(void)
+{
+    IIC_SetSdaMode(GPIO_Mode_OUT);
+
+    GPIO_ResetBits(IIC_PORT, IIC_SCL_PIN);
+    GPIO_ResetBits(IIC_PORT, IIC_SDA_PIN);
+
+    DELAY_us(2);
+
+    GPIO_SetBits(IIC_PORT, IIC_SCL_PIN);
+
+    DELAY_us(2);
+
+    GPIO_SetBits(IIC_PORT, IIC_SDA_PIN);
+
+    DELAY_us(2);
 }
 
-// 主机向从机发送一个字节数据
-void IIC_sendbyte(uint8_t byte)
+
+/**
+ * @brief 发送一个字节
+ */
+void IIC_SendByte(uint8_t byte)
 {
-    for (uint8_t i = 0; i < 8; i++)
+    uint8_t i;
+
+    IIC_SetSdaMode(GPIO_Mode_OUT);
+
+    for (i = 0; i < 8; i++)
     {
-        if (byte & (1 << 7 - i))
+        /*
+         * 从最高位开始发送
+         */
+        if (byte & (1U << (7 - i)))
         {
-            GPIO_SetBits(GPIOB, SDA_PIN);
+            GPIO_SetBits(IIC_PORT, IIC_SDA_PIN);
         }
         else
         {
-            GPIO_ResetBits(GPIOB, SDA_PIN);
+            GPIO_ResetBits(IIC_PORT, IIC_SDA_PIN);
         }
 
+        DELAY_us(2);
+
+        /*
+         * SCL 拉高
+         */
+        GPIO_SetBits(IIC_PORT, IIC_SCL_PIN);
+
         DELAY_us(4);
-        GPIO_SetBits(GPIOB, SCL_PIN);
-        DELAY_us(4);
-        GPIO_ResetBits(GPIOB, SCL_PIN);
-        DELAY_us(4);
+
+        /*
+         * SCL 拉低
+         */
+        GPIO_ResetBits(IIC_PORT, IIC_SCL_PIN);
+
+        DELAY_us(2);
     }
 }
 
-// 主机等待从机应答信号
-uint8_t IIC_waitack(void)
+
+/**
+ * @brief 等待从机 ACK
+ *
+ * ACK  = SDA = 0
+ * NACK = SDA = 1
+ *
+ * @return IIC_ACK / IIC_NACK
+ */
+uint8_t IIC_WaitAck(void)
 {
-    IIC_setsdamode(GPIO_Mode_IN);
-    GPIO_SetBits(GPIOB, SCL_PIN);
+    uint8_t ack;
+
+    /*
+     * 释放 SDA
+     */
+    IIC_SetSdaMode(GPIO_Mode_IN);
+
+    /*
+     * SCL 拉高
+     */
+    GPIO_SetBits(IIC_PORT, IIC_SCL_PIN);
+
     DELAY_us(4);
 
-    if (GPIO_ReadInputDataBit(GPIOB, SDA_PIN) == SET)
+    /*
+     * 读取 SDA
+     */
+    if (GPIO_ReadInputDataBit(IIC_PORT, IIC_SDA_PIN) == RESET)
     {
-        GPIO_ResetBits(GPIOB, SCL_PIN);
-        DELAY_us(4);
-        return IIC_NACK; // No ACK received
-    }
-
-    GPIO_ResetBits(GPIOB, SCL_PIN);
-    DELAY_us(4);
-    return IIC_ACK; // ACK received
-}
-
-// 主机从从机接收一个字节数据
-uint8_t IIC_receivebyte(void)
-{
-    uint8_t data = 0;
-    IIC_setsdamode(GPIO_Mode_IN);
-    for (uint8_t i = 0; i < 8; i++)
-    {
-        GPIO_SetBits(GPIOB, SCL_PIN);
-        DELAY_us(4);
-        if (GPIO_ReadInputDataBit(GPIOB, SDA_PIN) == SET)
-        {
-            data |= 1 << (7 - i);
-        }
-        GPIO_ResetBits(GPIOB, SCL_PIN);
-        DELAY_us(4);
-    }
-    return data;
-}
-
-// 主机向从机发送应答信号
-void IIC_sendack(uint8_t ack)
-{
-    IIC_setsdamode(GPIO_Mode_OUT);
-    GPIO_ResetBits(GPIOB, SDA_PIN);
-    GPIO_ResetBits(GPIOB, SCL_PIN);
-
-    if (ack)
-    {
-        GPIO_ResetBits(GPIOB, SDA_PIN); // Send ACK
+        ack = IIC_ACK;
     }
     else
     {
-        GPIO_SetBits(GPIOB, SDA_PIN); // Send NACK
+        ack = IIC_NACK;
     }
 
-    DELAY_us(4);
-    GPIO_SetBits(GPIOB, SCL_PIN);
-    DELAY_us(4);
-    GPIO_ResetBits(GPIOB, SCL_PIN);
-    DELAY_us(4);
+    /*
+     * SCL 拉低
+     */
+    GPIO_ResetBits(IIC_PORT, IIC_SCL_PIN);
+
+    DELAY_us(2);
+
+    return ack;
 }
 
-int8_t AT2402_pagewrite(uint8_t slave, uint16_t addr, uint8_t *data, uint8_t len)
+
+/**
+ * @brief 接收一个字节
+ */
+uint8_t IIC_ReceiveByte(void)
 {
-    IIC_start();
-    IIC_sendbyte(slave);
-    if (IIC_waitack() == IIC_NACK)
+    uint8_t i;
+    uint8_t data = 0;
+
+    /*
+     * 释放 SDA，让从机控制 SDA
+     */
+    IIC_SetSdaMode(GPIO_Mode_IN);
+
+    for (i = 0; i < 8; i++)
     {
-        IIC_stop();
-        return -1; // No ACK received
-    }
-    // Continue with the rest of the implementation...
-    IIC_sendbyte(slave);
-    if (IIC_waitack() == IIC_NACK)
-    {
-        IIC_stop();
-        return -2; // No ACK received
+        /*
+         * SCL 拉高
+         */
+        GPIO_SetBits(IIC_PORT, IIC_SCL_PIN);
+
+        DELAY_us(4);
+
+        /*
+         * 读取 SDA
+         */
+        if (GPIO_ReadInputDataBit(IIC_PORT, IIC_SDA_PIN) == SET)
+        {
+            data |= (1U << (7 - i));
+        }
+
+        /*
+         * SCL 拉低
+         */
+        GPIO_ResetBits(IIC_PORT, IIC_SCL_PIN);
+
+        DELAY_us(2);
     }
 
-    while (len--)
-    {
-        IIC_sendbyte(*data++);
-        if (IIC_waitack() == IIC_NACK)
-        {
-            IIC_stop();
-            return -3; // No ACK received
-        }
-    }
-    IIC_stop();
-    return 0; // Success
+    return data;
 }
 
-int8_t IIC_randomread(uint8_t slave, uint8_t address, uint8_t *data, uint8_t len)
+
+/**
+ * @brief 主机发送 ACK / NACK
+ */
+void IIC_SendAck(uint8_t ack)
 {
-    IIC_start();
-    IIC_sendbyte(slave); // 0xA0 1010 000 0
+    IIC_SetSdaMode(GPIO_Mode_OUT);
 
-    if (IIC_waitack() == IIC_NACK)
+    /*
+     * ACK  -> SDA = 0
+     * NACK -> SDA = 1
+     */
+    if (ack == IIC_ACK)
     {
-        IIC_stop();
-        return -4; // No ACK received
+        GPIO_ResetBits(IIC_PORT, IIC_SDA_PIN);
+    }
+    else
+    {
+        GPIO_SetBits(IIC_PORT, IIC_SDA_PIN);
     }
 
-    IIC_sendbyte(address);
-    if (IIC_waitack() == IIC_NACK)
-    {
-        IIC_stop();
-        return -5; // No ACK received
-    }
+    DELAY_us(2);
 
-    IIC_start();
-    IIC_sendbyte(slave | 0x01);
-    if (IIC_waitack() == IIC_NACK)
-    {
-        IIC_stop();
-        return -6; // No ACK received
-    }
+    /*
+     * SCL 高
+     */
+    GPIO_SetBits(IIC_PORT, IIC_SCL_PIN);
 
-    while (len--)
-    {
-        *data++ = IIC_receivebyte();
-        if (len)
-        {
-            IIC_sendack(IIC_ACK);
-        }
-        else
-        {
-            IIC_sendack(IIC_NACK);
-        }
-    }
-    IIC_stop();
-    return 0; // Success
+    DELAY_us(4);
+
+    /*
+     * SCL 低
+     */
+    GPIO_ResetBits(IIC_PORT, IIC_SCL_PIN);
+
+    DELAY_us(2);
 }

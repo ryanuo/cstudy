@@ -70,8 +70,7 @@ static void OLED_Status(char *ip, uint8_t srv_ok)
     OLED_ShowNum(24, 32, Web_ReqCount(), 4, OLED_6X8);
     OLED_ShowFanPins(54, 32); /* ???FAN:xy = PC6,PC7 ????????¦Ë */
     OLED_ShowString(0, 40, "SSID:" WIFI_SSID, OLED_6X8);
-    OLED_ShowString(0, 48, "http://", OLED_6X8);
-    OLED_ShowString(0, 56, (ip != 0 && ip[0] != '\0') ? ip : "no ip", OLED_6X8);
+    OLED_ShowString(0, 48, (ip != 0 && ip[0] != '\0') ? ip : "no ip", OLED_6X8);
     OLED_Update();
 }
 
@@ -101,7 +100,7 @@ int main(void)
     DHT11_Init();   /* ????? DHT11: PG9 (???? U6 ??) */
     ESP8266_Init(); /* USART3 + 1ms ?¦Ä? */
     OLED_Init();
-    // SPI1_init();    /* SPI1 + GPIOB 3/4/5/14 */
+    SPI1_init();    /* SPI1 + GPIOB 3/4/5/14 */
     // CAN_init();     /* CAN1
     
     /* ---------- 1. ???? + Station ?? ---------- */
