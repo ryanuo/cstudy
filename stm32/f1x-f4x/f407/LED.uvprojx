@@ -338,7 +338,7 @@
               <MiscControls></MiscControls>
               <Define>USE_STDPERIPH_DRIVER,HSE_VALUE=8000000</Define>
               <Undefine></Undefine>
-              <IncludePath>.\RTE;.\RTE\Device\STM32F407ZE;.\USER;.\HARDWARE;.\SYSTEM;.\AGREEMENT;.\WEB;.\FreeRTOS;.\FreeRTOS\src;.\FreeRTOS\inc;.\FreeRTOS\port;.\FreeRTOS\head</IncludePath>
+              <IncludePath>.\RTE;.\RTE\Device\STM32F407ZE;.\USER;.\HARDWARE;.\SYSTEM;.\AGREEMENT;.\WEB</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -386,11 +386,6 @@
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\USER\main.c</FilePath>
-            </File>
-            <File>
-              <FileName>FreeRTOSConfig.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\USER\FreeRTOSConfig.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -736,171 +731,6 @@
               <FileName>sensor_web.h</FileName>
               <FileType>5</FileType>
               <FilePath>.\WEB\sensor_web.h</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>FreeRTOS/src</GroupName>
-          <Files>
-            <File>
-              <FileName>list.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\FREERTOS\src\list.c</FilePath>
-            </File>
-            <File>
-              <FileName>queue.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\FREERTOS\src\queue.c</FilePath>
-            </File>
-            <File>
-              <FileName>tasks.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\FREERTOS\src\tasks.c</FilePath>
-            </File>
-            <File>
-              <FileName>timers.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\FREERTOS\src\timers.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>FreeRTOS/inc</GroupName>
-          <Files>
-            <File>
-              <FileName>atomic.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\atomic.h</FilePath>
-            </File>
-            <File>
-              <FileName>CMakeLists.txt</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\CMakeLists.txt</FilePath>
-            </File>
-            <File>
-              <FileName>croutine.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\croutine.h</FilePath>
-            </File>
-            <File>
-              <FileName>deprecated_definitions.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\deprecated_definitions.h</FilePath>
-            </File>
-            <File>
-              <FileName>event_groups.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\event_groups.h</FilePath>
-            </File>
-            <File>
-              <FileName>FreeRTOS.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\FreeRTOS.h</FilePath>
-            </File>
-            <File>
-              <FileName>list.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\list.h</FilePath>
-            </File>
-            <File>
-              <FileName>message_buffer.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\message_buffer.h</FilePath>
-            </File>
-            <File>
-              <FileName>mpu_prototypes.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\mpu_prototypes.h</FilePath>
-            </File>
-            <File>
-              <FileName>mpu_syscall_numbers.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\mpu_syscall_numbers.h</FilePath>
-            </File>
-            <File>
-              <FileName>mpu_wrappers.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\mpu_wrappers.h</FilePath>
-            </File>
-            <File>
-              <FileName>newlib-freertos.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\newlib-freertos.h</FilePath>
-            </File>
-            <File>
-              <FileName>picolibc-freertos.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\picolibc-freertos.h</FilePath>
-            </File>
-            <File>
-              <FileName>portable.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\portable.h</FilePath>
-            </File>
-            <File>
-              <FileName>projdefs.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\projdefs.h</FilePath>
-            </File>
-            <File>
-              <FileName>queue.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\queue.h</FilePath>
-            </File>
-            <File>
-              <FileName>semphr.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\semphr.h</FilePath>
-            </File>
-            <File>
-              <FileName>stack_macros.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\stack_macros.h</FilePath>
-            </File>
-            <File>
-              <FileName>StackMacros.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\StackMacros.h</FilePath>
-            </File>
-            <File>
-              <FileName>stream_buffer.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\stream_buffer.h</FilePath>
-            </File>
-            <File>
-              <FileName>task.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\task.h</FilePath>
-            </File>
-            <File>
-              <FileName>timers.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FREERTOS\inc\timers.h</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>FreeRTOS/port</GroupName>
-          <Files>
-            <File>
-              <FileName>port.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\FreeRTOS\port\port.c</FilePath>
-            </File>
-            <File>
-              <FileName>portmacro.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>.\FreeRTOS\port\portmacro.h</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>FreeRTOS/head</GroupName>
-          <Files>
-            <File>
-              <FileName>heap_4.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\FREERTOS\head\heap_4.c</FilePath>
             </File>
           </Files>
         </Group>
