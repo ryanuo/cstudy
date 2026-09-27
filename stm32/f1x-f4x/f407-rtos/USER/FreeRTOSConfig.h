@@ -46,6 +46,16 @@
 
 #define configPRIO_BITS    4
 
+/* Keil + ARM_CM4F direct routing: bind the port's exception handlers to the
+ * names used by the startup file's vector table. Without these three defines
+ * the vectors fall back to the default 'B .' handlers in
+ * startup_stm32f40_41xxx.s, so the 'svc 0' issued by vTaskStartScheduler()
+ * never returns and no task ever runs (symptom: looks completely dead).
+ * Keep these names in sync with the startup file if either is ever swapped. */
+#define vPortSVCHandler     SVC_Handler
+#define xPortPendSVHandler  PendSV_Handler
+#define xPortSysTickHandler SysTick_Handler
+
 /******************************************************************************/
 /* Hardware description related definitions. **********************************/
 /******************************************************************************/
@@ -56,7 +66,7 @@
  * settings.  Your application will certainly need a different value so set this
  * correctly. This is very often, but not always, equal to the main system clock
  * frequency. */
-#define configCPU_CLOCK_HZ    ( ( unsigned long ) 20000000 )
+#define configCPU_CLOCK_HZ    ( ( unsigned long ) 168000000 )  /* PLL_M=8 N=336 P=2 -> 168 MHz */
 
 /* configSYSTICK_CLOCK_HZ is an optional parameter for ARM Cortex-M ports only.
  *
@@ -80,7 +90,7 @@
 
 /* configTICK_RATE_HZ sets frequency of the tick interrupt in Hz, normally
  * calculated from the configCPU_CLOCK_HZ value. */
-#define configTICK_RATE_HZ                         100
+#define configTICK_RATE_HZ                         1000  /* 1 tick = 1 ms: the project's ms-based logic wants this */
 
 /* Set configUSE_PREEMPTION to 1 to use pre-emptive scheduling.  Set
  * configUSE_PREEMPTION to 0 to use co-operative scheduling.
@@ -290,7 +300,7 @@
  * or heap_4.c are included in the build.  This value is defaulted to 4096 bytes
  * but it must be tailored to each application.  Note the heap will appear in
  * the .bss section.  See https://www.freertos.org/a00111.html. */
-#define configTOTAL_HEAP_SIZE                        4096
+#define configTOTAL_HEAP_SIZE                        8192  /* 2 tasks + idle + timer task ~= 2.6 KB, keep headroom */
 
 /* Set configAPPLICATION_ALLOCATED_HEAP to 1 to have the application allocate
  * the array used as the FreeRTOS heap.  Set to 0 to have the linker allocate
@@ -596,18 +606,18 @@
  * to enable the TrustZone support in FreeRTOS ARMv8-M ports which allows the
  * non-secure FreeRTOS tasks to call the (non-secure callable) functions
  * exported from secure side. */
-#define configENABLE_TRUSTZONE            1
+#define configENABLE_TRUSTZONE            0  /* STM32F407 is ARMv7-M: no TrustZone */
 
 /* If the application writer does not want to use TrustZone, but the hardware
  * does not support disabling TrustZone then the entire application (including
  * the FreeRTOS scheduler) can run on the secure side without ever branching to
  * the non-secure side. To do that, in addition to setting
  * configENABLE_TRUSTZONE to 0, also set configRUN_FREERTOS_SECURE_ONLY to 1. */
-#define configRUN_FREERTOS_SECURE_ONLY    1
+#define configRUN_FREERTOS_SECURE_ONLY    0
 
 /* Set configENABLE_MPU to 1 to enable the Memory Protection Unit (MPU), or 0
  * to leave the Memory Protection Unit disabled. */
-#define configENABLE_MPU                  1
+#define configENABLE_MPU                  0  /* this project uses the non-MPU ARM_CM4F port */
 
 /* Set configENABLE_FPU to 1 to enable the Floating Point Unit (FPU), or 0
  * to leave the Floating Point Unit disabled. */
@@ -619,7 +629,7 @@
  * M-Profile Vector Extension (MVE) is available only on these architectures.
  * configENABLE_MVE must be left undefined, or defined to 0 for the
  * Cortex-M23,Cortex-M33 and Cortex-M35P ports. */
-#define configENABLE_MVE                  1
+#define configENABLE_MVE                  0  /* MVE exists only on Cortex-M52/M55/M85 */
 
 /******************************************************************************/
 /* ARMv7-M and ARMv8-M port Specific Configuration definitions. ***************/

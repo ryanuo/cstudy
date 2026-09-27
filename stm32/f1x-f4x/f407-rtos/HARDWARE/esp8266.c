@@ -1,13 +1,16 @@
 #include "esp8266.h"
 #include "string.h"
 #include "stm32f4xx.h"
+#include "FreeRTOS.h"   /* 1ms 滴答改由 RTOS 提供 */
+#include "task.h"
+#include "DELAY.h"      /* 仅用于调度器未启动时的 DWT 忙等 */
 
 /*
  * 接收路径分两级：
  *   1) esp_rx_buf  —— USART3 中断里的环形缓冲（只负责把字节接住）
  *   2) esp_acc     —— 主循环的累积文本缓冲（WaitResponse/Contains/Find/Peek 都看它）
  *
- * 新字节只追加一次，读走就把 tail 推到 head（消费掉）；超时用 SysTick 滴答计真实
+ * 新字节只追加一次，读走就把 tail 推到 head（消费掉）；超时用 FreeRTOS 滴答（1ms）计真实
  * 毫秒，不数循环次数 —— 否则一旦模块开始吐数据，循环每轮耗时暴涨，超时会被拖长很多倍。
  */
 static uint8_t  esp_rx_buf[ESP8266_RX_BUF_SIZE];
@@ -18,29 +21,32 @@ static volatile uint16_t esp_rx_tail = 0;   /* 读取位置 */
 static char     esp_acc[ESP8266_ACC_SIZE];  /* 累积文本（上次 ClearBuffer 之后收到的） */
 static uint16_t esp_acc_len = 0;
 
-static volatile uint32_t esp_tick_ms = 0;
+static volatile uint32_t esp_tick_ms = 0;   /* 仅调度器启动前的兜底计数 */
 
 /* ---------- 时间基准 ---------- */
 
-void SysTick_Handler(void)          /* 启动文件里是弱符号，这里覆盖它 */
-{
-    esp_tick_ms++;
-}
-
-void ESP8266_TickInit(void)
-{
-    SysTick_Config(SystemCoreClock / 1000U);
-}
-
 uint32_t ESP8266_GetTick(void)
 {
+    /* 调度器起来后统一用 FreeRTOS 的 1ms 滴答（configTICK_RATE_HZ = 1000），单位仍是毫秒，
+       LED/BEEP/DHT11/web 里按毫秒判断的逻辑都不用改；
+       调度器还没启动（初始化阶段）才回落到本地计数。 */
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+        return (uint32_t)xTaskGetTickCount();
+
     return esp_tick_ms;
 }
 
 void ESP8266_DelayMs(uint32_t ms)
 {
-    uint32_t start = esp_tick_ms;
-    while ((uint32_t)(esp_tick_ms - start) < ms);
+    /* 调度器在跑就真正让出 CPU；否则用 DWT 忙等（DELAY_ms 不碰 SysTick）。
+       绝不能无条件 vTaskDelay：V11 里调度器未启动就调用会命中 configASSERT 死循环。 */
+    if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+    {
+        vTaskDelay(pdMS_TO_TICKS(ms));
+        return;
+    }
+
+    DELAY_ms(ms);
 }
 
 /* ---------- 接收缓冲 ---------- */
@@ -114,7 +120,6 @@ void ESP8266_Init(void)
     USART_Cmd(USART3, ENABLE);
 
     /* 6. 1ms 滴答 */
-    ESP8266_TickInit();
 }
 
 void ESP8266_SendAT(char *cmd)
