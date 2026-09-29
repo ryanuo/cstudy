@@ -85,3 +85,5 @@ package
 .workbuddy
 .hermes
 .cache
+
+.metadata

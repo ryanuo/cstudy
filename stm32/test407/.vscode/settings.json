@@ -1,9 +1,19 @@
 {
     "cmake.configureOnOpen": true,
     "cmake.buildDirectory": "${workspaceFolder}/build/${presetName}",
-    "cmake.preferredGenerators": ["Ninja"],
+    "cmake.preferredGenerators": [
+        "Ninja"
+    ],
     "cmake.configureSettings": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
     },
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/Debug/compile_commands.json"
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/Debug/compile_commands.json",
+    "cSpell.words": [
+        "htim",
+        "huart",
+        "USART",
+        "OLED",
+        "SYSCLK",
+        "PLLM"
+    ]
 }
