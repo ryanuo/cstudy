@@ -64,6 +64,7 @@ static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 /* USER CODE BEGIN PFP */
 static void Show_CAN_Diag(void);
+static void Show_CAN_Regs_Page(const CAN_Diag_t *d);
 
 /* USER CODE END PFP */
 
@@ -342,12 +343,64 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /*------------------------------------------------------------------
+ * 自检第 2 页：PD0/PD1 的 GPIO 配置 + CAN1 关键寄存器
+ * 期望值
+ *   MODER : 0000000A  PD0/PD1 = AF 模式（0b10）
+ *   AFR0  : 00000099  PD0/PD1 都复用成 AF9（CAN1）
+ *   IDR   : 00000003  静默时 PD0(隐性)、PD1 都应该是高
+ *   MSR   : 00000C0C  INAK=1 正常模式，SLAK=0 没睡
+ *   IER   : 00000002  FIFO0 消息中断已使能（bit1）
+ *   FA1R  : 00000001  bank0 激活
+ *   FM1:0（掩码模式） FS1:1（32 位） FFA:0（挂 FIFO0）
+ *----------------------------------------------------------------*/
+static void Show_CAN_Regs_Page(const CAN_Diag_t *d) {
+  OLED_ShowString(0, 0, "PG2 PIN/CAN1 REG", OLED_6X8);
+
+  OLED_ShowString(0, 8, "MODER:", OLED_6X8);
+  OLED_ShowHexNum(36, 8, d->gpiod_moder, 8, OLED_6X8);
+
+  OLED_ShowString(0, 16, "AFR0 :", OLED_6X8);
+  OLED_ShowHexNum(36, 16, d->gpiod_afr0, 8, OLED_6X8);
+
+  OLED_ShowString(0, 24, "IDR  :", OLED_6X8);
+  OLED_ShowHexNum(36, 24, d->gpiod_idr, 8, OLED_6X8);
+
+  OLED_ShowString(0, 32, "MSR  :", OLED_6X8);
+  OLED_ShowHexNum(36, 32, d->msr, 8, OLED_6X8);
+
+  OLED_ShowString(0, 40, "IER  :", OLED_6X8);
+  OLED_ShowHexNum(36, 40, d->ier, 8, OLED_6X8);
+
+  OLED_ShowString(0, 48, "FA1R :", OLED_6X8);
+  OLED_ShowHexNum(36, 48, d->fa1r, 8, OLED_6X8);
+
+  OLED_ShowString(0, 56, "FM1:", OLED_6X8);
+  OLED_ShowNum(24, 56, d->fm1r & 0x01U, 1, OLED_6X8);
+  OLED_ShowString(30, 56, " FS1:", OLED_6X8);
+  OLED_ShowNum(60, 56, d->fs1r & 0x01U, 1, OLED_6X8);
+  OLED_ShowString(66, 56, " FFA:", OLED_6X8);
+  OLED_ShowNum(96, 56, d->ffa1r & 0x01U, 1, OLED_6X8);
+}
+
+/*------------------------------------------------------------------
  * CAN 自检画面：把 CAN1 的寄存器直接画到 OLED（6x8 字体，8 行）
  *   每行 21 字符以内，横坐标按 6 像素/字符排
  *----------------------------------------------------------------*/
 static void Show_CAN_Diag(void) {
   CAN_Diag_t d;
   CAN_Diag_Read(&d);
+
+  /* 两页轮播：每 2 秒翻一页（第 2 页 = PD0/PD1 配置 + CAN1 关键寄存器） */
+  static uint8_t page = 0;
+  static uint8_t tick = 0;
+  if (++tick >= 2) {
+    tick = 0;
+    page ^= 1;
+  }
+  if (page != 0) {
+    Show_CAN_Regs_Page(&d);
+    return;
+  }
 
 #if CAN_ROLE_SENDER == 1
   /* ---- 发送端：只关心"发出去没有" ---- */

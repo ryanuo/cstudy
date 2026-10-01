@@ -119,6 +119,11 @@ void CAN_Diag_Read(CAN_Diag_t *diag) {
   diag->fr1 = CAN1->sFilterRegister[0].FR1;
   diag->fr2 = CAN1->sFilterRegister[0].FR2;
 
+  diag->ier = CAN1->IER;
+  diag->gpiod_moder = GPIOD->MODER;
+  diag->gpiod_afr0 = GPIOD->AFR[0];
+  diag->gpiod_idr = GPIOD->IDR;
+
   diag->rx_irq_cnt = g_can_rx_irq_cnt;
   diag->rx_ok_cnt = g_can_rx_ok_cnt;
   diag->tx_req_cnt = g_can_tx_req_cnt;

@@ -28,6 +28,11 @@ void MyCAN_OnRx(uint32_t ID, uint8_t Length, uint8_t *Data);
  *   ffa1r  0 = 该 bank 挂 FIFO0，1 = 挂 FIFO1
  *   fr1    bank0 的 ID  寄存器（32 位模式下 = ID 的位）
  *   fr2    bank0 的掩码寄存器（掩码位 = 1 表示该位必须和 ID 相同）
+ *   ier    bit1 = 1 才是 FIFO0 消息中断使能（=0 就永远不进回调）
+ *   gpiod_moder / gpiod_afr0 / gpiod_idr = PD0/PD1 的 GPIO 配置与实时电平
+ *          MODER 低 4 位：PD0=bits[1:0]、PD1=bits[3:2]，AF 模式 = 0b10 → 期望 0x0000000A
+ *          AFR0  低 8 位：PD0=bits[3:0]、PD1=bits[7:4]，AF9      → 期望 0x00000099
+ *          IDR   低 2 位：静默时 PD0(隐性)、PD1 都应为高          → 期望 0x00000003
  *----------------------------------------------------------------*/
 typedef struct {
   uint32_t rf0r;
@@ -41,6 +46,10 @@ typedef struct {
   uint32_t ffa1r;
   uint32_t fr1;
   uint32_t fr2;
+  uint32_t ier;         /* CAN_IER */
+  uint32_t gpiod_moder; /* GPIOD->MODER */
+  uint32_t gpiod_afr0;  /* GPIOD->AFR[0] */
+  uint32_t gpiod_idr;   /* GPIOD->IDR */
   uint32_t rx_irq_cnt; /* RX FIFO0 中断进入次数（不论 ID 是否匹配） */
   uint32_t rx_ok_cnt;  /* 从 FIFO0 成功取出的帧数 */
   uint32_t tx_req_cnt; /* 调用发送的次数 */
