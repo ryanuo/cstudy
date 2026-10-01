@@ -343,6 +343,17 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /*------------------------------------------------------------------
+ * 翻页前把 8 行整行擦成空格（一行 21 字符 = 126 px）。
+ * 上一页较长的行不清掉的话，下一页较短的行末尾会留残影。
+ *----------------------------------------------------------------*/
+static void OLED_ClearPage(void) {
+  const char *blank = "                     "; /* 21 个空格 */
+  for (uint8_t y = 0; y < 64; y += 8) {
+    OLED_ShowString(0, y, (char *)blank, OLED_6X8);
+  }
+}
+
+/*------------------------------------------------------------------
  * 自检第 2 页：PD0/PD1 的 GPIO 配置 + CAN1 关键寄存器
  * 期望值
  *   MODER : 0000000A  PD0/PD1 = AF 模式（0b10）
@@ -389,6 +400,8 @@ static void Show_CAN_Regs_Page(const CAN_Diag_t *d) {
 static void Show_CAN_Diag(void) {
   CAN_Diag_t d;
   CAN_Diag_Read(&d);
+
+  OLED_ClearPage(); /* 先整屏擦干净，不然翻页会留上一页的残字 */
 
   /* 两页轮播：每 2 秒翻一页（第 2 页 = PD0/PD1 配置 + CAN1 关键寄存器） */
   static uint8_t page = 0;
