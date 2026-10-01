@@ -62,6 +62,7 @@ uint8_t CAN_rxbuff[8] = {0};
 uint16_t CAN_rxid = 0;
 uint8_t CAN_rxlength = 0;
 uint8_t CAN_rxflag = 0;
+volatile uint32_t CAN_rx_irq_cnt = 0;//收到帧就累加：任何进 FIFO0 的帧都算，不看 ID
 
 void CAN1_RX0_IRQHandler(void)
 {
@@ -69,6 +70,7 @@ void CAN1_RX0_IRQHandler(void)
  {
    CanRxMsg rxMsg;
 	 CAN_Receive(CAN1,CAN_FIFO0,&rxMsg);
+   CAN_rx_irq_cnt++;//先累加再干别的：帧数只看这里，和 ID/打印无关
 	 CAN_rxid = rxMsg.StdId;
 	 CAN_rxlength =  rxMsg.DLC;
 	 for(int i = 0;i<CAN_rxlength;i++)

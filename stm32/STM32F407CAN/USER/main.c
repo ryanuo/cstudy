@@ -23,6 +23,46 @@
 #include "AT24C02.h"
 #include "CAN.h"
 
+/* ==========================================================================
+ * CAN 收发测试开关（烧录前只改这一段）
+ *
+ *   CAN_ROLE_SENDER   1 = 发送端：每 CAN_TX_PERIOD_MS 毫秒发一帧，只发不收
+ *                     0 = 接收端：收到帧就打印，并把 LED2/LED3 点亮
+ *   CAN_DEBUG_PRINTF  1 = 串口打印（USART1，9600 8N1，串口助手别设 115200）
+ *                     0 = 关掉所有打印，只用灯看结果
+ *   CAN_TEST_ID       测试用的标准 ID（现在的过滤器是全通过，任何 ID 都收）
+ *
+ * 灯（低电平点亮）：LED1=PF9  LED2=PF10  LED3=PE13  LED4=PE14
+ * ========================================================================== */
+#define CAN_ROLE_SENDER   1
+#define CAN_DEBUG_PRINTF  1
+#define CAN_TX_PERIOD_MS  500
+#define CAN_TEST_ID       0x123
+
+#if CAN_DEBUG_PRINTF == 1
+/* 一行寄存器自检，直接送到串口：
+ *   N   收到的帧数（在 CAN 中断里无条件累加，不看 ID）
+ *   FMP FIFO0 里还积压几帧
+ *   ESR LEC=bit6:4 最近一次错误(0 无错 / 3 没人 ACK / 6 CRC 或波特率不符)
+ *       TEC=bit23:16 发送错误计数   REC=bit31:24 接收错误计数
+ *   TSR bit0=TXOK0（发送成功过）  bit26=TME0（邮箱0 空着）
+ *   MSR 正常运行 = 00000C00（INAK/SLAK 都为 0）
+ */
+static void CAN_print_diag(void)
+{
+  uint32_t esr = CAN1->ESR;
+  printf("N=%u FMP=%u ESR=%08X LEC=%u TEC=%u REC=%u TSR=%08X MSR=%08X\r\n",
+         (unsigned)CAN_rx_irq_cnt,
+         (unsigned)(CAN1->RF0R & 0x03U),
+         (unsigned)esr,
+         (unsigned)((esr >> 4) & 0x07U),
+         (unsigned)((esr >> 16) & 0xFFU),
+         (unsigned)((esr >> 24) & 0xFFU),
+         (unsigned)CAN1->TSR,
+         (unsigned)CAN1->MSR);
+}
+#endif
+
 int main(void) 
 {
   DELAY_ms(1000);
@@ -47,16 +87,73 @@ int main(void)
   SPI1SOFTWARE_init();
 	IICSOFTWARE_init();
   CAN_init();
-	uint8_t senddata = 0X78;
+#if CAN_DEBUG_PRINTF == 1
+  printf("\r\n==== CAN %s ====  ID=0x%03X\r\n",
+         (CAN_ROLE_SENDER == 1) ? "SENDER" : "RECEIVER",
+         (unsigned)CAN_TEST_ID);
+  CAN_print_diag();
+#endif
+#if CAN_ROLE_SENDER == 1
+	uint8_t senddata = 0X78;//发送端才用得到
+#endif
+	uint16_t loop_cnt = 0;
 	while(1)
 	{
-    CAN_sendmessage(0X123,&senddata,1);
-//		if(CAN_rxflag == 1)
-//		{
-//		  CAN_rxflag = 0;
-//			printf("%d\r\n",CAN_rxbuff[0]);
-//		}
+#if CAN_ROLE_SENDER == 1
+		/* ==================== 发送端 ==================== */
+		CAN_sendmessage(CAN_TEST_ID,&senddata,1);
+#if CAN_DEBUG_PRINTF == 1
+		if((CAN1->TSR & 0x00000001U) != 0U)//TXOK0=1：这帧真的发出去了（总线上有人 ACK）
+		{
+			LED4_on();
+		}
+		printf("TX d0=%02X TSR=%08X\r\n",(unsigned)senddata,(unsigned)CAN1->TSR);
+#endif
+		senddata++;
+		if(++loop_cnt >= 4U)//约 2 秒打一行寄存器自检
+		{
+			loop_cnt = 0;
+#if CAN_DEBUG_PRINTF == 1
+			CAN_print_diag();
+#endif
+		}
+		DELAY_ms(CAN_TX_PERIOD_MS);
+#else
+		/* ==================== 接收端 ==================== */
+		if(CAN_rxflag == 1)
+		{
+			CAN_rxflag = 0;
+			LED2_on();
+			LED3_on();
+#if CAN_DEBUG_PRINTF == 1
+			printf("RX id=%03X dlc=%u d0=%02X N=%u\r\n",
+			       (unsigned)CAN_rxid,(unsigned)CAN_rxlength,
+			       (unsigned)CAN_rxbuff[0],(unsigned)CAN_rx_irq_cnt);
+#endif
+		}
+		if(CAN_rx_irq_cnt > 0U)//收到过帧就一直亮，不会被看漏
+		{
+			LED2_on();
+			LED3_on();
+		}
+		if(++loop_cnt >= 100U)//约 1 秒打一行自检（收不到帧时靠它看 ESR/TSR）
+		{
+			loop_cnt = 0;
+#if CAN_DEBUG_PRINTF == 1
+			CAN_print_diag();
+#endif
+		}
+		DELAY_ms(10);
+#endif
+
+		/* ========== 原来的测试代码（留着，随时改回来） ==========
+		CAN_sendmessage(0X123,&senddata,1);
+		if(CAN_rxflag == 1)
+		{
+			CAN_rxflag = 0;
+			printf("%d\r\n",CAN_rxbuff[0]);
+		}
 		DELAY_ms(500);
+		====================================================== */
 	}
 }
-
