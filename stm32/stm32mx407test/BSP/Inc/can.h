@@ -59,4 +59,9 @@ typedef struct {
 
 void CAN_Diag_Read(CAN_Diag_t *diag);
 
+/* 计数器（在中断里累加），可以直接拿来点灯/判活 */
+extern volatile uint32_t g_can_rx_irq_cnt; /* 进 RX FIFO0 中断的次数（不论 ID） */
+extern volatile uint32_t g_can_rx_ok_cnt;  /* 成功从 FIFO0 取出的帧数 */
+extern volatile uint32_t g_can_tx_req_cnt; /* 调用发送的次数 */
+
 #endif

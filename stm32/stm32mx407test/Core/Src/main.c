@@ -36,6 +36,9 @@
    排除"采样那一刻恰好在空闲"的偶然。调完改成 0 即可。 */
 #define CAN_TEST_AUTO_TX 1
 
+/* 自检画面开关：现在只用灯做指示，设 0 把整页寄存器画面关掉（代码留着） */
+#define CAN_DIAG_OLED 0
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,15 +71,25 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 /* USER CODE BEGIN PFP */
+#if CAN_DIAG_OLED == 1
 static void Show_CAN_Diag(void);
 static void Show_CAN_Regs_Page(const CAN_Diag_t *d);
+#endif
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#if CAN_DIAG_OLED == 1
 /* 自检用：ID == 0x123 的回调命中次数 */
 static uint32_t s_rx_match_cnt = 0;
+#endif
+
+/* 点灯测试用的时间戳 / 计数快照 */
+static uint32_t s_led_tick = 0;      /* 心跳灯 */
+static uint32_t s_tx_tick = 0;       /* 自动发送 */
+static uint32_t s_rx_led_until = 0;  /* 收帧后灯2 亮到什么时候 */
+static uint32_t s_rx_ok_last = 0;    /* 上次看到的收帧计数 */
 
 /* USER CODE END 0 */
 
@@ -123,46 +136,45 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    /* ---- CAN 自检画面：先看寄存器，再谈收发 ---- */
-    Show_CAN_Diag();
-    OLED_Update();
+    /* ---- 灯1：500 ms 翻转一次 = 程序在跑（心跳，不阻塞） ---- */
+    if ((HAL_GetTick() - s_led_tick) >= 500U) {
+      s_led_tick = HAL_GetTick();
+      LED_Toggle(0); /* 灯1 */
+    }
 
-    // 点灯模块
-    LED_On(0);
-    HAL_Delay(500);
-    LED_Off(0);
-    HAL_Delay(500);
-
-// 风扇模块
-// FAN_reverserotation();
-// HAL_Delay(3000);
-
-// 红外模块
-// uint32_t count = CountSensor_GetValue();
-// if (last_count != count) {
-//   last_count = count;
-//   OLED_ShowNum(0, 16, count, 5, OLED_8X16);
-// }
-// 蜂鸣器模块
-// BEEP_on();
-// HAL_Delay(500);
-// BEEP_off();
+    /* ---- 灯2：只要 FIFO0 收到帧（不限 ID）就亮 50 ms，视觉上是"每来一帧闪一下" ---- */
+    if (g_can_rx_ok_cnt != s_rx_ok_last) {
+      s_rx_ok_last = g_can_rx_ok_cnt;
+      LED_On(1); /* 灯2 */
+      s_rx_led_until = HAL_GetTick() + 50U;
+    }
+    if ((s_rx_led_until != 0U) &&
+        ((HAL_GetTick() - s_rx_led_until) < 0x80000000U)) {
+      s_rx_led_until = 0U;
+      LED_Off(1);
+    }
 
 #if CAN_TEST_AUTO_TX == 1
-    /* 测试模式：不按键，每秒自动发一帧（两块板都发，总线上就一直有帧） */
-    {
-      static uint32_t last_tx = 0;
+    /* ---- 发送：不依赖按键，每秒自动发一帧 ---- */
+    if ((HAL_GetTick() - s_tx_tick) >= 1000U) {
       static uint8_t seq = 0;
-      if (HAL_GetTick() - last_tx >= 500U) {
-        uint8_t txbuf[8] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
-        txbuf[0] = seq++;
-        MyCAN_Transmit(0x123, 8, txbuf);
-        last_tx = HAL_GetTick();
-      }
+      uint8_t txbuf[8] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
+      txbuf[0] = seq++;
+      MyCAN_Transmit(0x123, 8, txbuf);
+      s_tx_tick = HAL_GetTick();
     }
 #endif
 
-// CAN 总线 发送端
+#if CAN_DIAG_OLED == 1
+    /* ---- 寄存器自检画面（现在关着，把 CAN_DIAG_OLED 改成 1 就回来） ---- */
+    Show_CAN_Diag();
+    OLED_Update();
+#endif
+
+    /* 【按需求注释掉】原来的按键触发发送 + OLED 收发显示：
+     按键用的 PA0 本来也没在 MX_GPIO_Init 里配置，去掉更干净。
+     需要时把下面整段取消注释即可。
+
 #if CAN_ROLE_SENDER == 1
     if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET) {
       LED_On(3);
@@ -175,12 +187,11 @@ int main(void)
       }
     }
 #else
-    // CAN 总线 接收端：帧已在中断里存进 g_can_rx_*，
-    // 画面由上面的 Show_CAN_Diag 统一刷新，这里只把标志清掉
     if (g_can_rx_flag) {
       g_can_rx_flag = 0;
     }
 #endif
+    */
 
     /* USER CODE END WHILE */
 
@@ -361,6 +372,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+#if CAN_DIAG_OLED == 1
 /*------------------------------------------------------------------
  * 翻页前把 8 行整行擦成空格（一行 21 字符 = 126 px）。
  * 上一页较长的行不清掉的话，下一页较短的行末尾会留残影。
@@ -553,10 +565,14 @@ static void Show_CAN_Diag(void) {
 //   CountSensor_EXTI_Callback(GPIO_Pin);
 // }
 
+#endif /* CAN_DIAG_OLED */
+
 // CAN总线回调
 void MyCAN_OnRx(uint32_t ID, uint8_t Length, uint8_t *Data) {
   if (ID == 0x123) {
+#if CAN_DIAG_OLED == 1
     s_rx_match_cnt++;
+#endif
     g_can_rx_id = ID;
     g_can_rx_len = Length;
     for (uint8_t i = 0; i < Length && i < 8; i++) {
