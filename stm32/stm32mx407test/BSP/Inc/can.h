@@ -8,6 +8,16 @@ void    MyCAN_Transmit(uint32_t ID, uint8_t Length, uint8_t *Data);
 uint8_t MyCAN_ReceiveFlag(void);
 void    MyCAN_Receive(uint32_t *ID, uint8_t *Length, uint8_t *Data);
 
+/*------------------------------------------------------------------
+ * 环回自检开关（1 = 开）
+ *   CAN 内部把发送的帧直接接回接收端，不走 TX/RX 引脚、不需要收发器、
+ *   不需要接线、不需要第二块板。用来单独验证
+ *   "发送邮箱 → 过滤器 → 中断 → FIFO0 → 点灯" 这一整条软件链。
+ *   环回下自己给自己发 ACK，所以发送也会成功。
+ *   测完改回 0（正常模式）再烧两块板。
+ *----------------------------------------------------------------*/
+#define CAN_TEST_LOOPBACK 0
+
 /* 接收回调，用户重写 */
 void MyCAN_OnRx(uint32_t ID, uint8_t Length, uint8_t *Data);
 

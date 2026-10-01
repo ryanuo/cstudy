@@ -15,6 +15,15 @@ volatile uint32_t g_can_tx_req_cnt = 0; /* 调用发送的次数 */
 void BSP_CAN_Init(void) {
   CAN_FilterTypeDef sFilterConfig = {0};
 
+#if CAN_TEST_LOOPBACK == 1
+  /* 环回自检：改模式后重新初始化一次（必须放在配过滤器/启动之前）。
+     MX_CAN1_Init 里是正常模式，这里覆盖成环回，不改生成代码。 */
+  hcan1.Init.Mode = CAN_MODE_LOOPBACK;
+  if (HAL_CAN_Init(&hcan1) != HAL_OK) {
+    Error_Handler();
+  }
+#endif
+
   sFilterConfig.FilterBank = 0;
   sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
   sFilterConfig.FilterScale = CAN_FILTERSCALE_32BIT;
