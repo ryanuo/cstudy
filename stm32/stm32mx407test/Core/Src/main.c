@@ -31,6 +31,11 @@
 
 #define CAN_ROLE_SENDER 0
 
+/* 测试开关：不用按键，两块板都每 1 秒自动发一帧 0x123。
+   目的是让总线上"一直有帧"，这样接收端的 EDG/N 才有确定的判据，
+   排除"采样那一刻恰好在空闲"的偶然。调完改成 0 即可。 */
+#define CAN_TEST_AUTO_TX 1
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -142,6 +147,20 @@ int main(void)
 // BEEP_on();
 // HAL_Delay(500);
 // BEEP_off();
+
+#if CAN_TEST_AUTO_TX == 1
+    /* 测试模式：不按键，每秒自动发一帧（两块板都发，总线上就一直有帧） */
+    {
+      static uint32_t last_tx = 0;
+      static uint8_t seq = 0;
+      if (HAL_GetTick() - last_tx >= 500U) {
+        uint8_t txbuf[8] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
+        txbuf[0] = seq++;
+        MyCAN_Transmit(0x123, 8, txbuf);
+        last_tx = HAL_GetTick();
+      }
+    }
+#endif
 
 // CAN 总线 发送端
 #if CAN_ROLE_SENDER == 1
@@ -364,12 +383,17 @@ static void OLED_ClearPage(void) {
 static uint16_t Sample_RX_Edges(void) {
   uint32_t last = GPIOD->IDR & GPIO_PIN_0;
   uint16_t edges = 0;
+  uint32_t t0 = HAL_GetTick();
 
-  for (uint32_t i = 0; i < 200000U; i++) {
+  /* 采满 1 秒：发送端那帧一直挂着重传、总线上是连续活动，
+     1 秒窗口足够避开"刚好采到忙/空闲间隙"的偶然 */
+  while ((HAL_GetTick() - t0) < 1000U) {
     uint32_t now = GPIOD->IDR & GPIO_PIN_0;
     if (now != last) {
       last = now;
-      edges++;
+      if (edges < 65535U) {
+        edges++; /* 饱和，避免回绕成小数字 */
+      }
     }
   }
   return edges;
@@ -428,11 +452,7 @@ static void Show_CAN_Diag(void) {
 
   /* 两页轮播：每 2 秒翻一页（第 2 页 = PD0/PD1 配置 + CAN1 关键寄存器） */
   static uint8_t page = 0;
-  static uint8_t tick = 0;
-  if (++tick >= 2) {
-    tick = 0;
-    page ^= 1;
-  }
+  page ^= 1; /* 每刷一屏翻一页（EDG 采样要 1 秒，所以两页各约 2 秒） */
   if (page != 0) {
     Show_CAN_Regs_Page(&d);
     return;
