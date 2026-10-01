@@ -51,14 +51,14 @@
 static void CAN_print_diag(void)
 {
   uint32_t esr = CAN1->ESR;
-  printf("N=%u FMP=%u ESR=%08X LEC=%u TEC=%u REC=%u TSR=%08X MSR=%08X\r\n",
-         (unsigned)CAN_rx_irq_cnt,
-         (unsigned)(CAN1->RF0R & 0x03U),
-         (unsigned)esr,
+  printf("N=%u FMP=%u LEC=%u TEC=%u REC=%u\r\n",
+         (unsigned)CAN_rx_irq_cnt,(unsigned)(CAN1->RF0R & 0x03U),
          (unsigned)((esr >> 4) & 0x07U),
-         (unsigned)((esr >> 16) & 0xFFU),
-         (unsigned)((esr >> 24) & 0xFFU),
-         (unsigned)CAN1->TSR,
+         (unsigned)((esr >> 16) & 0xFFU),(unsigned)((esr >> 24) & 0xFFU));
+  printf("ESR=%08X TSR=%08X\r\n",(unsigned)esr,(unsigned)CAN1->TSR);
+  printf("TXOK0=%u TME0=%u MSR=%08X\r\n",
+         (unsigned)((CAN1->TSR & CAN_TSR_TXOK0) != 0U ? 1U : 0U),
+         (unsigned)((CAN1->TSR & CAN_TSR_TME0) != 0U ? 1U : 0U),
          (unsigned)CAN1->MSR);
 }
 #endif
@@ -101,14 +101,15 @@ int main(void)
 	{
 #if CAN_ROLE_SENDER == 1
 		/* ==================== 发送端 ==================== */
-		CAN_sendmessage(CAN_TEST_ID,&senddata,1);
+		uint8_t mb = CAN_sendmessage(CAN_TEST_ID,&senddata,1);
 #if CAN_DEBUG_PRINTF == 1
-		if((CAN1->TSR & 0x00000001U) != 0U)//TXOK0=1：这帧真的发出去了（总线上有人 ACK）
+		if((CAN1->TSR & CAN_TSR_TXOK0) != 0U)//TXOK0(bit1)=1：这帧发出去并被人 ACK 了
 		{
 			LED4_on();
 		}
-		printf("TX d0=%02X TSR=%08X\r\n",(unsigned)senddata,(unsigned)CAN1->TSR);
+		printf("TX d0=%02X mb=%u\r\n",(unsigned)senddata,(unsigned)mb);//mb=邮箱号 0/1/2；mb=4=三个邮箱全满(没人 ACK 在重传)
 #endif
+		(void)mb;//关掉串口打印时靠这句消掉 unused 警告
 		senddata++;
 		if(++loop_cnt >= 4U)//约 2 秒打一行寄存器自检
 		{
