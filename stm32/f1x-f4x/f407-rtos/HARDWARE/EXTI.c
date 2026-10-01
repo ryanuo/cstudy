@@ -119,7 +119,7 @@ void EXTI4_IRQHandler(void) // SET触发 RESET不触发
 		// 10.2）实际的业务代码
 		if (GPIO_ReadInputDataBit(GPIOE, GPIO_Pin_4) == 0)
 		{
-			flag = 2;
+			flag = 4;
 		}
 		// 10.3）清除标志位 软件复位0
 		EXTI_ClearITPendingBit(EXTI_Line4);

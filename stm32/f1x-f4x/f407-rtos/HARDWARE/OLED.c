@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include "DELAY.h"
 
 #define GPIO_SCL_PIN GPIO_Pin_8
 #define GPIO_SDA_PIN GPIO_Pin_9
@@ -115,11 +116,7 @@ void DWT_Init(void)
 // 2. Î¢ÃëÑÓÊ±
 static void OLED_I2C_Delay(void)
 {
-	// ÑÓÊ± 2 Î¢Ãë
-	uint32_t ticks = 2 * (SystemCoreClock / 1000000U);
-	uint32_t start = DWT->CYCCNT;
-	while ((DWT->CYCCNT - start) < ticks)
-		;
+	DELAY_us(2);
 }
 
 void OLED_W_SCL(uint8_t BitValue)

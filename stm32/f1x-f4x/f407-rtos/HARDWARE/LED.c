@@ -3,25 +3,36 @@
 
 void LED_init(void)
 {
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE);
+    // 1. 开启 GPIOE, GPIOF 的时钟 (保留你原来的)
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOF, ENABLE);
+    
+    // 2. 【新增】开启 GPIOC 的时钟
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOC, ENABLE);
 
-	GPIO_InitTypeDef GPIO_INSTRUCT;
-	GPIO_INSTRUCT.GPIO_Mode = GPIO_Mode_OUT;
-	GPIO_INSTRUCT.GPIO_OType = GPIO_OType_PP;
-	GPIO_INSTRUCT.GPIO_Pin = GPIO_Pin_13 | GPIO_Pin_14;
-	GPIO_INSTRUCT.GPIO_PuPd = GPIO_PuPd_NOPULL;
-	GPIO_INSTRUCT.GPIO_Speed = GPIO_Speed_100MHz;
+    GPIO_InitTypeDef GPIO_INSTRUCT;
+    GPIO_INSTRUCT.GPIO_Mode = GPIO_Mode_OUT;
+    GPIO_INSTRUCT.GPIO_OType = GPIO_OType_PP;
+    GPIO_INSTRUCT.GPIO_PuPd = GPIO_PuPd_NOPULL;
+    GPIO_INSTRUCT.GPIO_Speed = GPIO_Speed_100MHz;
 
-	GPIO_Init(GPIOE, &GPIO_INSTRUCT);
+    // 初始化 E 和 F (保留你原来的)
+    GPIO_INSTRUCT.GPIO_Pin = GPIO_Pin_13 | GPIO_Pin_14;
+    GPIO_Init(GPIOE, &GPIO_INSTRUCT);
 
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOF, ENABLE);
+    GPIO_INSTRUCT.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_10;
+    GPIO_Init(GPIOF, &GPIO_INSTRUCT);
 
-	GPIO_INSTRUCT.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_10;
+    // 3. 【新增】初始化 PC13
+    GPIO_INSTRUCT.GPIO_Pin = GPIO_Pin_13;
+    GPIO_Init(GPIOC, &GPIO_INSTRUCT);
 
-	GPIO_Init(GPIOF, &GPIO_INSTRUCT);
-
-	GPIO_SetBits(GPIOE, GPIO_Pin_13 | GPIO_Pin_14);
-	GPIO_SetBits(GPIOF, GPIO_Pin_9 | GPIO_Pin_10);
+    // 4. 设置默认电平 (保留你原来的，同时把 PC13 也置高，默认熄灭)
+    GPIO_SetBits(GPIOE, GPIO_Pin_13 | GPIO_Pin_14);
+    GPIO_SetBits(GPIOF, GPIO_Pin_9 | GPIO_Pin_10);
+    
+    // 【新增】默认给 PC13 高电平（如果是低电平点亮，高电平就是熄灭）
+    GPIO_SetBits(GPIOC, GPIO_Pin_13); 
 }
 
 void LED3_off(void)

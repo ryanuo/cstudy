@@ -63,7 +63,8 @@
                 "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/Include",
                 "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/Device/StdPeriph_Driver/inc",
                 "/Users/ryanuo/dev/stm32/STM32F4xx_DFP-1.0.8/CMSIS/Core/Include",
-                "${workspaceFolder}"
+                "${workspaceFolder}",
+                "${workspaceFolder}/FreeRTOS/port"
             ],
             "defines": [
                 "USE_STDPERIPH_DRIVER",
