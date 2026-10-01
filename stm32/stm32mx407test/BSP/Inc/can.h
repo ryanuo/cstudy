@@ -17,7 +17,8 @@ void MyCAN_OnRx(uint32_t ID, uint8_t Length, uint8_t *Data);
  *   rf0r   FMP0[1:0]  = FIFO0 里积压的帧数（一直是 0 = 一帧都没进来）
  *   esr    LEC[6:4]   = 最近一次错误类型（0=无错，越大越严重）
  *          TEC[23:16] = 发送错误计数    REC[31:24] = 接收错误计数
- *   msr    INAK[0]=1  = CAN 已进入正常模式（=0 说明还停在初始化/睡眠）
+ *   msr    INAK=bit0、SLAK=bit1：两个都为 0 才是正常运行
+ *          （复位值 0x00000C02 = SLAK 睡着；INAK=1 表示停在初始化模式）
  *   tsr    TXOK0[0]=1 = 邮箱0 发送成功；TERR0[15]=1 发送失败；TME0[26]=1 邮箱空
  *   fmr    FINIT[0]   = 过滤器初始化位；CAN2SB[13:8] = CAN2 起始 bank
  *          （F407 是双 CAN：CAN2SB=0 表示 28 个过滤 bank 全归 CAN2，

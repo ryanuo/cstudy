@@ -348,7 +348,7 @@ static void MX_GPIO_Init(void)
  *   MODER : 0000000A  PD0/PD1 = AF 模式（0b10）
  *   AFR0  : 00000099  PD0/PD1 都复用成 AF9（CAN1）
  *   IDR   : 00000003  静默时 PD0(隐性)、PD1 都应该是高
- *   MSR   : 00000C0C  INAK=1 正常模式，SLAK=0 没睡
+ *   MSR   : 00000C00  INAK=0、SLAK=0；复位值是 00000C02（SLAK=1 睡着）
  *   IER   : 00000002  FIFO0 消息中断已使能（bit1）
  *   FA1R  : 00000001  bank0 激活
  *   FM1:0（掩码模式） FS1:1（32 位） FFA:0（挂 FIFO0）
@@ -423,7 +423,7 @@ static void Show_CAN_Diag(void) {
   OLED_ShowString(78, 24, " REC:", OLED_6X8);
   OLED_ShowNum(108, 24, (d.esr >> 24) & 0xFFU, 3, OLED_6X8);
 
-  // MSR: INAK[0]=1 已进入正常模式
+  // MSR: INAK[0]=0 且 SLAK[1]=0 才是正常运行（复位值 C02 里 SLAK=1，是睡着）
   OLED_ShowString(0, 32, "MSR:", OLED_6X8);
   OLED_ShowHexNum(24, 32, d.msr, 8, OLED_6X8);
 
