@@ -353,6 +353,29 @@ static void OLED_ClearPage(void) {
   }
 }
 
+#if CAN_ROLE_SENDER == 0
+/*------------------------------------------------------------------
+ * 在 MCU 引脚自己身上看 CAN_RX（PD0）到底有没有动：
+ * AF 模式下 GPIOD->IDR 依然反映引脚电平，所以用紧凑循环采样约 20 ms，
+ * 数跳变次数（500 k 每一位 2 µs，线上只要有帧在跑就是几百上千次）。
+ *   EDG 大 + N 不涨  → 引脚在动但外设没收到（回到软件侧）
+ *   EDG 恒 0         → PD0 电气上根本没动（线断 / 收发器没往 MCU 输出）
+ *----------------------------------------------------------------*/
+static uint16_t Sample_RX_Edges(void) {
+  uint32_t last = GPIOD->IDR & GPIO_PIN_0;
+  uint16_t edges = 0;
+
+  for (uint32_t i = 0; i < 200000U; i++) {
+    uint32_t now = GPIOD->IDR & GPIO_PIN_0;
+    if (now != last) {
+      last = now;
+      edges++;
+    }
+  }
+  return edges;
+}
+#endif
+
 /*------------------------------------------------------------------
  * 自检第 2 页：PD0/PD1 的 GPIO 配置 + CAN1 关键寄存器
  * 期望值
@@ -473,9 +496,12 @@ static void Show_CAN_Diag(void) {
   OLED_ShowString(78, 16, " REC:", OLED_6X8);
   OLED_ShowNum(108, 16, (d.esr >> 24) & 0xFFU, 3, OLED_6X8);
 
-  // FR1/FR2: bank0 的 ID 寄存器 / 掩码寄存器（掩码写错在这里一眼能看出来）
-  OLED_ShowString(0, 24, "FR1:", OLED_6X8);
-  OLED_ShowHexNum(24, 24, d.fr1, 8, OLED_6X8);
+  // EDG: 在 MCU 引脚上采样 PD0(CAN_RX) 约 20 ms 的跳变次数。
+  // 线上有帧在跑（发送端一直重传）= 几百上千；恒 0 = PD0 电气上没动过
+  OLED_ShowString(0, 24, "EDG:", OLED_6X8);
+  OLED_ShowNum(24, 24, Sample_RX_Edges(), 5, OLED_6X8);
+
+  // FR2: bank0 的掩码寄存器（掩码全 0 就是全接收，FR1 的 ID 已无意义，那一行换成 EDG）
   OLED_ShowString(0, 32, "FR2:", OLED_6X8);
   OLED_ShowHexNum(24, 32, d.fr2, 8, OLED_6X8);
 
