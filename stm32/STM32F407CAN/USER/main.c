@@ -34,11 +34,12 @@
  *
  * 灯（低电平点亮）：LED1=PF9  LED2=PF10  LED3=PE13  LED4=PE14
  * ========================================================================== */
-#define CAN_ROLE_SENDER   1
+#define CAN_ROLE_SENDER   0
 #define CAN_DEBUG_PRINTF  1
 #define CAN_TX_PERIOD_MS  500
 #define CAN_TEST_ID       0x123
 #define CAN_PIN_SNIFF     1     // 1 = 每秒数一次引脚跳变数（看信号到底进没进板子）
+#define CAN_TX_PIN_TEST   1     // 接收端专用：开机把 CAN_TX(PD1) 当普通 IO 翻转，数 CAN_RX(PD0) 跟不跟
 
 #if CAN_DEBUG_PRINTF == 1
 /* 一行寄存器自检，直接送到串口：
@@ -100,6 +101,68 @@ static void CAN_pin_sniff(void)
 }
 #endif
 
+#if (CAN_ROLE_SENDER == 0) && (CAN_TX_PIN_TEST == 1)
+/*---------------------------------------------------------------
+ * 数 CAN_RX(PD0) 在 iters 次采样里跳变了几次
+ *---------------------------------------------------------------*/
+static uint32_t CAN_count_rx(uint32_t iters)
+{
+  uint32_t cnt = 0,prev = GPIOD->IDR & 0x0001U,k;
+  for(k = 0;k < iters;k++)
+  {
+    uint32_t v = GPIOD->IDR & 0x0001U;
+    if(v != prev)
+    {
+      cnt++;
+      prev = v;
+    }
+  }
+  return cnt;
+}
+
+/*---------------------------------------------------------------
+ * 开机自检：把 CAN_TX(PD1) 临时当普通推挽输出，慢速手动翻转，
+ * 同时数 CAN_RX(PD0) 的跳变。一次就能判断接收端本地这一段：
+ *   TXPD PD0 > 0  = 收发器在工作，而且它的 RXD 确实接到了 PD0
+ *                   （那收不到就只能是两板之间的总线线/共地问题）
+ *   TXPD PD0 = 0  = 收发器没供电/没工作，或 RXD 到 PD0 这段断
+ * 测完自动把 PD1 恢复成 CAN1 复用（AF9），不影响后面的测试。
+ *---------------------------------------------------------------*/
+static void CAN_tx_pin_test(void)
+{
+  uint32_t i,edges = 0;
+  GPIO_InitTypeDef gi;
+  gi.GPIO_Pin = GPIO_Pin_1;
+  gi.GPIO_Mode = GPIO_Mode_OUT;
+  gi.GPIO_OType = GPIO_OType_PP;
+  gi.GPIO_PuPd = GPIO_PuPd_NOPULL;
+  gi.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(GPIOD,&gi);//PD1 先变成普通输出
+
+  for(i = 0;i < 500U;i++)
+  {
+    GPIO_ResetBits(GPIOD,GPIO_Pin_1);//CAN_TX 拉低 -> 收发器把总线拉成显性
+    edges += CAN_count_rx(3000U);
+    GPIO_SetBits(GPIOD,GPIO_Pin_1);//放开总线
+    edges += CAN_count_rx(3000U);
+  }
+
+  gi.GPIO_Mode = GPIO_Mode_AF;//恢复 CAN1 复用
+  GPIO_Init(GPIOD,&gi);
+  GPIO_PinAFConfig(GPIOD,GPIO_PinSource1,GPIO_AF_CAN1);
+
+  printf("TXPD PD0=%u", (unsigned)edges);
+  if(edges > 0U)
+  {
+    printf(" (RX path OK)");
+  }
+  else
+  {
+    printf(" (RX path DEAD)");
+  }
+  printf("\r\n");
+}
+#endif
 int main(void) 
 {
   DELAY_ms(1000);
@@ -129,6 +192,9 @@ int main(void)
          (CAN_ROLE_SENDER == 1) ? "SENDER" : "RECEIVER",
          (unsigned)CAN_TEST_ID);
   CAN_print_diag();
+#endif
+#if (CAN_ROLE_SENDER == 0) && (CAN_TX_PIN_TEST == 1)
+  CAN_tx_pin_test();//开机自检一次：手动驱动 CAN_TX，看 CAN_RX 跟不跟
 #endif
 #if CAN_ROLE_SENDER == 1
 	uint8_t senddata = 0X78;//发送端才用得到
