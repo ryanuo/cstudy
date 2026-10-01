@@ -16,7 +16,7 @@ void    MyCAN_Receive(uint32_t *ID, uint8_t *Length, uint8_t *Data);
  *   环回下自己给自己发 ACK，所以发送也会成功。
  *   测完改回 0（正常模式）再烧两块板。
  *----------------------------------------------------------------*/
-#define CAN_TEST_LOOPBACK 0
+#define CAN_TEST_LOOPBACK 1
 
 /* 接收回调，用户重写 */
 void MyCAN_OnRx(uint32_t ID, uint8_t Length, uint8_t *Data);

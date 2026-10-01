@@ -85,11 +85,9 @@ static void Show_CAN_Regs_Page(const CAN_Diag_t *d);
 static uint32_t s_rx_match_cnt = 0;
 #endif
 
-/* 点灯测试用的时间戳 / 计数快照 */
-static uint32_t s_led_tick = 0;      /* 心跳灯 */
-static uint32_t s_tx_tick = 0;       /* 自动发送 */
-static uint32_t s_rx_led_until = 0;  /* 收帧后灯2 亮到什么时候 */
-static uint32_t s_rx_ok_last = 0;    /* 上次看到的收帧计数 */
+/* 点灯测试用的时间戳 */
+static uint32_t s_led_tick = 0; /* 心跳灯 */
+static uint32_t s_tx_tick = 0;  /* 自动发送 */
 
 /* USER CODE END 0 */
 
@@ -142,16 +140,15 @@ int main(void)
       LED_Toggle(0); /* 灯1 */
     }
 
-    /* ---- 灯2：只要 FIFO0 收到帧（不限 ID）就亮 50 ms，视觉上是"每来一帧闪一下" ---- */
-    if (g_can_rx_ok_cnt != s_rx_ok_last) {
-      s_rx_ok_last = g_can_rx_ok_cnt;
-      LED_On(1); /* 灯2 */
-      s_rx_led_until = HAL_GetTick() + 50U;
+    /* ---- 常亮指示（不闪，不会被看漏；也不押在某一颗灯上）----
+       灯2 + 灯3 常亮 = 收到过帧（g_can_rx_ok_cnt > 0，不限 ID）
+       灯4      常亮 = 至少有一次发送成功（TSR 的 TXOK0 = bit0） */
+    if (g_can_rx_ok_cnt > 0U) {
+      LED_On(1); /* 灯2 = PF10 */
+      LED_On(2); /* 灯3 = PE13 */
     }
-    if ((s_rx_led_until != 0U) &&
-        ((HAL_GetTick() - s_rx_led_until) < 0x80000000U)) {
-      s_rx_led_until = 0U;
-      LED_Off(1);
+    if ((CAN1->TSR & 0x00000001U) != 0U) { /* TXOK0：发送成功过 */
+      LED_On(3); /* 灯4 = PE14（之前验证过能亮） */
     }
 
 #if CAN_TEST_AUTO_TX == 1
