@@ -34,13 +34,13 @@
  *
  * 灯（低电平点亮）：LED1=PF9  LED2=PF10  LED3=PE13  LED4=PE14
  * ========================================================================== */
-#define CAN_ROLE_SENDER   1
+#define CAN_ROLE_SENDER   0
 #define CAN_DEBUG_PRINTF  1
 #define CAN_TX_PERIOD_MS  500
 #define CAN_TEST_ID       0x123
 #define CAN_PIN_SNIFF     1     // 1 = 每秒数一次引脚跳变数（看信号到底进没进板子）
 #define CAN_TX_PIN_TEST   1     // 0 = 关；1 = 开机+每约5秒把 CAN_TX(PD1) 当普通 IO 翻转，数 CAN_RX(PD0) 跟不跟（收发器→PD0 这段通不通）
-#define CAN_DBG_VER       6     // 固件版本号：开机横幅里会打出来，用来确认板上烧的是哪一版
+#define CAN_DBG_VER       7     // 固件版本号：开机横幅里会打出来，用来确认板上烧的是哪一版
 
 #if CAN_DEBUG_PRINTF == 1
 /* 一行寄存器自检，直接送到串口：
@@ -131,6 +131,30 @@ static uint32_t CAN_count_rx(uint32_t iters)
  *   TXPD PD0 = 0  = 收发器没供电/没工作，或 RXD 到 PD0 这段断
  * 测完自动把 PD1 恢复成 CAN1 复用（AF9），不影响后面的测试。
  *---------------------------------------------------------------*/
+
+/*---------------------------------------------------------------
+ * 六脚电平快照：PD0 PD1 PB8 PB9 PA11 PA12（各 1 位，依次打印）
+ *---------------------------------------------------------------*/
+static uint32_t CAN_levels6(void)
+{
+  uint32_t v = 0;
+  if(GPIOD->IDR & 0x0001U) v |= 0x20U;//PD0
+  if(GPIOD->IDR & 0x0002U) v |= 0x10U;//PD1
+  if(GPIOB->IDR & 0x0100U) v |= 0x08U;//PB8
+  if(GPIOB->IDR & 0x0200U) v |= 0x04U;//PB9
+  if(GPIOA->IDR & 0x0800U) v |= 0x02U;//PA11
+  if(GPIOA->IDR & 0x1000U) v |= 0x01U;//PA12
+  return v;
+}
+
+static void CAN_print_levels(const char *tag,uint32_t v)
+{
+  printf("PROBE %s %u %u %u %u %u %u\r\n",tag,
+         (unsigned)((v >> 5) & 1U),(unsigned)((v >> 4) & 1U),
+         (unsigned)((v >> 3) & 1U),(unsigned)((v >> 2) & 1U),
+         (unsigned)((v >> 1) & 1U),(unsigned)(v & 1U));
+}
+
 static void CAN_tx_pin_test(void)
 {
   uint32_t i,edges = 0;
@@ -149,6 +173,16 @@ static void CAN_tx_pin_test(void)
     GPIO_SetBits(GPIOD,GPIO_Pin_1);//放开总线
     edges += CAN_count_rx(3000U);
   }
+
+  /* 电平探针：PD1 保持高 60 ms / 拉低 60 ms，各读一次六个候选脚的静态电平。
+     PD1 高时 PD0=1、PD1 低时 PD0=0 => 收发器在驱动总线并把总线状态回读；
+     PD0 两次都一样(例如都是 1) => PD0 没被收发器驱动(悬空/芯片没供电)。*/
+  GPIO_SetBits(GPIOD,GPIO_Pin_1);
+  DELAY_ms(60);
+  CAN_print_levels("hi",CAN_levels6());
+  GPIO_ResetBits(GPIOD,GPIO_Pin_1);
+  DELAY_ms(60);
+  CAN_print_levels("lo",CAN_levels6());
 
   gi.GPIO_Mode = GPIO_Mode_AF;//恢复 CAN1 复用
   GPIO_Init(GPIOD,&gi);
