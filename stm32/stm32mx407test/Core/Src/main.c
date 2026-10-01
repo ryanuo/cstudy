@@ -22,23 +22,11 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "beep.h"
-#include "can.h"
 // #include "count_sensor.h"
 #include "fan.h"
 #include "led.h"
 #include "oled.h"
 #include <stdint.h>
-
-#define CAN_ROLE_SENDER 0
-
-/* 测试开关：不用按键，两块板都每 1 秒自动发一帧 0x123。
-   目的是让总线上"一直有帧"，这样接收端的 EDG/N 才有确定的判据，
-   排除"采样那一刻恰好在空闲"的偶然。调完改成 0 即可。 */
-#define CAN_TEST_AUTO_TX 1
-
-/* 自检画面开关：现在只用灯做指示，设 0 把整页寄存器画面关掉（代码留着） */
-#define CAN_DIAG_OLED 0
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,10 +48,6 @@
 CAN_HandleTypeDef hcan1;
 
 /* USER CODE BEGIN PV */
-volatile uint8_t g_can_rx_flag = 0;
-volatile uint32_t g_can_rx_id = 0;
-volatile uint8_t g_can_rx_len = 0;
-volatile uint8_t g_can_rx_data[8] = {0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,24 +55,12 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 /* USER CODE BEGIN PFP */
-#if CAN_DIAG_OLED == 1
-static void Show_CAN_Diag(void);
-static void Show_CAN_Regs_Page(const CAN_Diag_t *d);
-#endif
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-#if CAN_DIAG_OLED == 1
-/* 自检用：ID == 0x123 的回调命中次数 */
-static uint32_t s_rx_match_cnt = 0;
-#endif
-
 /* 点灯测试用的时间戳 */
 static uint32_t s_led_tick = 0; /* 心跳灯 */
-static uint32_t s_tx_tick = 0;  /* 自动发送 */
-
 /* USER CODE END 0 */
 
 /**
@@ -122,13 +94,9 @@ int main(void)
   MX_GPIO_Init();
   MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
-
   OLED_Init();
   // uint32_t last_count = 0xFFFFFFFF;
   // CountSensor_Init();
-
-  BSP_CAN_Init();
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -139,56 +107,6 @@ int main(void)
       s_led_tick = HAL_GetTick();
       LED_Toggle(0); /* 灯1 */
     }
-
-    /* ---- 常亮指示（不闪，不会被看漏；也不押在某一颗灯上）----
-       灯2 + 灯3 常亮 = 收到过帧（g_can_rx_ok_cnt > 0，不限 ID）
-       灯4      常亮 = 至少有一次发送成功（TSR 的 TXOK0 = bit0） */
-    if (g_can_rx_ok_cnt > 0U) {
-      LED_On(1); /* 灯2 = PF10 */
-      LED_On(2); /* 灯3 = PE13 */
-    }
-    if ((CAN1->TSR & 0x00000001U) != 0U) { /* TXOK0：发送成功过 */
-      LED_On(3); /* 灯4 = PE14（之前验证过能亮） */
-    }
-
-#if CAN_TEST_AUTO_TX == 1
-    /* ---- 发送：不依赖按键，每秒自动发一帧 ---- */
-    if ((HAL_GetTick() - s_tx_tick) >= 1000U) {
-      static uint8_t seq = 0;
-      uint8_t txbuf[8] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
-      txbuf[0] = seq++;
-      MyCAN_Transmit(0x123, 8, txbuf);
-      s_tx_tick = HAL_GetTick();
-    }
-#endif
-
-#if CAN_DIAG_OLED == 1
-    /* ---- 寄存器自检画面（现在关着，把 CAN_DIAG_OLED 改成 1 就回来） ---- */
-    Show_CAN_Diag();
-    OLED_Update();
-#endif
-
-    /* 【按需求注释掉】原来的按键触发发送 + OLED 收发显示：
-     按键用的 PA0 本来也没在 MX_GPIO_Init 里配置，去掉更干净。
-     需要时把下面整段取消注释即可。
-
-#if CAN_ROLE_SENDER == 1
-    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET) {
-      LED_On(3);
-      HAL_Delay(20);
-      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET) {
-        uint8_t txbuf[8] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
-        MyCAN_Transmit(0x123, 8, txbuf);
-        while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET)
-          ;
-      }
-    }
-#else
-    if (g_can_rx_flag) {
-      g_can_rx_flag = 0;
-    }
-#endif
-    */
 
     /* USER CODE END WHILE */
 
@@ -369,215 +287,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-#if CAN_DIAG_OLED == 1
-/*------------------------------------------------------------------
- * 翻页前把 8 行整行擦成空格（一行 21 字符 = 126 px）。
- * 上一页较长的行不清掉的话，下一页较短的行末尾会留残影。
- *----------------------------------------------------------------*/
-static void OLED_ClearPage(void) {
-  const char *blank = "                     "; /* 21 个空格 */
-  for (uint8_t y = 0; y < 64; y += 8) {
-    OLED_ShowString(0, y, (char *)blank, OLED_6X8);
-  }
-}
-
-#if CAN_ROLE_SENDER == 0
-/*------------------------------------------------------------------
- * 在 MCU 引脚自己身上看 CAN_RX（PD0）到底有没有动：
- * AF 模式下 GPIOD->IDR 依然反映引脚电平，所以用紧凑循环采样约 20 ms，
- * 数跳变次数（500 k 每一位 2 µs，线上只要有帧在跑就是几百上千次）。
- *   EDG 大 + N 不涨  → 引脚在动但外设没收到（回到软件侧）
- *   EDG 恒 0         → PD0 电气上根本没动（线断 / 收发器没往 MCU 输出）
- *----------------------------------------------------------------*/
-static uint16_t Sample_RX_Edges(void) {
-  uint32_t last = GPIOD->IDR & GPIO_PIN_0;
-  uint16_t edges = 0;
-  uint32_t t0 = HAL_GetTick();
-
-  /* 采满 1 秒：发送端那帧一直挂着重传、总线上是连续活动，
-     1 秒窗口足够避开"刚好采到忙/空闲间隙"的偶然 */
-  while ((HAL_GetTick() - t0) < 1000U) {
-    uint32_t now = GPIOD->IDR & GPIO_PIN_0;
-    if (now != last) {
-      last = now;
-      if (edges < 65535U) {
-        edges++; /* 饱和，避免回绕成小数字 */
-      }
-    }
-  }
-  return edges;
-}
-#endif
-
-/*------------------------------------------------------------------
- * 自检第 2 页：PD0/PD1 的 GPIO 配置 + CAN1 关键寄存器
- * 期望值
- *   MODER : 0000000A  PD0/PD1 = AF 模式（0b10）
- *   AFR0  : 00000099  PD0/PD1 都复用成 AF9（CAN1）
- *   IDR   : 00000003  静默时 PD0(隐性)、PD1 都应该是高
- *   MSR   : 00000C00  INAK=0、SLAK=0；复位值是 00000C02（SLAK=1 睡着）
- *   IER   : 00000002  FIFO0 消息中断已使能（bit1）
- *   FA1R  : 00000001  bank0 激活
- *   FM1:0（掩码模式） FS1:1（32 位） FFA:0（挂 FIFO0）
- *----------------------------------------------------------------*/
-static void Show_CAN_Regs_Page(const CAN_Diag_t *d) {
-  OLED_ShowString(0, 0, "PG2 PIN/CAN1 REG", OLED_6X8);
-
-  OLED_ShowString(0, 8, "MODER:", OLED_6X8);
-  OLED_ShowHexNum(36, 8, d->gpiod_moder, 8, OLED_6X8);
-
-  OLED_ShowString(0, 16, "AFR0 :", OLED_6X8);
-  OLED_ShowHexNum(36, 16, d->gpiod_afr0, 8, OLED_6X8);
-
-  OLED_ShowString(0, 24, "IDR  :", OLED_6X8);
-  OLED_ShowHexNum(36, 24, d->gpiod_idr, 8, OLED_6X8);
-
-  OLED_ShowString(0, 32, "MSR  :", OLED_6X8);
-  OLED_ShowHexNum(36, 32, d->msr, 8, OLED_6X8);
-
-  OLED_ShowString(0, 40, "IER  :", OLED_6X8);
-  OLED_ShowHexNum(36, 40, d->ier, 8, OLED_6X8);
-
-  OLED_ShowString(0, 48, "FA1R :", OLED_6X8);
-  OLED_ShowHexNum(36, 48, d->fa1r, 8, OLED_6X8);
-
-  OLED_ShowString(0, 56, "FM1:", OLED_6X8);
-  OLED_ShowNum(24, 56, d->fm1r & 0x01U, 1, OLED_6X8);
-  OLED_ShowString(30, 56, " FS1:", OLED_6X8);
-  OLED_ShowNum(60, 56, d->fs1r & 0x01U, 1, OLED_6X8);
-  OLED_ShowString(66, 56, " FFA:", OLED_6X8);
-  OLED_ShowNum(96, 56, d->ffa1r & 0x01U, 1, OLED_6X8);
-}
-
-/*------------------------------------------------------------------
- * CAN 自检画面：把 CAN1 的寄存器直接画到 OLED（6x8 字体，8 行）
- *   每行 21 字符以内，横坐标按 6 像素/字符排
- *----------------------------------------------------------------*/
-static void Show_CAN_Diag(void) {
-  CAN_Diag_t d;
-  CAN_Diag_Read(&d);
-
-  OLED_ClearPage(); /* 先整屏擦干净，不然翻页会留上一页的残字 */
-
-  /* 两页轮播：每 2 秒翻一页（第 2 页 = PD0/PD1 配置 + CAN1 关键寄存器） */
-  static uint8_t page = 0;
-  page ^= 1; /* 每刷一屏翻一页（EDG 采样要 1 秒，所以两页各约 2 秒） */
-  if (page != 0) {
-    Show_CAN_Regs_Page(&d);
-    return;
-  }
-
-#if CAN_ROLE_SENDER == 1
-  /* ---- 发送端：只关心"发出去没有" ---- */
-  // TX REQ: 调用发送的次数
-  OLED_ShowString(0, 0, "TX REQ:", OLED_6X8);
-  OLED_ShowNum(42, 0, d.tx_req_cnt, 4, OLED_6X8);
-
-  // TSR: TXOK0[0]=1 发送成功  TERR0[15]=1 发送失败  TME0[26]=1 邮箱空
-  OLED_ShowString(0, 8, "TSR:", OLED_6X8);
-  OLED_ShowHexNum(24, 8, d.tsr, 8, OLED_6X8);
-
-  // ESR: LEC[6:4] 错误类型  TEC[23:16] 发送错误计数  REC[31:24] 接收错误计数
-  OLED_ShowString(0, 16, "ESR:", OLED_6X8);
-  OLED_ShowHexNum(24, 16, d.esr, 8, OLED_6X8);
-
-  OLED_ShowString(0, 24, "LEC:", OLED_6X8);
-  OLED_ShowNum(24, 24, (d.esr >> 4) & 0x07U, 1, OLED_6X8);
-  OLED_ShowString(30, 24, " TEC:", OLED_6X8);
-  OLED_ShowNum(60, 24, (d.esr >> 16) & 0xFFU, 3, OLED_6X8);
-  OLED_ShowString(78, 24, " REC:", OLED_6X8);
-  OLED_ShowNum(108, 24, (d.esr >> 24) & 0xFFU, 3, OLED_6X8);
-
-  // MSR: INAK[0]=0 且 SLAK[1]=0 才是正常运行（复位值 C02 里 SLAK=1，是睡着）
-  OLED_ShowString(0, 32, "MSR:", OLED_6X8);
-  OLED_ShowHexNum(24, 32, d.msr, 8, OLED_6X8);
-
-  // ERR: HAL 汇总的错误标志
-  OLED_ShowString(0, 40, "ERR:", OLED_6X8);
-  OLED_ShowHexNum(24, 40, d.err, 8, OLED_6X8);
-
-  // 顺便看自己能不能收
-  OLED_ShowString(0, 48, "RX N:", OLED_6X8);
-  OLED_ShowNum(30, 48, d.rx_irq_cnt, 4, OLED_6X8);
-
-  // FMR: FINIT[0] + CAN2SB[13:8]（CAN2SB=0 → CAN1 没有过滤 bank）
-  OLED_ShowString(0, 56, "FMR:", OLED_6X8);
-  OLED_ShowHexNum(24, 56, d.fmr, 8, OLED_6X8);
-#else
-  /* ---- 接收端 ---- */
-  // N: 进 RX FIFO0 中断的次数（帧真进来了才涨） FMP: FIFO0 里积压帧数
-  // OK: ID 命中 0x123 的次数
-  OLED_ShowString(0, 0, "N:", OLED_6X8);
-  OLED_ShowNum(12, 0, d.rx_irq_cnt, 4, OLED_6X8);
-  OLED_ShowString(36, 0, " FMP:", OLED_6X8);
-  OLED_ShowNum(66, 0, d.rf0r & 0x03U, 1, OLED_6X8);
-  OLED_ShowString(72, 0, " OK:", OLED_6X8);
-  OLED_ShowNum(96, 0, s_rx_match_cnt, 4, OLED_6X8);
-
-  // ESR: LEC[6:4] 错误类型  TEC[23:16] 发送错误计数  REC[31:24] 接收错误计数
-  OLED_ShowString(0, 8, "ESR:", OLED_6X8);
-  OLED_ShowHexNum(24, 8, d.esr, 8, OLED_6X8);
-
-  OLED_ShowString(0, 16, "LEC:", OLED_6X8);
-  OLED_ShowNum(24, 16, (d.esr >> 4) & 0x07U, 1, OLED_6X8);
-  OLED_ShowString(30, 16, " TEC:", OLED_6X8);
-  OLED_ShowNum(60, 16, (d.esr >> 16) & 0xFFU, 3, OLED_6X8);
-  OLED_ShowString(78, 16, " REC:", OLED_6X8);
-  OLED_ShowNum(108, 16, (d.esr >> 24) & 0xFFU, 3, OLED_6X8);
-
-  // EDG: 在 MCU 引脚上采样 PD0(CAN_RX) 约 20 ms 的跳变次数。
-  // 线上有帧在跑（发送端一直重传）= 几百上千；恒 0 = PD0 电气上没动过
-  OLED_ShowString(0, 24, "EDG:", OLED_6X8);
-  OLED_ShowNum(24, 24, Sample_RX_Edges(), 5, OLED_6X8);
-
-  // FR2: bank0 的掩码寄存器（掩码全 0 就是全接收，FR1 的 ID 已无意义，那一行换成 EDG）
-  OLED_ShowString(0, 32, "FR2:", OLED_6X8);
-  OLED_ShowHexNum(24, 32, d.fr2, 8, OLED_6X8);
-
-  // 收到的 ID / 长度
-  OLED_ShowString(0, 40, "ID:", OLED_6X8);
-  OLED_ShowHexNum(18, 40, g_can_rx_id, 3, OLED_6X8);
-  OLED_ShowString(36, 40, " L:", OLED_6X8);
-  OLED_ShowNum(54, 40, g_can_rx_len, 1, OLED_6X8);
-
-  // 8 字节数据（没收到的那几位用空格擦掉，避免留残影）
-  OLED_ShowString(0, 48, "D:", OLED_6X8);
-  for (uint8_t i = 0; i < 8; i++) {
-    if (i < g_can_rx_len) {
-      OLED_ShowHexNum(12 + i * 12, 48, g_can_rx_data[i], 2, OLED_6X8);
-    } else {
-      OLED_ShowString(12 + i * 12, 48, "  ", OLED_6X8);
-    }
-  }
-
-  // FMR: FINIT[0] + CAN2SB[13:8]   FA1: bank0 是否激活
-  OLED_ShowString(0, 56, "FMR:", OLED_6X8);
-  OLED_ShowHexNum(24, 56, d.fmr, 8, OLED_6X8);
-  OLED_ShowString(72, 56, " FA1:", OLED_6X8);
-  OLED_ShowNum(102, 56, d.fa1r & 0x01U, 1, OLED_6X8);
-#endif
-}
-
-// void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-//   CountSensor_EXTI_Callback(GPIO_Pin);
-// }
-
-#endif /* CAN_DIAG_OLED */
-
-// CAN总线回调
-void MyCAN_OnRx(uint32_t ID, uint8_t Length, uint8_t *Data) {
-  if (ID == 0x123) {
-#if CAN_DIAG_OLED == 1
-    s_rx_match_cnt++;
-#endif
-    g_can_rx_id = ID;
-    g_can_rx_len = Length;
-    for (uint8_t i = 0; i < Length && i < 8; i++) {
-      g_can_rx_data[i] = Data[i];
-    }
-    g_can_rx_flag = 1;
-  }
-}
 /* USER CODE END 4 */
 
 /**
