@@ -40,6 +40,7 @@
 #define CAN_TEST_ID       0x123
 #define CAN_PIN_SNIFF     1     // 1 = 每秒数一次引脚跳变数（看信号到底进没进板子）
 #define CAN_TX_PIN_TEST   1     // 接收端专用：开机把 CAN_TX(PD1) 当普通 IO 翻转，数 CAN_RX(PD0) 跟不跟
+#define CAN_DBG_VER       5     // 固件版本号：开机横幅里会打出来，用来确认板上烧的是哪一版
 
 #if CAN_DEBUG_PRINTF == 1
 /* 一行寄存器自检，直接送到串口：
@@ -102,6 +103,8 @@ static void CAN_pin_sniff(void)
 #endif
 
 #if (CAN_ROLE_SENDER == 0) && (CAN_TX_PIN_TEST == 1)
+static uint16_t s_txpd_cnt = 0;//每 5 个自检槽重跑一次通路测试
+
 /*---------------------------------------------------------------
  * 数 CAN_RX(PD0) 在 iters 次采样里跳变了几次
  *---------------------------------------------------------------*/
@@ -188,8 +191,9 @@ int main(void)
 	IICSOFTWARE_init();
   CAN_init();
 #if CAN_DEBUG_PRINTF == 1
-  printf("\r\n==== CAN %s ====  ID=0x%03X\r\n",
+  printf("\r\n==== CAN %s v%u ====  ID=0x%03X\r\n",
          (CAN_ROLE_SENDER == 1) ? "SENDER" : "RECEIVER",
+         (unsigned)CAN_DBG_VER,
          (unsigned)CAN_TEST_ID);
   CAN_print_diag();
 #endif
@@ -251,6 +255,13 @@ int main(void)
 #endif
 #if CAN_PIN_SNIFF == 1
 			CAN_pin_sniff();//紧随其后数 1 秒引脚跳变
+#endif
+#if (CAN_ROLE_SENDER == 0) && (CAN_TX_PIN_TEST == 1)
+			if(++s_txpd_cnt >= 5U)//每约 5 秒重跑一次收发通路自检
+			{
+				s_txpd_cnt = 0;
+				CAN_tx_pin_test();
+			}
 #endif
 		}
 		DELAY_ms(10);
