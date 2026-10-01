@@ -38,6 +38,7 @@
 #define CAN_DEBUG_PRINTF  1
 #define CAN_TX_PERIOD_MS  500
 #define CAN_TEST_ID       0x123
+#define CAN_PIN_SNIFF     1     // 1 = 每秒数一次引脚跳变数（看信号到底进没进板子）
 
 #if CAN_DEBUG_PRINTF == 1
 /* 一行寄存器自检，直接送到串口：
@@ -60,6 +61,42 @@ static void CAN_print_diag(void)
          (unsigned)((CAN1->TSR & CAN_TSR_TXOK0) != 0U ? 1U : 0U),
          (unsigned)((CAN1->TSR & CAN_TSR_TME0) != 0U ? 1U : 0U),
          (unsigned)CAN1->MSR);
+}
+#endif /* CAN_DEBUG_PRINTF */
+
+#if CAN_PIN_SNIFF == 1
+/*---------------------------------------------------------------
+ * 引脚嗅探：约 1 秒内数 6 个脚的跳变次数，打到串口
+ *
+ * 为什么有用：发送端现在因为没人 ACK 在【不停重传】，总线上的波形
+ * 是一直有的。所以：
+ *   哪个脚在跳  = 收发器的 RXD 实际接在那个脚上（顺便查出接错脚）
+ *   全都不跳    = 信号根本没进板子（收发器没供电/没工作、线断）
+ *   PD1 在跳    = MCU 确实在往收发器送数据（发送端应该狂跳）
+ *   PD0 在跳    = 收发器把总线状态回读给了 MCU（发送端也应有）
+ *
+ * PD0/PD1 是 CAN 复用脚，AF 模式下 GPIOD->IDR 照样反映引脚真实电平；
+ * PA11/PA12 复位后是输入模式；PB8/PB9 被软件 IIC 配成了 GPIO，都能读。
+ *---------------------------------------------------------------*/
+static void CAN_pin_sniff(void)
+{
+  uint32_t c0 = 0,c1 = 0,c8 = 0,c9 = 0,ca = 0,cb = 0;
+  uint32_t pd = GPIOD->IDR,pb = GPIOB->IDR,pa = GPIOA->IDR;
+  volatile uint32_t n;
+  for(n = 0;n < 8000000U;n++)//约 1 秒
+  {
+    uint32_t d = GPIOD->IDR,b = GPIOB->IDR,a = GPIOA->IDR;
+    if((d ^ pd) & 0x0001U) c0++;
+    if((d ^ pd) & 0x0002U) c1++;
+    if((b ^ pb) & 0x0100U) c8++;
+    if((b ^ pb) & 0x0200U) c9++;
+    if((a ^ pa) & 0x0800U) ca++;
+    if((a ^ pa) & 0x1000U) cb++;
+    pd = d;pb = b;pa = a;
+  }
+  printf("SN PD0=%u PD1=%u\r\n",(unsigned)c0,(unsigned)c1);
+  printf("SN PB8=%u PB9=%u\r\n",(unsigned)c8,(unsigned)c9);
+  printf("SN PA11=%u PA12=%u\r\n",(unsigned)ca,(unsigned)cb);
 }
 #endif
 
@@ -117,6 +154,9 @@ int main(void)
 #if CAN_DEBUG_PRINTF == 1
 			CAN_print_diag();
 #endif
+#if CAN_PIN_SNIFF == 1
+			CAN_pin_sniff();//紧随其后数 1 秒引脚跳变
+#endif
 		}
 		DELAY_ms(CAN_TX_PERIOD_MS);
 #else
@@ -142,6 +182,9 @@ int main(void)
 			loop_cnt = 0;
 #if CAN_DEBUG_PRINTF == 1
 			CAN_print_diag();
+#endif
+#if CAN_PIN_SNIFF == 1
+			CAN_pin_sniff();//紧随其后数 1 秒引脚跳变
 #endif
 		}
 		DELAY_ms(10);
