@@ -1,6 +1,6 @@
 #include "app_wifi.h"
 #include "bsp_esp8266.h"
-#include "oled.h"
+#include "lcd.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -94,12 +94,56 @@ static uint8_t wifi_parse_ip(char *dst, uint8_t max_len) {
   return 1;
 }
 
+/* 把缓冲区里某一段按 hex 或 ASCII 打到屏上（12 号字，一行约 39 字符）
+ * hex=1 时 len 用 13（13*3=39 字符），hex=0 时 len 用 39 */
+static void wifi_dump(char *buf, uint16_t n, uint16_t from, uint16_t len,
+                      uint16_t y, uint8_t hex) {
+  char line[44];
+  uint16_t i;
+  uint8_t k = 0;
+
+  line[0] = '\0';
+  if (n > 0 && from < n) {
+    for (i = from; i < n && i < (uint16_t)(from + len); i++) {
+      if (hex)
+        k += (uint8_t)snprintf(line + k, sizeof(line) - k, "%02X ",
+                               (unsigned char)buf[i]);
+      else {
+        char c = buf[i];
+        line[k++] = (c >= 0x20 && c <= 0x7e) ? c : '.';
+      }
+    }
+    line[k] = '\0';
+  }
+  LCD_DisplayString(4, y, 12, (u8 *)line);
+}
+
+/* 收到的东西看不懂时，把原始字节摊开看：头尾的 hex + ASCII */
+static void wifi_show_raw(char *buf) {
+  char line[32];
+  uint16_t n = (uint16_t)strlen(buf);
+
+  snprintf(line, sizeof(line), "RX=%u", (unsigned)n);
+  LCD_DisplayString(4, 60, 16, (u8 *)line);
+
+  /* 头部（模块上电启动日志一般在这） */
+  wifi_dump(buf, n, 0, 13, 84, 1);
+  wifi_dump(buf, n, 0, 39, 98, 0);
+  wifi_dump(buf, n, 39, 39, 112, 0);
+
+  /* 尾部（最后收到的东西） */
+  wifi_dump(buf, n, (n > 26) ? (uint16_t)(n - 26) : 0, 13, 128, 1);
+  wifi_dump(buf, n, (n > 78) ? (uint16_t)(n - 78) : 0, 39, 142, 0);
+  wifi_dump(buf, n, (n > 39) ? (uint16_t)(n - 39) : 0, 39, 156, 0);
+}
+
 /* ================= 对外接口 ================= */
 
 WIFI_Status_t WIFI_Init(void) {
   BSP_ESP8266_ClearBuffer();
   BSP_ESP8266_SendAT("AT");
-  if (!wifi_wait_for("OK", "ERROR", NULL, 1000))
+  /* 模块刚上电时还在启动，给 2 秒；这段时间也能收到它的启动信息 */
+  if (!wifi_wait_for("OK", "ERROR", NULL, 2000))
     return WIFI_ERR_NO_MODULE;
 
   /* 关闭回显，避免影响后续解析 */
@@ -121,7 +165,7 @@ WIFI_Status_t WIFI_Connect(char *ssid, char *pwd) {
 
   /* 连 WiFi 慢，给 15 秒；成功的关键字是 WIFI GOT IP */
   if (wifi_wait_for("WIFI GOT IP", "FAIL", "ERROR", 15000)) {
-    HAL_Delay(500);
+    HAL_Delay(2000);
     return WIFI_OK;
   }
 
@@ -144,49 +188,73 @@ WIFI_Status_t WIFI_GetIP(char *ip_buf, uint8_t len) {
 
 /* ================= 综合测试 + OLED 显示 ================= */
 
+#define LCD_CLEAR_SCREEN WHITE
 WIFI_Status_t WIFI_TestAndShow(char *ssid, char *pwd) {
   char ip[32];
   char line[64];
   WIFI_Status_t st;
 
   /* 1. 初始化 */
-  OLED_Clear();
-  OLED_ShowString(0, 0, "Init ESP8266...", OLED_8X16);
+  LCD_Clear(LCD_CLEAR_SCREEN);
+  Text_Foreground_Color(BLACK);
+  Text_Background_Color(WHITE);
+  LCD_DisplayString(20, 20, 16, (u8 *)"Init ESP8266...");
+
   st = WIFI_Init();
   if (st != WIFI_OK) {
-    OLED_Clear();
-    OLED_ShowString(0, 0, "No module!", OLED_8X16);
+    LCD_Clear(LCD_CLEAR_SCREEN);
+    Text_Foreground_Color(RED);
+    Text_Background_Color(WHITE);
+    LCD_DisplayString(20, 20, 16, (u8 *)"No module!");
+    /* 诊断：把这一轮收到的原始字节摊开
+       全是乱码   -> 线上不是 UART 信号（P5 短路帽没拆/PHY 占用 PA1）或波特率不对
+       有 AT/OK   -> 解析问题
+       只有 AT    -> TX 被回环/回显 */
+    wifi_show_raw(BSP_ESP8266_Find(""));
     return st;
   }
 
   /* 2. 连 WiFi */
-  OLED_Clear();
-  OLED_ShowString(0, 0, "Connecting...", OLED_8X16);
+  LCD_Clear(LCD_CLEAR_SCREEN);
+  Text_Foreground_Color(BLACK);
+  Text_Background_Color(WHITE);
+  LCD_DisplayString(20, 20, 16, (u8 *)"Connecting...");
   snprintf(line, sizeof(line), "SSID:%s", ssid);
-  OLED_ShowString(0, 16, line, OLED_8X16);
+  LCD_DisplayString(20, 60, 16, (u8 *)line);
 
   st = WIFI_Connect(ssid, pwd);
   if (st != WIFI_OK) {
-    OLED_Clear();
-    OLED_ShowString(0, 0, "Connect fail", OLED_8X16);
+    LCD_Clear(LCD_CLEAR_SCREEN);
+    Text_Foreground_Color(RED);
+    Text_Background_Color(WHITE);
+    LCD_DisplayString(20, 20, 16, (u8 *)"Connect fail");
     return st;
   }
 
   /* 3. 拿 IP */
-  OLED_Clear();
-  OLED_ShowString(0, 0, "Getting IP...", OLED_8X16);
+  LCD_Clear(LCD_CLEAR_SCREEN);
+  Text_Foreground_Color(BLACK);
+  Text_Background_Color(WHITE);
+  LCD_DisplayString(20, 20, 16, (u8 *)"Getting IP...");
+
   st = WIFI_GetIP(ip, sizeof(ip));
   if (st != WIFI_OK) {
-    OLED_Clear();
-    OLED_ShowString(0, 0, "Get IP fail", OLED_8X16);
+    LCD_Clear(LCD_CLEAR_SCREEN);
+    Text_Foreground_Color(RED);
+    Text_Background_Color(WHITE);
+    LCD_DisplayString(20, 20, 16, (u8 *)"Get IP fail");
     return st;
   }
 
   /* 4. 显示结果 */
-  OLED_Clear();
-  OLED_ShowString(0, 0, "WiFi OK", OLED_8X16);
+  LCD_Clear(LCD_CLEAR_SCREEN);
+  Text_Foreground_Color(GREEN);
+  Text_Background_Color(WHITE);
+  LCD_DisplayString(20, 20, 24, (u8 *)"WiFi OK");
+
+  Text_Foreground_Color(BLACK);
   snprintf(line, sizeof(line), "IP:%s", ip);
-  OLED_ShowString(0, 16, line, OLED_8X16);
+  LCD_DisplayString(20, 70, 16, (u8 *)line);
 
   return WIFI_OK;
 }
