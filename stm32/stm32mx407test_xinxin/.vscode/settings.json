@@ -1,0 +1,23 @@
+{
+    "cmake.cmakePath": "cube-cmake",
+    "cmake.configureArgs": [
+        "-DCMAKE_COMMAND=cube-cmake"
+    ],
+    "cmake.preferredGenerators": [
+        "Ninja"
+    ],
+    "stm32cube-ide-clangd.path": "cube",
+    "stm32cube-ide-clangd.arguments": [
+        "starm-clangd",
+        "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-gcc*",
+        "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/14.3.1+st.2/bin/arm-none-eabi-g++*"
+    ],
+    // ===== 新增：控制参数名提示 =====
+    // 方式 1：完全隐藏 C/C++ 的参数名提示（最彻底）
+    "clangd.inlayHints.parameterNames": false,
+    // 方式 2：如果你用的是微软官方的 C/C++ 插件而不是 clangd，则用这句：
+    // "C_Cpp.inlayHints.parameterNames.enabled": false,
+    // 方式 3：全局控制内联提示的显示策略
+    // "off" 完全不显示；"on" 总是显示；"offUnlessPressed" 按住 Ctrl+Alt 才显示
+    "editor.inlayHints.enabled": "off"
+}
