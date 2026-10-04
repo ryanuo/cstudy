@@ -22,7 +22,7 @@ class El {
     const s = this._cls;
     return { toggle: (c, on) => { on ? s.add(c) : s.delete(c); }, contains: c => s.has(c), add: c => s.add(c), remove: c => s.delete(c) };
   }
-  closest(sel) { return sel === '#voiceBtn' && this.id === 'voiceBtn' ? this : null; }
+  closest(sel) { return sel === '#' + this.id ? this : null; }
 }
 
 function makeEnv({ withSR = false } = {}) {
@@ -30,8 +30,20 @@ function makeEnv({ withSR = false } = {}) {
     voiceBtn: new El('voiceBtn'),
     voiceLabel: new El('voiceLabel'),
     voiceBar: new El('voiceBar'),
-    voiceText: new El('voiceText')
+    voiceText: new El('voiceText'),
+    voiceCfgBtn: new El('voiceCfgBtn'),
+    voiceCfg: new El('voiceCfg'),
+    voiceSel: new El('voiceSel'),
+    voiceRate: new El('voiceRate'),
+    voicePitch: new El('voicePitch'),
+    voiceVol: new El('voiceVol'),
+    voiceRateVal: new El('voiceRateVal'),
+    voicePitchVal: new El('voicePitchVal'),
+    voiceVolVal: new El('voiceVolVal'),
+    voiceTest: new El('voiceTest'),
+    voiceHint: new El('voiceHint')
   };
+  els.voiceCfg.hidden = true;
   els.voiceBar.hidden = true;
   const doc = {
     listeners: {},
@@ -41,7 +53,7 @@ function makeEnv({ withSR = false } = {}) {
     readyState: 'complete'
   };
   const store = {};
-  const calls = { fetch: [], set: [], speak: [] };
+  const calls = { fetch: [], set: [], speak: [], utterances: [] };
 
   globalThis.window = globalThis;
   globalThis.document = doc;
@@ -51,7 +63,12 @@ function makeEnv({ withSR = false } = {}) {
     removeItem: k => { delete store[k]; }
   };
   globalThis.fetch = async (url, opts) => { calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
-  globalThis.speechSynthesis = { cancel() {}, speak(u) { calls.speak.push(u.text); if (u.onend) setTimeout(u.onend, 0); } };
+  globalThis.speechSynthesis = {
+    cancel() {},
+    speak(u) { calls.speak.push(u.text); calls.utterances.push(u); if (u.onend) setTimeout(u.onend, 0); },
+    getVoices() { return [{ name: 'Ting-Ting', lang: 'zh-CN' }, { name: 'Sin-ji', lang: 'zh-HK' }, { name: 'Alex', lang: 'en-US' }]; },
+    onvoiceschanged: null
+  };
   globalThis.location = { reload() { calls.reloaded = (calls.reloaded || 0) + 1; } };
   // 故意**不**提供 window.prompt：Electron 里就没有它，代码不该依赖
   const body = { children: [], appendChild(n) { this.children.push(n); globalThis.__gate = n; } };
@@ -63,7 +80,7 @@ function makeEnv({ withSR = false } = {}) {
     el.appendChild = () => {};
     return el;
   };
-  globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+  globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; this.rate = 0; this.pitch = 0; this.volume = 0; this.voice = null; this.lang = ''; } };
 
   if (withSR) {
     class FakeSR {
@@ -373,4 +390,50 @@ test('steps：开风扇 + 报温度，合成一句播报（含度数）', async 
   assert.match(spoken, /26\.7/, '播报要带具体数值');
   assert.match(spoken, /度/, '℃ 要念成"度"');
   assert.equal(env.srStarts, 1, '场景执行完不自动续听');
+});
+
+
+/* ---------------- 语音设置（音色 / 语速 / 音调 / 音量） ---------------- */
+
+test('保存过的朗读参数会应用到播报（音色 + 语速/音调/音量）', async () => {
+  const env = makeEnv({ withSR: true });
+  env.store.panelVoice = JSON.stringify({ name: 'Sin-ji', rate: 1.6, pitch: 0.7, volume: 0.4 });
+  env.fetchReply = async () => ({ ok: true, status: 200,
+    json: async () => ({ intent: { action: 'chat', reply: '你好呀' } }) });
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  globalThis.__panel = { controls: [], cards: [], isOnline: () => true, set: async () => true,
+    setMany: async () => ({ ok: true }), get: () => null, refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r = [[{ transcript: '你好' }]]; r[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r });
+  await new Promise(res => setTimeout(res, 40));
+
+  const u = env.calls.utterances[env.calls.utterances.length - 1];
+  assert.equal(u.rate, 1.6, '语速应来自本地配置');
+  assert.equal(u.pitch, 0.7, '音调应来自本地配置');
+  assert.equal(u.volume, 0.4, '音量应来自本地配置');
+  assert.equal(u.voice && u.voice.name, 'Sin-ji', '应按名字选中保存的音色');
+  assert.equal(u.lang, 'zh-CN');
+});
+
+test('齿轮按钮打开设置面板并列出系统音色', async () => {
+  const env = makeEnv();
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceCfgBtn }));
+  assert.equal(env.els.voiceCfg.hidden, false, '面板应打开');
+  assert.match(env.els.voiceSel.innerHTML, /Ting-Ting/, '应列出声色');
+  assert.match(env.els.voiceSel.innerHTML, /selected/, '当前音色应被选中');
+  assert.ok(/音色来自系统|系统没装中文语音/.test(env.els.voiceHint.textContent), '应有提示文案');
+});
+
+test('拖动语速滑块会存入 localStorage，并影响后续播报', async () => {
+  const env = makeEnv();
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceCfgBtn }));   // 打开 → 绑定
+  env.els.voiceRate.value = '1.5';
+  env.els.voiceRate.fire('input', {});
+  assert.equal(JSON.parse(env.store.panelVoice).rate, 1.5, '应写回本地配置');
+  assert.equal(env.els.voiceRateVal.textContent, '1.50', '数值要显示出来');
 });

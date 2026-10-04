@@ -163,12 +163,45 @@
     </div>
   </transition>
 
-  <!-- 语音：底部居中悬浮按钮（拇指位，手机也好按） -->
-  <button type="button" id="voiceBtn" class="voice-fab"
-          title="语音控制：说“打开灯 1”“温度多少”“刷新一下”">
-    <i class="fa fa-microphone"></i>
-    <span id="voiceLabel">语音</span>
-  </button>
+  <!-- 语音：底部居中悬浮坞（拇指位，手机也好按） -->
+  <div class="voice-dock">
+    <div id="voiceCfg" class="voice-cfg" hidden>
+      <div class="voice-cfg-head">语音设置</div>
+      <div class="voice-cfg-row">
+        <label for="voiceSel">音色</label>
+        <select id="voiceSel"></select>
+      </div>
+      <div class="voice-cfg-row">
+        <label for="voiceRate">语速</label>
+        <input id="voiceRate" type="range" min="0.5" max="2" step="0.05" />
+        <span class="voice-cfg-val" id="voiceRateVal"></span>
+      </div>
+      <div class="voice-cfg-row">
+        <label for="voicePitch">音调</label>
+        <input id="voicePitch" type="range" min="0" max="2" step="0.05" />
+        <span class="voice-cfg-val" id="voicePitchVal"></span>
+      </div>
+      <div class="voice-cfg-row">
+        <label for="voiceVol">音量</label>
+        <input id="voiceVol" type="range" min="0" max="1" step="0.05" />
+        <span class="voice-cfg-val" id="voiceVolVal"></span>
+      </div>
+      <div class="voice-cfg-foot">
+        <button type="button" id="voiceTest" class="btn btn-outline btn-sm">试听</button>
+        <span id="voiceHint" class="voice-cfg-hint"></span>
+      </div>
+    </div>
+
+    <button type="button" id="voiceBtn" class="voice-fab"
+            title="语音控制：说“打开灯 1”“太热了”“温度多少”">
+      <i class="fa fa-microphone"></i>
+      <span id="voiceLabel">语音</span>
+    </button>
+
+    <button type="button" id="voiceCfgBtn" class="voice-gear" title="语音设置（音色 / 语速 / 音调）">
+      <i class="fa fa-sliders"></i>
+    </button>
+  </div>
 
 </div>
 

@@ -49,17 +49,28 @@
   }
   /* 朗读用浏览器自带 TTS（免费、不需要后端）。Chrome 的音色列表是异步加载的，
      所以先挑一次 + 监听 voiceschanged 再挑，尽量拿到中文音色。 */
+  /* 朗读参数：音色 / 语速 / 音调 / 音量 —— 存本机 localStorage，可在面板里调 */
+  const VCFG_KEY = 'panelVoice';
+  const vcfg = Object.assign({ name: '', rate: 1.05, pitch: 1, volume: 1 },
+    (function () { try { return JSON.parse(localStorage.getItem(VCFG_KEY) || '{}') || {}; } catch (e) { return {}; } })());
+  function saveVcfg() { try { localStorage.setItem(VCFG_KEY, JSON.stringify(vcfg)); } catch (e) {} }
+
   let zhVoice = null;
-  function pickVoice() {
-    if (!window.speechSynthesis || !speechSynthesis.getVoices) return;
-    let vs = [];
-    try { vs = speechSynthesis.getVoices() || []; } catch (e) { return; }
-    zhVoice = vs.find(v => /zh[-_]?(CN|Hans)/i.test(v.lang) || /Chinese|中文|普通话/i.test(v.name))
-           || vs.find(v => /^zh/i.test(v.lang)) || null;
+  function allVoices() {
+    try { return (window.speechSynthesis && speechSynthesis.getVoices()) || []; } catch (e) { return []; }
   }
-  pickVoice();
-  if (window.speechSynthesis) {
-    try { speechSynthesis.onvoiceschanged = pickVoice; } catch (e) {}
+  function zhVoices() {
+    const vs = allVoices();
+    const zh = vs.filter(v => /zh/i.test(v.lang));
+    return zh.length ? zh : vs;      // 系统没有中文就退回全部，让用户自己挑
+  }
+  function pickVoice() {
+    const vs = zhVoices();
+    zhVoice = vs.find(x => x.name === vcfg.name)
+           || vs.find(x => /zh[-_]?(CN|Hans)/i.test(x.lang) || /Chinese|中文|普通话/i.test(x.name))
+           || vs[0] || null;
+    if (zhVoice && !vcfg.name) { vcfg.name = zhVoice.name; saveVcfg(); }
+    fillVoiceCfg();
   }
 
   /* 播报；onEnd 在"念完"后回调（没有 TTS 时用时长估算兜底），只触发一次 */
@@ -74,7 +85,9 @@
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(String(msg));
       u.lang = 'zh-CN';
-      u.rate = 1.05;
+      u.rate = Number(vcfg.rate) || 1.05;
+      u.pitch = Number(vcfg.pitch) >= 0 ? Number(vcfg.pitch) : 1;
+      u.volume = Number(vcfg.volume) >= 0 ? Number(vcfg.volume) : 1;
       if (zhVoice) u.voice = zhVoice;
       u.onend = fire;
       u.onerror = fire;
@@ -107,6 +120,73 @@
       start();
     });
   }
+  /* ---------- 语音设置面板 ---------- */
+  function fillVoiceCfg() {
+    const sel = $('voiceSel'), hint = $('voiceHint');
+    if (!sel) return;
+    const vs = zhVoices();
+    const cur = (zhVoice && zhVoice.name) || vcfg.name || '';
+    if (vs.length) {
+      sel.innerHTML = vs.map(v =>
+        '<option value="' + v.name.replace(/"/g, '&quot;') + '"' + (v.name === cur ? ' selected' : '') +
+        '>' + v.name + '（' + v.lang + '）</option>').join('');
+    } else {
+      sel.innerHTML = '<option value="">（系统还没有可用音色）</option>';
+    }
+    const r = $('voiceRate'), p = $('voicePitch'), vo = $('voiceVol');
+    if (r) { r.value = vcfg.rate; $('voiceRateVal').textContent = Number(vcfg.rate).toFixed(2); }
+    if (p) { p.value = vcfg.pitch; $('voicePitchVal').textContent = Number(vcfg.pitch).toFixed(2); }
+    if (vo) { vo.value = vcfg.volume; $('voiceVolVal').textContent = Number(vcfg.volume).toFixed(2); }
+    if (hint) {
+      hint.textContent = vs.length
+        ? '音色来自系统；要更多（如「婷婷/美佳」）去系统设置里下载中文语音'
+        : '系统没装中文语音：macOS 系统设置 → 辅助功能 → 朗读内容 → 系统声音 → 管理声音';
+    }
+  }
+
+  function bindVoiceCfg() {
+    const sel = $('voiceSel');
+    if (!sel || sel.__bound) return;
+    sel.__bound = true;
+    const onRange = (el, key) => {
+      if (!el) return;
+      el.addEventListener('input', () => {
+        vcfg[key] = Number(el.value);
+        const span = $('voice' + key[0].toUpperCase() + key.slice(1) + 'Val');
+        if (span) span.textContent = Number(el.value).toFixed(2);
+        saveVcfg();
+      });
+    };
+    sel.addEventListener('change', () => {
+      vcfg.name = sel.value;
+      saveVcfg();
+      pickVoice();
+      speak('音色已切换');
+    });
+    onRange($('voiceRate'), 'rate');
+    onRange($('voicePitch'), 'pitch');
+    onRange($('voiceVol'), 'volume');
+    const test = $('voiceTest');
+    if (test) test.addEventListener('click', () => speak('已打开 风扇，温度 26.7 度'));
+  }
+
+  function toggleVoiceCfg() {
+    const box = $('voiceCfg'), btn = $('voiceCfgBtn');
+    if (!box) return;
+    const open = !box.hidden;
+    if (open) {
+      box.classList.remove('is-show');
+      setTimeout(() => { if (!box.classList.contains('is-show')) box.hidden = true; }, 170);
+    } else {
+      fillVoiceCfg();
+      bindVoiceCfg();
+      box.hidden = false;
+      const raf = window.requestAnimationFrame || (f => setTimeout(f, 0));
+      raf(() => box.classList.add('is-show'));
+    }
+    if (btn) btn.classList.toggle('is-open', !open);
+  }
+
   function setLive(on) {
     listening = on;
     const btn = $('voiceBtn'), label = $('voiceLabel');
@@ -282,12 +362,18 @@
 
   /* 事件委托：Vue 重建按钮后依然生效 */
   document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('#voiceCfgBtn')) { toggleVoiceCfg(); return; }
     const btn = e.target.closest && e.target.closest('#voiceBtn');
     if (!btn) return;
     if (listening) { try { rec.stop(); } catch (err) {} show(''); return; }
     relistenGuard = 0;                  // 手动点 = 重新开始
     start();
   });
+
+  pickVoice();
+  if (window.speechSynthesis) {
+    try { speechSynthesis.onvoiceschanged = pickVoice; } catch (e) {}   // Chrome 音色列表是异步加载的
+  }
 
   /* 不支持时把按钮置灰（同样等 Vue 渲染完再动） */
   if (!SR) {
