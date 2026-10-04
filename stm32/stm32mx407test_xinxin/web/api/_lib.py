@@ -45,7 +45,11 @@ def build_prompt(controls, cards):
         "问某个数值→query；刷新/更新数据→refresh；重启/复位设备→reboot；打招呼/闲聊/没听懂→chat 或 unknown。\n"
         '一次要动多个（"把灯都关了""全部关掉""蜂鸣器和风扇都关"）→ action=toggle_many，'
         'targets 填涉及的 key 列表、value 填 true/false、target 填 null。\n'
-        '没指明是哪一路（例如只说"开灯"）→ {"action":"toggle","target":null,"value":null,"reply":"要开哪一路？"}'
+        '没指明是哪一路（例如只说"开灯"）→ {"action":"toggle","target":null,"value":null,"reply":"要开哪一路？"}\n'
+        '只报了几个目标但没说开还是关（例如「灯1和灯3」「风扇和蜂鸣器」）→ action=toggle_many、'
+        'targets 填这几个 key、value=null、reply 问「要开还是关」\n'
+        "上下文：如果用户这句是在回答你上一轮的追问（上一轮你问了「要开哪一路？」、用户只说「灯 1」），"
+        "就结合上文把动作补全成完整意图；用户说「算了」「不用了」→ action=chat。"
         % (ctrl, card)
     )
 
@@ -95,8 +99,12 @@ def validate(intent, controls, cards):
                     targets.append(t)
         targets = targets[:MAX_TARGETS]
         if not targets or value not in (True, False):
-            return {"action": "unknown", "target": None, "targets": None, "value": None,
-                    "reply": reply or "要动哪几个？开还是关？"}
+            out = {"action": "unknown", "target": None, "targets": None, "value": None,
+                   "reply": reply or "要动哪几个？开还是关？"}
+            if targets or value in (True, False):
+                out["pending"] = {"action": "toggle_many", "targets": targets or None,
+                                  "value": value if value in (True, False) else None}
+            return out
         if len(targets) == 1:                  # 只剩一个就退回单目标，前端少一条分支
             return {"action": "toggle", "target": targets[0], "targets": None,
                     "value": value, "reply": reply}
@@ -105,8 +113,14 @@ def validate(intent, controls, cards):
 
     if action == "toggle":
         if target is None or value not in (True, False):
-            return {"action": "unknown", "target": None, "value": None,
-                    "reply": reply or "要控制哪一路？开还是关？"}
+            out = {"action": "unknown", "target": None, "targets": None, "value": None,
+                   "reply": reply or "要控制哪一路？开还是关？"}
+            if target is not None or value in (True, False):
+                # 只要有"目标"或"开关"其中一样，就还差另一样 → 可继续追问
+                # （"开灯"缺目标；"灯1和灯3"缺开关；两样都缺就只能让用户重说）
+                out["pending"] = {"action": "toggle", "target": target,
+                                  "value": value if value in (True, False) else None}
+            return out
     else:
         value = None
 
@@ -219,12 +233,33 @@ def onenet_call(op, params=None, body=None):
 
 
 # ----------------------------- LLM -----------------------------
-def ask_qwen(text, controls, cards):
+def build_messages(text, controls, cards, history=None, pending=None):
+    """系统提示 + 最近几轮对话 + 本轮用户话。
+
+    pending 是上一轮"还差什么信息"的结构化提示（例如只说了"开灯"、差哪一路），
+    显式喂回去比只靠 history 可靠得多：实测只给 history 时，用户答"关掉"
+    会被理解成"把全部都关了"，而不是补全上一轮那两路。
+    """
+    system = build_prompt(controls, cards)
+    if pending:
+        system += ("\n\n注意：用户这句是在回答你的上一次追问。上一轮没定下来的部分是："
+                   + json.dumps(pending, ensure_ascii=False)
+                   + "。请只把缺的部分补上，不要扩大范围、也不要改动已经确定的目标，"
+                     "然后输出完整意图 JSON。")
+    msgs = [{"role": "system", "content": system}]
+    for h in (history or [])[-6:]:
+        role, content = h.get("role"), h.get("content")
+        if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+            msgs.append({"role": role, "content": content[:400]})
+    msgs.append({"role": "user", "content": text})
+    return msgs
+
+
+def ask_qwen(text, controls, cards, history=None, pending=None):
     key = os.environ.get("DASHSCOPE_API_KEY", "")
     payload = {
         "model": os.environ.get("QWEN_MODEL", "qwen-plus"),
-        "messages": [{"role": "system", "content": build_prompt(controls, cards)},
-                     {"role": "user", "content": text}],
+        "messages": build_messages(text, controls, cards, history, pending),
         "temperature": 0.1,
         "max_tokens": 300,
     }

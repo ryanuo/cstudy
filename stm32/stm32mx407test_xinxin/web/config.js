@@ -68,11 +68,11 @@ window.PanelAPI = {
     input.focus();
   },
 
-  async chat(text, controls, cards) {
+  async chat(text, controls, cards, history, pending) {
     const res = await fetch(window.PANEL_CONFIG.chatUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Panel-Key': this.key() },
-      body: JSON.stringify({ text, controls, cards })
+      body: JSON.stringify({ text, controls, cards, history: history || [], pending: pending || null })
     });
     if (res.status === 401) {
       this.clearKey();

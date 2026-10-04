@@ -90,3 +90,56 @@ def test_all_actions_have_full_schema():
     for it in [{"action": "chat", "reply": "hi"}, {"action": "refresh"}, {"action": "query", "target": "temperature"}]:
         out = validate(it, C3, K)
         assert set(out) >= {"action", "target", "targets", "value", "reply"}
+
+
+# ---------------- 多轮追问（pending + 上下文） ----------------
+def test_targetless_toggle_reports_pending():
+    out = validate({"action": "toggle", "target": None, "value": True, "reply": "要开哪一路？"}, C3, K)
+    assert out["action"] == "unknown"
+    assert out["pending"] == {"action": "toggle", "target": None, "value": True}
+
+
+def test_targetless_toggle_without_value_has_no_pending():
+    out = validate({"action": "toggle", "target": None, "value": None}, C3, K)
+    assert "pending" not in out          # 目标、开关两样都缺 → 追问不出有效动作，让用户重说
+
+
+def test_toggle_with_target_but_no_value_reports_pending():
+    # "灯1和灯3" 这种：知道目标、不知道开还是关 → 也要能接着追问
+    out = validate({"action": "toggle", "target": "led1", "value": None}, C3, K)
+    assert out["action"] == "unknown"
+    assert out["pending"] == {"action": "toggle", "target": "led1", "value": None}
+
+
+def test_toggle_many_with_targets_but_no_value_reports_pending():
+    out = validate({"action": "toggle_many", "targets": ["led1", "led3"], "value": None}, C3, K)
+    assert out["pending"] == {"action": "toggle_many", "targets": ["led1", "led3"], "value": None}
+
+
+def test_chat_has_no_pending():
+    assert "pending" not in validate({"action": "chat", "reply": "你好"}, C3, K)
+    assert "pending" not in validate({"action": "refresh"}, C3, K)
+
+
+def test_toggle_many_without_targets_reports_pending():
+    out = validate({"action": "toggle_many", "targets": ["zzz"], "value": False}, C3, K)
+    assert out["action"] == "unknown"
+    assert out["pending"] == {"action": "toggle_many", "targets": None, "value": False}
+
+
+def test_build_messages_carries_history():
+    from _lib import build_messages
+    hist = [{"role": "user", "content": "开灯"},
+            {"role": "assistant", "content": '{"action":"unknown","reply":"要开哪一路？"}'},
+            {"role": "bogus", "content": "x"}]
+    m = build_messages("灯1", C3, K, hist)
+    assert m[0]["role"] == "system" and m[-1] == {"role": "user", "content": "灯1"}
+    assert [x["role"] for x in m[1:-1]] == ["user", "assistant"]      # 非法的 role 被丢掉
+    assert build_messages("灯1", C3, K) [-1]["content"] == "灯1"
+
+
+def test_build_messages_trims_history():
+    from _lib import build_messages
+    hist = [{"role": "user", "content": "n%d" % i} for i in range(20)]
+    m = build_messages("hi", C3, K, hist)
+    assert len(m) == 1 + 6 + 1          # 系统 + 最近 6 条 + 本轮

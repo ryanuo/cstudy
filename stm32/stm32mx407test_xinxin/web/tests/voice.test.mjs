@@ -51,7 +51,7 @@ function makeEnv({ withSR = false } = {}) {
     removeItem: k => { delete store[k]; }
   };
   globalThis.fetch = async (url, opts) => { calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
-  globalThis.speechSynthesis = { cancel() {}, speak(u) { calls.speak.push(u.text); } };
+  globalThis.speechSynthesis = { cancel() {}, speak(u) { calls.speak.push(u.text); if (u.onend) setTimeout(u.onend, 0); } };
   globalThis.location = { reload() { calls.reloaded = (calls.reloaded || 0) + 1; } };
   // 故意**不**提供 window.prompt：Electron 里就没有它，代码不该依赖
   const body = { children: [], appendChild(n) { this.children.push(n); globalThis.__gate = n; } };
@@ -67,7 +67,7 @@ function makeEnv({ withSR = false } = {}) {
 
   if (withSR) {
     class FakeSR {
-      start() { this.started = true; env.lastSR = this; if (this.onstart) this.onstart(); }
+      start() { this.started = true; env.lastSR = this; env.srStarts++; if (this.onstart) this.onstart(); }
       stop() { if (this.onend) this.onend(); }
     }
     globalThis.SpeechRecognition = FakeSR;
@@ -78,7 +78,7 @@ function makeEnv({ withSR = false } = {}) {
 
   const env = {
     els, calls, doc, store,
-    lastSR: null,
+    lastSR: null, srStarts: 0,
     fetchReply: async () => ({ ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) })
   };
   return env;
@@ -173,13 +173,18 @@ test('没有口令时：点按钮 → 弹出页面内输入条（不用 window.p
   assert.match(env.els.voiceText.textContent, /口令/);
 });
 
-test('toggle 缺少目标时不下发，只提示', async () => {
+test('缺目标时不下发、播报追问、并自动接着听（真实后端形状）', async () => {
   const env = makeEnv({ withSR: true });
-  env.fetchReply = async () => ({ ok: true, status: 200, json: async () => ({ intent: { action: 'toggle', target: null, value: null, reply: '要开哪一路？' } }) });
+  env.fetchReply = async () => ({ ok: true, status: 200, json: async () => ({
+    intent: { action: 'unknown', target: null, targets: null, value: null,
+              reply: '要开哪一路？', pending: { action: 'toggle', value: true } } }) });
   globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  const set = [];
   globalThis.__panel = {
     controls: [{ key: 'led1', name: '灯 1' }], cards: [], isOnline: () => true,
-    set: async () => { throw new Error('不该下发'); }, get: () => null, refresh: async () => {}, armReboot: () => false
+    set: async (k, v) => { set.push(k + ':' + v); return true; },
+    setMany: async () => ({ ok: true, changed: 0 }), get: () => null,
+    refresh: async () => {}, armReboot: () => false
   };
   env.store.panelKey = 'test-key';
   loadScripts();
@@ -187,8 +192,11 @@ test('toggle 缺少目标时不下发，只提示', async () => {
   const results = [[{ transcript: '开灯' }]];
   results[0].isFinal = true;
   env.lastSR.onresult({ resultIndex: 0, results });
-  await new Promise(r => setTimeout(r, 30));
-  assert.match(env.els.voiceText.textContent, /要开哪一路？/);
+  await new Promise(r => setTimeout(r, 80));
+
+  assert.deepEqual(set, [], '不该下发任何东西');
+  assert.ok(env.calls.speak.some(x => /要开哪一路/.test(x)), '应该把追问念出来');
+  assert.equal(env.srStarts, 2, '念完应自动重新开麦（第二次 start）');
 });
 
 
@@ -215,4 +223,117 @@ test('toggle_many：一条下发多个目标（走 panel.setMany）', async () =
 
   assert.deepEqual(calls, ['led1+led2+led3:false'], '应一条下发三个目标');
   assert.match(env.els.voiceText.textContent, /已关闭|关闭/);
+});
+
+
+test('追问"要开哪一路"后自动重新开麦，且第二轮带上上下文', async () => {
+  const env = makeEnv({ withSR: true });
+  let round = 0;
+  env.fetchReply = async () => {
+    round++;
+    const intent = round === 1
+      ? { action: 'unknown', target: null, targets: null, value: null, reply: '要开哪一路？', pending: { action: 'toggle', value: true } }
+      : { action: 'toggle', target: 'led1', targets: null, value: true, reply: '已开启' };
+    return { ok: true, status: 200, json: async () => ({ intent }) };
+  };
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  const set = [];
+  globalThis.__panel = {
+    controls: [{ key: 'led1', name: '灯 1' }], cards: [], isOnline: () => true,
+    set: async (k, v) => { set.push(k + ':' + v); return true; },
+    setMany: async () => ({ ok: true, changed: 0 }), get: () => null,
+    refresh: async () => {}, armReboot: () => false
+  };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+
+  // 第一轮："开灯" → 追问
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r1 = [[{ transcript: '开灯' }]]; r1[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r1 });
+  await new Promise(r => setTimeout(r, 80));
+
+  assert.ok(env.calls.speak.some(x => /要开哪一路/.test(x)), '应该念出追问');
+  assert.equal(env.srStarts, 2, '应该自动重新开麦');
+  assert.match(env.els.voiceText.textContent, /在听/, '重新开麦后状态条显示"在听…"');
+  assert.equal(typeof env.lastSR.onresult, 'function');
+
+  // 第二轮："灯1" → 补全并执行
+  const r2 = [[{ transcript: '灯1' }]]; r2[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r2 });
+  await new Promise(r => setTimeout(r, 80));
+
+  assert.deepEqual(set, ['led1:true'], '第二轮应补全成 led1=true');
+  const second = JSON.parse(env.calls.fetch[1].opts.body);
+  assert.equal(second.text, '灯1');
+  assert.ok(Array.isArray(second.history) && second.history.length >= 2, '第二轮必须带上下文');
+  assert.equal(second.history[0].content, '开灯');
+});
+
+test('闲聊（无 pending）不会自动重新开麦', async () => {
+  const env = makeEnv({ withSR: true });
+  env.fetchReply = async () => ({ ok: true, status: 200,
+    json: async () => ({ intent: { action: 'chat', target: null, targets: null, value: null, reply: '你好呀' } }) });
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  globalThis.__panel = { controls: [], cards: [], isOnline: () => true, set: async () => true,
+    setMany: async () => ({ ok: true }), get: () => null, refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  let starts = 0;
+  const origStart = Object.getPrototypeOf; // 不折腾原型，直接数 onstart 次数
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r = [[{ transcript: '今天天气怎么样' }]]; r[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r });
+  await new Promise(res => setTimeout(res, 120));
+  assert.equal(env.calls.fetch.length, 1, '闲聊只应发一次请求，不该自动继续听');
+});
+
+
+test('模型只回问句（无 pending）也会自动接着听，并把 pending 回传', async () => {
+  const env = makeEnv({ withSR: true });
+  let round = 0;
+  env.fetchReply = async () => {
+    round++;
+    const intent = round === 1
+      ? { action: 'unknown', target: null, targets: null, value: null, reply: '要开哪一路？' }   // 无 pending，但是问句
+      : { action: 'toggle', target: 'led1', targets: null, value: true, reply: '已开启' };
+    return { ok: true, status: 200, json: async () => ({ intent }) };
+  };
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  const set = [];
+  globalThis.__panel = { controls: [{ key: 'led1', name: '灯 1' }], cards: [], isOnline: () => true,
+    set: async (k, v) => { set.push(k + ':' + v); return true; }, setMany: async () => ({ ok: true }),
+    get: () => null, refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r1 = [[{ transcript: '开灯' }]]; r1[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r1 });
+  await new Promise(r => setTimeout(r, 80));
+  assert.equal(env.srStarts, 2, '问句 → 自动重新开麦');
+
+  const r2 = [[{ transcript: '灯1' }]]; r2[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r2 });
+  await new Promise(r => setTimeout(r, 80));
+  assert.deepEqual(set, ['led1:true']);
+  const body = JSON.parse(env.calls.fetch[1].opts.body);
+  assert.ok('pending' in body, '后续请求要带 pending 字段（可能为 null）');
+  assert.equal(body.history.length >= 2, true);
+});
+
+test('一次动作做完就不再自动听（避免自说自话）', async () => {
+  const env = makeEnv({ withSR: true });
+  env.fetchReply = async () => ({ ok: true, status: 200,
+    json: async () => ({ intent: { action: 'toggle', target: 'led1', targets: null, value: true, reply: '已开启' } }) });
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  globalThis.__panel = { controls: [{ key: 'led1', name: '灯 1' }], cards: [], isOnline: () => true,
+    set: async () => true, setMany: async () => ({ ok: true }), get: () => null,
+    refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r = [[{ transcript: '打开灯1' }]]; r[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r });
+  await new Promise(res => setTimeout(res, 120));
+  assert.equal(env.srStarts, 1, '执行成功不该再自动开麦');
 });

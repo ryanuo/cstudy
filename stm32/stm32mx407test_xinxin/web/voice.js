@@ -11,6 +11,13 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null, listening = false, busy = false;
 
+  /* 多轮：追问"要开哪一路？"之后要能听懂用户只答一句"灯 1"。
+     所以把最近几轮带给后端，并在追问后自动重新开麦。 */
+  let context = [];          // [{role:'user'|'assistant', content}]，最多 6 条
+  let lastPending = null;    // 上一轮"还差什么"：显式回传给后端，比只靠 history 准
+  let relistenGuard = 0;     // 连续追问次数上限，防死循环
+  const MAX_RELISTEN = 3;
+
   const ICON = { 'is-live': 'fa-microphone', 'is-ok': 'fa-check-circle', 'is-err': 'fa-exclamation-circle' };
   let hideTimer = null;
 
@@ -40,15 +47,49 @@
       hideTimer = setTimeout(() => show(''), 8000);
     }
   }
-  function speak(msg) {
-    if (!msg || !window.speechSynthesis) return;
+  /* 播报；onEnd 在"念完"后回调（没有 TTS 时用时长估算兜底），只触发一次 */
+  function speak(msg, onEnd) {
+    let done = false;
+    const fire = () => { if (!done) { done = true; if (onEnd) onEnd(); } };
+    if (!msg || !window.speechSynthesis) {
+      if (onEnd) setTimeout(fire, Math.min(4000, String(msg || '').length * 120 + 400));
+      return;
+    }
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(String(msg));
       u.lang = 'zh-CN';
       u.rate = 1.05;
+      u.onend = fire;
+      u.onerror = fire;
       speechSynthesis.speak(u);
-    } catch (e) { /* 播报失败不影响执行 */ }
+      setTimeout(fire, Math.min(8000, String(msg).length * 220 + 900));   // 兜底：onend 没回来也能接上
+    } catch (e) { fire(); }
+  }
+
+  function remember(text, intent) {
+    context.push({ role: 'user', content: text });
+    context.push({ role: 'assistant', content: JSON.stringify({
+      action: intent.action, target: intent.target, targets: intent.targets,
+      value: intent.value, reply: intent.reply }) });
+    if (context.length > 6) context = context.slice(-6);
+  }
+
+  /* 需要补全槽位（例如只说了"开灯"）：念完问题后自动接着听 */
+  function askAgain(reply) {
+    const text = reply || '没听懂，再说一次';
+    show(text, 'is-err');
+    speak(text, () => {
+      if (!SR) return;
+      if (relistenGuard >= MAX_RELISTEN) {
+        relistenGuard = 0;
+        show('连着几轮没听懂，点麦克风可以重来', 'is-err');
+        return;
+      }
+      relistenGuard++;
+      show('在听…请回答上一句', 'is-live');
+      start();
+    });
   }
   function setLive(on) {
     listening = on;
@@ -64,7 +105,8 @@
 
     switch (action) {
       case 'toggle': {
-        if (target === null) { show(reply || '要控制哪一路？', 'is-err'); speak(reply || '要控制哪一路？'); return; }
+        if (target === null) { lastPending = intent.pending || null; askAgain(reply || '要控制哪一路？'); return; }
+        relistenGuard = 0;
         if (!panel.isOnline()) { show('设备离线，不能下发', 'is-err'); speak('设备离线'); return; }
         const ok = await panel.set(target, value);
         const name = (panel.controls.find(c => c.key === target) || {}).name || target;
@@ -75,6 +117,8 @@
       }
       case 'toggle_many': {
         const keys = intent.targets || [];
+        if (!keys.length) { lastPending = intent.pending || null; askAgain(reply || '要动哪几个？'); return; }
+        relistenGuard = 0;
         if (!panel.isOnline()) { show('设备离线，不能下发', 'is-err'); speak('设备离线'); return; }
         const r = await panel.setMany(keys, value);
         const names = (r.names || keys.map(k => (panel.controls.find(c => c.key === k) || {}).name || k)).join('、');
@@ -86,7 +130,8 @@
         return;
       }
       case 'query': {
-        if (target === null) { show(reply || '要查哪一项？', 'is-err'); speak(reply || '要查哪一项？'); return; }
+        if (target === null) { lastPending = intent.pending || null; askAgain(reply || '要查哪一项？'); return; }
+        relistenGuard = 0;
         await panel.refresh();
         const v = panel.get(target);
         const card = panel.cards.find(c => c.id === target) || {};
@@ -111,6 +156,15 @@
         speak('要重启设备的话，请点两下面板上的重启按钮确认');
         return;
       default:
+        /* 两种信号任一命中就接着听：
+           ① 后端给了 pending（结构化地告诉我们差什么）
+           ② 回复是个问句（模型在等用户回答，例如「要开哪一路？」）
+           纯粹闲聊（无问号、无 pending）则不追问，避免自说自话 */
+        if (intent.pending || /[？?]\s*$/.test((reply || '').trim())) {
+          askAgain(reply || '再说一次？');
+          return;
+        }
+        relistenGuard = 0;
         show(reply || '没听懂，再说一次', 'is-err');
         speak(reply || '没听懂，再说一次');
     }
@@ -122,7 +176,10 @@
     show('解析中…' + transcript, 'is-live');
     try {
       const panel = window.__panel;
-      const intent = await PanelAPI.chat(transcript, panel ? panel.controls : [], panel ? panel.cards : []);
+      const intent = await PanelAPI.chat(transcript, panel ? panel.controls : [],
+                                         panel ? panel.cards : [], context, lastPending);
+      remember(transcript, intent);
+      lastPending = intent.pending || null;
       await execute(intent);
     } catch (err) {
       if (err.needKey) { show('口令失效，请刷新页面重新输入', 'is-err'); }
@@ -170,6 +227,7 @@
     const btn = e.target.closest && e.target.closest('#voiceBtn');
     if (!btn) return;
     if (listening) { try { rec.stop(); } catch (err) {} show(''); return; }
+    relistenGuard = 0;                  // 手动点 = 重新开始
     start();
   });
 

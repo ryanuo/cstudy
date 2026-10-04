@@ -34,12 +34,6 @@
         <span :style="{ color: statusColor }">{{ statusText }}</span>
       </span>
 
-      <button type="button" id="voiceBtn" class="btn btn-outline btn-sm btn-voice"
-              title="语音控制：说“打开灯 1”“温度多少”“刷新一下”">
-        <i class="fa fa-microphone"></i>
-        <span class="hide-xs" id="voiceLabel">语音</span>
-      </button>
-
       <button type="button" class="btn btn-outline btn-sm btn-danger"
               :disabled="!online || rebooting"
               :title="online ? '重启设备（复位 MCU）' : '设备离线，不可重启'"
@@ -168,6 +162,13 @@
       </div>
     </div>
   </transition>
+
+  <!-- 语音：底部居中悬浮按钮（拇指位，手机也好按） -->
+  <button type="button" id="voiceBtn" class="voice-fab"
+          title="语音控制：说“打开灯 1”“温度多少”“刷新一下”">
+    <i class="fa fa-microphone"></i>
+    <span id="voiceLabel">语音</span>
+  </button>
 
 </div>
 
