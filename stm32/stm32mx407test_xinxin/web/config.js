@@ -9,6 +9,7 @@ window.PANEL_CONFIG = {
   deviceName: 'humi_temp',
   apiBase: '/api/onenet',
   chatUrl: '/api/chat',
+  healthUrl: '/api/health',
   ttsUrl: '/api/tts'
   /* 口令不在这里：统一由 PanelAPI.key() 现取（localStorage） */
 };

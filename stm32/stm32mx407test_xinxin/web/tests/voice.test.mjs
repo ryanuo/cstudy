@@ -41,7 +41,8 @@ function makeEnv({ withSR = false } = {}) {
     voicePitchVal: new El('voicePitchVal'),
     voiceVolVal: new El('voiceVolVal'),
     voiceTest: new El('voiceTest'),
-    voiceHint: new El('voiceHint')
+    voiceHint: new El('voiceHint'),
+    voiceCloud: new El('voiceCloud')
   };
   els.voiceCfg.hidden = true;
   els.voiceBar.hidden = true;
@@ -426,7 +427,7 @@ test('齿轮按钮打开设置面板并列出系统音色', async () => {
   assert.equal(env.els.voiceCfg.hidden, false, '面板应打开');
   assert.match(env.els.voiceSel.innerHTML, /Ting-Ting/, '应列出声色');
   assert.match(env.els.voiceSel.innerHTML, /selected/, '当前音色应被选中');
-  assert.ok(/音色来自系统|系统没装中文语音/.test(env.els.voiceHint.textContent), '应有提示文案');
+  assert.ok(/优先用云端|云端|系统没装中文语音/.test(env.els.voiceHint.textContent), '应有提示文案');
 });
 
 test('拖动语速滑块会存入 localStorage，并影响后续播报', async () => {
@@ -568,4 +569,42 @@ test('没有 PanelAPI.tts 时（旧页面/缓存）直接本地朗读，不报�
   } finally {
     globalThis.PanelAPI = saved;
   }
+});
+
+
+/* ---------------- 设置面板里的"云端音色"（问 /api/health，只问一次） ---------------- */
+
+test('打开面板问一次 /api/health，把云端音色显出来', async () => {
+  const env = makeEnv();
+  env.fetchReply = async (url) => (url === '/api/health'
+    ? { ok: true, status: 200, json: async () => ({ ok: true, tts: { voice: 'zh_female_vv_uranus_bigtts', ready: true } }) }
+    : { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) });
+  openPanel(env);
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(env.calls.fetch.filter(f => f.url === '/api/health').length, 1, '只问一次');
+  assert.equal(env.els.voiceCloud.textContent, 'zh_female_vv_uranus_bigtts');
+  assert.match(env.els.voiceHint.textContent, /优先用云端音色/, '要说清是云端优先');
+});
+
+test('云端缺凭据：标"缺凭据"并说明现在用浏览器音色', async () => {
+  const env = makeEnv();
+  env.fetchReply = async (url) => (url === '/api/health'
+    ? { ok: true, status: 200, json: async () => ({ tts: { voice: 'zh_female_vv_uranus_bigtts', ready: false } }) }
+    : { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) });
+  openPanel(env);
+  await new Promise(r => setTimeout(r, 20));
+  assert.match(env.els.voiceCloud.textContent, /缺凭据/);
+  assert.match(env.els.voiceHint.textContent, /VOLC_TTS_API_KEY/);
+});
+
+test('/api/health 拿不到也不影响用（面板照旧能设音色）', async () => {
+  const env = makeEnv();
+  env.fetchReply = async (url) => {
+    if (url === '/api/health') throw new Error('boom');
+    return { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) };
+  };
+  openPanel(env);
+  await new Promise(r => setTimeout(r, 20));
+  assert.match(env.els.voiceSel.innerHTML, /Ting-Ting/, '音色列表照旧');
+  assert.equal(env.els.voiceCloud.textContent, '不可用');
 });

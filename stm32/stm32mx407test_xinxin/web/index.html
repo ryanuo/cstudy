@@ -168,8 +168,12 @@
     <div id="voiceCfg" class="voice-cfg" hidden>
       <div class="voice-cfg-head">语音设置</div>
       <div class="voice-cfg-row">
-        <label for="voiceSel">音色</label>
+        <label for="voiceSel" title="云端不可用时的备用音色（浏览器朗读）">浏览器</label>
         <select id="voiceSel"></select>
+      </div>
+      <div class="voice-cfg-row">
+        <label title="后端常量 VOLC_TTS_VOICE：朗读优先用它">云端</label>
+        <span class="voice-cfg-val" id="voiceCloud">——</span>
       </div>
       <div class="voice-cfg-row">
         <label for="voiceRate">语速</label>

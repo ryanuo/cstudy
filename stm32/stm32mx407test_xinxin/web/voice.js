@@ -174,11 +174,38 @@
     if (r) { r.value = vcfg.rate; $('voiceRateVal').textContent = Number(vcfg.rate).toFixed(2); }
     if (p) { p.value = vcfg.pitch; $('voicePitchVal').textContent = Number(vcfg.pitch).toFixed(2); }
     if (vo) { vo.value = vcfg.volume; $('voiceVolVal').textContent = Number(vcfg.volume).toFixed(2); }
-    if (hint) {
-      hint.textContent = vs.length
-        ? '音色来自系统；要更多（如「婷婷/美佳」）去系统设置里下载中文语音'
-        : '系统没装中文语音：macOS 系统设置 → 辅助功能 → 朗读内容 → 系统声音 → 管理声音';
+    paintTtsInfo();
+  }
+
+  /* 云端朗读通道（问 /api/health，只在打开设置面板时问一次）：
+     面板上的"音色"其实是**备用**音色 —— 默认优先云端，得让用户看得见用的是哪条、配没配好 */
+  let ttsInfo = null;
+  function loadTtsInfo() {
+    if (ttsInfo !== null || !window.fetch) return;
+    ttsInfo = {};                                    // 先占位，防止重复请求
+    fetch(window.PANEL_CONFIG.healthUrl)
+      .then(r => r.json())
+      .then(d => { ttsInfo = (d && d.tts) || {}; paintTtsInfo(); })
+      .catch(() => { ttsInfo = {}; paintTtsInfo(); });
+  }
+  function paintTtsInfo() {
+    const box = $('voiceCloud'), hint = $('voiceHint');
+    if (!hint) return;
+    const ready = !!(ttsInfo && ttsInfo.ready);
+    if (box) {
+      box.textContent = ttsInfo === null ? '——'
+        : (ready ? (ttsInfo.voice || '已配置')
+                 : (ttsInfo.voice ? ttsInfo.voice + '（缺凭据）' : '不可用'));
     }
+    if (ttsInfo === null) {                          // 还没问过后端：先按旧文案提示系统音色
+      hint.textContent = zhVoices().length
+        ? '优先用云端音色（打开面板时查询后端）；云端不可用时用上面的浏览器音色'
+        : '系统没装中文语音：macOS 系统设置 → 辅助功能 → 朗读内容 → 系统声音 → 管理声音';
+      return;
+    }
+    if (ready) hint.textContent = '优先用云端音色；失败会自动回退上面的浏览器音色';
+    else if (!zhVoices().length) hint.textContent = '云端没配凭据 + 系统没装中文语音：先在系统设置里加中文语音';
+    else hint.textContent = '云端没配凭据（后端补 VOLC_TTS_API_KEY 即启用），现在用浏览器音色';
   }
 
   function bindVoiceCfg() {
@@ -223,6 +250,7 @@
     } else {
       fillVoiceCfg();
       bindVoiceCfg();
+      loadTtsInfo();
       box.hidden = false;
       const raf = window.requestAnimationFrame || (f => setTimeout(f, 0));
       raf(() => box.classList.add('is-show'));

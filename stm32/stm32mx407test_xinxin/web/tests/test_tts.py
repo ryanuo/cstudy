@@ -200,3 +200,21 @@ def test_route_key_rate_and_truncate(client, monkeypatch):
     monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None: (seen.setdefault("t", text), (b"X", None))[1])
     c.post("/api/tts", json={"text": "啊" * 500}, headers={"X-Panel-Key": "PW"})
     assert len(seen["t"]) == 300
+
+
+def test_health_reports_tts_channel(monkeypatch):
+    """/api/health 要报出"实际用哪条朗读通道"，面板靠它显示云端音色/凭据状态"""
+    pytest.importorskip("flask")
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "api"))
+    monkeypatch.setenv("VOLC_TTS_API_KEY", "K")
+    import health
+    d = health.app.test_client().get("/api/health").get_json()
+    assert d["ok"] is True
+    assert d["tts"]["voice"] == _lib.VOLC_TTS_VOICE
+    assert d["tts"]["ready"] is True
+
+    monkeypatch.delenv("VOLC_TTS_API_KEY")
+    for k in ("VOLC_TTS_APPID", "VOLC_TTS_ACCESS_KEY", "VOLC_TTS_TOKEN"):
+        monkeypatch.delenv(k, raising=False)
+    assert health.app.test_client().get("/api/health").get_json()["tts"]["ready"] is False
+
