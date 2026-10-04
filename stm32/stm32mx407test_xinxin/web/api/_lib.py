@@ -9,8 +9,19 @@ import base64
 import json
 import os
 import re
+import socket
 import time
 import uuid
+
+# 强制 IPv4（默认开）：Vercel 函数在海外/香港调国内接口时，常见症状是 IPv6 先连、走不通再回退，
+# 白等十几秒（实测 16s）。置 0 可关掉做对比。
+if os.environ.get("ONENET_FORCE_IPV4", "1") == "1":
+    try:
+        import urllib3.util.connection as _uc
+
+        _uc.HAS_IPV6 = False
+    except Exception:
+        pass
 
 import requests
 
@@ -254,10 +265,23 @@ def onenet_call(op, params=None, body=None):
         kwargs["params"] = q
     else:
         kwargs["json"] = _post_payload(op, body, q["product_id"], q["device_name"])
+    t0 = time.perf_counter()
     try:
         r = requests.request(method, "%s/%s" % (ONENET_BASE, path), **kwargs)
     except Exception as e:
         return {"code": 599, "msg": "onenet unreachable: %s" % e}, 502
+    dt = time.perf_counter() - t0
+    if dt > 2.0:
+        # 慢调用要能一眼看出卡在哪：DNS 单独再解一次（Vercel 日志里能看到 print 输出），
+        # 并把解析到的 IP 都列出来（含 IPv6 就说明可能是 IPv6 回退问题）
+        try:
+            t1 = time.perf_counter()
+            ais = socket.getaddrinfo(ONENET_BASE.split("//")[-1], 443, proto=socket.IPPROTO_TCP)
+            dns = time.perf_counter() - t1
+            ips = sorted({a[4][0] for a in ais})
+        except Exception as e:
+            dns, ips = -1.0, [str(e)]
+        print("[onenet] 慢 %.1fs（DNS 重解 %.2fs，IP %s）%s %s" % (dt, dns, ",".join(ips), method, path), flush=True)
     try:
         return r.json(), r.status_code
     except Exception:
