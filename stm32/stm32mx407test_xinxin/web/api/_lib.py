@@ -280,6 +280,10 @@ VOLC_TTS_RESOURCE = os.environ.get("VOLC_TTS_RESOURCE", "seed-tts-2.0")
 # 这里用的是文档示例同款：豆包语音合成模型 2.0 的 Vivi 2.0（中/日/印尼/西语 + 30 多语种 + 方言）。
 VOLC_TTS_VOICE = "zh_female_vv_uranus_bigtts"
 
+# 成功码有两个：文档在 submit 那页写「20000000 表明请求成功」、unidirectional 这页写「返回 0 则表示成功」，
+# 实测这条接口回的就是 20000000 + message "OK"（拿它当失败会把成功帧误判成错误、丢掉已经收到的音频）。
+VOLC_TTS_OK_CODES = {0, 20000000}
+
 
 def _v3_headers():
     """X-Api-Resource-Id 必选；X-Api-Request-Id 也必选（uuid）。凭据优先用新版 API Key。"""
@@ -362,7 +366,8 @@ def tts(text, speed=None, pitch=None, volume=None):
         audio = bytearray()
         for obj in _stream_objs(r.iter_content(chunk_size=8192)):
             code = obj.get("code")
-            if code not in (0, None):            # 流里带错就立刻停：别把半截音频当成功
+            if code is not None and code not in VOLC_TTS_OK_CODES:
+                # 流里带真错就立刻停（别把半截音频当成功）；缺 code 的帧通常是纯音频块
                 return None, "火山返回 %s：%s（音色 %s）" % (code, obj.get("message") or "无说明", VOLC_TTS_VOICE)
             d = obj.get("data")
             if d:

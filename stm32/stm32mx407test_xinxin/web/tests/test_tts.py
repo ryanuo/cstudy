@@ -106,6 +106,19 @@ def test_stream_parses_frames_split_and_glued():
     assert [g["data"] for g in _stream_objs(iter(noisy))] == ["C", "D"]
 
 
+def test_real_world_success_code_20000000(volc):
+    """实测这条接口成功帧回的是 code=20000000 + message=OK（不是文档另一页写的 0）：
+    必须当成功收下音频，而不是报"火山返回 20000000"。"""
+    calls, replies = volc
+    replies.append(FakeStream([
+        obj(code=20000000, message="OK", data=base64.b64encode(b"ID3-first").decode()),
+        obj(code=20000000, message="OK", data=base64.b64encode(b"-second").decode()),
+        obj(code=20000000, message="OK"),                      # 收尾帧没有 data
+    ]))
+    audio, err = tts("你好")
+    assert err is None and audio == b"ID3-first-second"
+
+
 def test_multi_chunk_audio_is_concatenated(volc):
     calls, replies = volc
     replies.append(FakeStream([
@@ -122,7 +135,7 @@ def test_error_frame_mid_stream_stops(volc):
     calls, replies = volc
     replies.append(FakeStream([
         obj(code=0, message="OK", data=base64.b64encode(b"PART").decode()),
-        obj(code=45000001, message="invalid speaker"),
+        obj(code=45000001, message="invalid speaker"),          # 真正的错误码照旧要拦
     ]))
     audio, err = tts("你好")
     assert audio is None and "45000001" in err and "invalid speaker" in err
