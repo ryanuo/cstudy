@@ -1,0 +1,81 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "detail": "make build — cmake --preset Debug + Ninja（Ctrl+Shift+B 默认任务）",
+            "type": "shell",
+            "command": "make",
+            "args": ["build"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "flash",
+            "detail": "make flash — 编译 + 生成 bin/hex + openocd(ST-Link) 烧录",
+            "type": "shell",
+            "command": "make",
+            "args": ["flash"],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "build + flash",
+            "detail": "先编译再烧录（顺序执行）",
+            "dependsOrder": "sequence",
+            "dependsOn": ["build", "flash"],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "reset",
+            "detail": "make reset — 复位并运行",
+            "type": "shell",
+            "command": "make",
+            "args": ["reset"],
+            "problemMatcher": []
+        },
+        {
+            "label": "clean",
+            "detail": "make clean — 删 build/Debug",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "problemMatcher": []
+        },
+        {
+            "label": "serial (printf)",
+            "detail": "make serial — 打开 /dev/cu.wchusbserial1110 @115200（退出：Ctrl-A 再按反斜杠）",
+            "type": "shell",
+            "command": "make",
+            "args": ["serial"],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "size",
+            "detail": "make size — Flash/RAM 占用",
+            "type": "shell",
+            "command": "make",
+            "args": ["size"],
+            "problemMatcher": []
+        }
+    ]
+}

@@ -1,0 +1,30 @@
+#ifndef __APP_CONFIG_H
+#define __APP_CONFIG_H
+
+/* ============================================================
+ *  应用级配置 —— 唯一真值源
+ *  凭据、周期、调试开关都放这里，别散落到 main.c / app_*.c
+ *  （引脚相关配置在 BSP/Inc/board_pins.h）
+ * ============================================================ */
+
+/* ---------------- WiFi ---------------- */
+#define APP_WIFI_SSID "YQ-shixun5"
+#define APP_WIFI_PWD "88888888"
+
+/* ---------------- OneNET 设备 ---------------- */
+#define APP_ONENET_PRODUCT_ID "WW0f6843I6"
+#define APP_ONENET_DEVICE_ID "humi_temp"
+
+/* 属性上报用 Token（OneNET Studio 生成，注意 et 有效期） */
+#define APP_ONENET_TOKEN                                                       \
+  "version=2018-10-31&res=products%2FWW0f6843I6%2Fdevices%2Fhumi_temp&"        \
+  "et=1822562760&method=sha1&sign=o3KQXG0XbEBbJZBHkyfXDpzSIHQ%3D"
+
+/* ---------------- 运行周期 ---------------- */
+#define APP_REPORT_PERIOD_MS 5000U    /* 属性上报周期 */
+#define APP_DHT11_PERIOD_MS 2000U     /* DHT11 采样周期（bsp_dht11.c 内部节流用） */
+
+/* ---------------- 调试开关 ---------------- */
+#define APP_ONENET_DEBUG 0 /* 1 = 每条 AT 后把 ESP 原始缓冲 printf 出来（同步阻塞，很慢）*/
+
+#endif /* __APP_CONFIG_H */

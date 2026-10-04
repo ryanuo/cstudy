@@ -17,7 +17,7 @@
 #define LCD_BACK_GPIO_PORT GPIOF
 #define LCD_BACK_GPIO_PIN GPIO_PIN_10
 #define LCD_BACK_SET(x)                                                        \
-  HAL_GPIO_WritePin(LCD_BACK_GPIO_PORT, LCD_BACK_GPIO_PIN,                    \
+  HAL_GPIO_WritePin(LCD_BACK_GPIO_PORT, LCD_BACK_GPIO_PIN,                     \
                     (x) ? GPIO_PIN_SET : GPIO_PIN_RESET)
 
 /* ================= 颜色定义 ================= */
@@ -47,10 +47,10 @@
 #define D2U_R2L 7 // 从下到上,从右到左
 
 /* ================= 全局变量 ================= */
-extern u16 lcd_id;       // LCD ID
-extern u8 dir_flag;      // 横竖屏控制：0 竖屏，1 横屏
-extern u16 lcd_width;    // LCD 宽度
-extern u16 lcd_height;   // LCD 高度
+extern u16 lcd_id;        // LCD ID
+extern u8 dir_flag;       // 横竖屏控制：0 竖屏，1 横屏
+extern u16 lcd_width;     // LCD 宽度
+extern u16 lcd_height;    // LCD 高度
 extern u16 write_gramcmd; // 写 GRAM 指令
 extern u16 setxcmd;       // 设置 X 坐标指令
 extern u16 setycmd;       // 设置 Y 坐标指令
@@ -88,5 +88,6 @@ u32 Counter_Power(u8 a, u8 n);
 void LCD_DisplayNum(u16 x, u16 y, u32 value, u8 len, u8 size, u8 mode);
 void LCD_DisplayNum_color(u16 x, u16 y, u32 num, u8 len, u8 size, u8 mode,
                           u16 brushcolor, u16 backcolor);
+void LCD_Showf(u16 x, u16 y, u8 size, u16 fg, u16 bg, char *format, ...);
 
 #endif

@@ -42,10 +42,10 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
-file(GLOB BSP_SOURCES
+file(GLOB BSP_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/Src/*.c
 )
-file(GLOB APP_SOURCES
+file(GLOB APP_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/APP/Src/*.c
 )
 # Add sources to executable
@@ -53,6 +53,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     ${BSP_SOURCES}
     ${APP_SOURCES}
+    # 第三方库（不放 CubeMX 托管的 Core/ 下，避免被生成流程搅乱）
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libs/cJSON/cJSON.c
 )
 
 # Add include paths
@@ -60,11 +62,14 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_CURRENT_SOURCE_DIR}/BSP/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/APP/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/Libs/cJSON
 )
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined symbols
+    # cJSON 默认嵌套上限 1000 层：实测每层嵌套约 104B 栈（-fstack-usage），
+    # 一条深嵌套报文就能吃掉 ~100KB 栈。MCU 上压到 8 层。
+    CJSON_NESTING_LIMIT=8
 )
 
 # Remove wrong libob.a library dependency when using cpp files
