@@ -47,6 +47,21 @@
       hideTimer = setTimeout(() => show(''), 8000);
     }
   }
+  /* 朗读用浏览器自带 TTS（免费、不需要后端）。Chrome 的音色列表是异步加载的，
+     所以先挑一次 + 监听 voiceschanged 再挑，尽量拿到中文音色。 */
+  let zhVoice = null;
+  function pickVoice() {
+    if (!window.speechSynthesis || !speechSynthesis.getVoices) return;
+    let vs = [];
+    try { vs = speechSynthesis.getVoices() || []; } catch (e) { return; }
+    zhVoice = vs.find(v => /zh[-_]?(CN|Hans)/i.test(v.lang) || /Chinese|中文|普通话/i.test(v.name))
+           || vs.find(v => /^zh/i.test(v.lang)) || null;
+  }
+  pickVoice();
+  if (window.speechSynthesis) {
+    try { speechSynthesis.onvoiceschanged = pickVoice; } catch (e) {}
+  }
+
   /* 播报；onEnd 在"念完"后回调（没有 TTS 时用时长估算兜底），只触发一次 */
   function speak(msg, onEnd) {
     let done = false;
@@ -60,6 +75,7 @@
       const u = new SpeechSynthesisUtterance(String(msg));
       u.lang = 'zh-CN';
       u.rate = 1.05;
+      if (zhVoice) u.voice = zhVoice;
       u.onend = fire;
       u.onerror = fire;
       speechSynthesis.speak(u);
@@ -98,6 +114,42 @@
     if (label) label.textContent = on ? '在听' : '语音';
   }
 
+  /* 读一个属性：返回展示值 + 适合朗读的说法（℃ 念"度"，%RH 念"%"） */
+  const SPEAK_UNIT = { '℃': '度', '°C': '度', '%RH': '%', '%': '%' };
+  function readValue(id) {
+    const panel = window.__panel;
+    const card = (panel.cards || []).find(c => c.id === id) || {};
+    const raw = panel.get(id);
+    if (raw === null || raw === undefined || raw === '') return { name: card.name || id, text: '暂无数据', speak: (card.name || id) + '暂无数据' };
+    const n = Number(raw);
+    const text = isNaN(n) ? String(raw) : (card.unit === '℃' ? n.toFixed(1) : String(raw));
+    const unit = card.unit || '';
+    return { name: card.name || id, text: text + unit, speak: (card.name || id) + text + (SPEAK_UNIT[unit] || unit) };
+  }
+
+  /* 一句话里做多件事（"太热了" = 开风扇 + 报温度）：按顺序执行，最后合成一句播报 */
+  async function runSteps(steps) {
+    const panel = window.__panel;
+    const parts = [];
+    for (const st of (steps || [])) {
+      if (st.action === 'toggle' || st.action === 'toggle_many') {
+        const keys = st.action === 'toggle' ? [st.target] : (st.targets || []);
+        if (!keys.filter(Boolean).length) continue;
+        if (!panel.isOnline()) { parts.push('设备离线'); continue; }
+        const r = await panel.setMany(keys, st.value);
+        const names = (r.names || keys.map(k => (panel.controls.find(c => c.key === k) || {}).name || k)).join('、');
+        parts.push(r.ok ? ((st.value ? '已打开 ' : '已关闭 ') + names) : ('下发失败：' + names));
+      } else if (st.action === 'query') {
+        await panel.refresh();                       // 先拉最新值再播报
+        const rv = readValue(st.target);
+        parts.push(rv.text === '暂无数据' ? (rv.name + ' 暂无数据') : rv.speak);
+      } else if (st.action === 'refresh') {
+        panel.refresh();
+      }
+    }
+    return parts;
+  }
+
   async function execute(intent) {
     const panel = window.__panel;
     if (!panel) return show('面板还没就绪', 'is-err');
@@ -133,11 +185,17 @@
         if (target === null) { lastPending = intent.pending || null; askAgain(reply || '要查哪一项？'); return; }
         relistenGuard = 0;
         await panel.refresh();
-        const v = panel.get(target);
-        const card = panel.cards.find(c => c.id === target) || {};
-        const val = (v === null || v === undefined || v === '') ? '暂时没有数据'
-                  : (Number(v).toFixed ? Number(v).toFixed(1) + (card.unit || '') : String(v));
-        const msg = card.name + ' ' + val;      // 自己拼，别让模型的口径掺进来
+        const rv = readValue(target);
+        const msg = rv.name + ' ' + rv.text;     // 自己拼，别让模型的口径掺进来
+        show(msg, 'is-ok');
+        speak(msg);
+        return;
+      }
+      case 'steps': {
+        if (!panel.isOnline()) { show('设备离线，做不了', 'is-err'); speak('设备离线'); return; }
+        const parts = await runSteps(intent.steps);
+        const msg = parts.join('，') || (reply || '已执行');
+        relistenGuard = 0;
         show(msg, 'is-ok');
         speak(msg);
         return;

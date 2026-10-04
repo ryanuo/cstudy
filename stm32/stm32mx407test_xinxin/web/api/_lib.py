@@ -15,7 +15,11 @@ import requests
 ONENET_BASE = "https://iot-api.heclouds.com"
 DASHSCOPE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 
-ALLOWED_ACTIONS = {"toggle", "toggle_many", "query", "refresh", "reboot", "chat", "unknown"}
+ALLOWED_ACTIONS = {"toggle", "toggle_many", "query", "refresh", "reboot", "chat", "unknown", "steps"}
+
+# 一句话里做多件事（"太热了" = 开风扇 + 报温度）。只允许这些内层动作，且最多 3 步。
+STEP_ACTIONS = {"toggle", "toggle_many", "query", "refresh"}
+MAX_STEPS = 3
 
 MAX_TARGETS = 8   # 一次最多动几个：防模型抽风列一大串
 
@@ -48,6 +52,13 @@ def build_prompt(controls, cards):
         '没指明是哪一路（例如只说"开灯"）→ {"action":"toggle","target":null,"value":null,"reply":"要开哪一路？"}\n'
         '只报了几个目标但没说开还是关（例如「灯1和灯3」「风扇和蜂鸣器」）→ action=toggle_many、'
         'targets 填这几个 key、value=null、reply 问「要开还是关」\n'
+        '场景（用户描述感受/状态时按这里的动作做，用 steps 输出）：\n'
+        '  "太热了/好热/热死了/有点热" → [开风扇, 查温度]（reply 写"已打开风扇"）\n'
+        '  "太冷了/有点冷" → [关风扇]\n'
+        '  "我要睡了/我出门了/全都关掉" → [把灯和风扇蜂鸣器全关]\n'
+        '一句话里说了几件事（"打开风扇并告诉我温度"）→ 也用 steps，按顺序列出来。\n'
+        'steps 写法：{"action":"steps","steps":[{"action":"toggle","target":"fan","value":true},'
+        '{"action":"query","target":"temperature"}],"target":null,"targets":null,"value":null,"reply":"已打开风扇"}\n'
         "上下文：如果用户这句是在回答你上一轮的追问（上一轮你问了「要开哪一路？」、用户只说「灯 1」），"
         "就结合上文把动作补全成完整意图；用户说「算了」「不用了」→ action=chat。"
         % (ctrl, card)
@@ -89,6 +100,25 @@ def validate(intent, controls, cards):
     keys = {c.get("key") for c in controls} | {c.get("id") for c in cards}
     if target not in keys:          # 幻觉出的标识符（led4/relay）一律丢掉
         target = None
+
+    if action == "steps":
+        raw = intent.get("steps")
+        if not isinstance(raw, list):
+            return dict(fallback, reply=reply or fallback["reply"])
+        steps = []
+        for st in raw[:MAX_STEPS]:
+            if not isinstance(st, dict) or st.get("action") not in STEP_ACTIONS:
+                continue
+            one = validate(dict(st, steps=None), controls, cards)      # 单步走同一套白名单
+            if one["action"] not in STEP_ACTIONS:
+                continue
+            steps.append({k: one[k] for k in ("action", "target", "targets", "value")})
+        if not steps:
+            return dict(fallback, reply=reply or fallback["reply"])
+        if len(steps) == 1:                      # 只剩一步就退回普通动作，前端少一条分支
+            return dict(steps[0], reply=reply)
+        return {"action": "steps", "steps": steps, "target": None, "targets": None,
+                "value": None, "reply": reply}
 
     if action == "toggle_many":
         raw = intent.get("targets")

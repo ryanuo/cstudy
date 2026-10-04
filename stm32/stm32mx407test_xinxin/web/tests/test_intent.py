@@ -143,3 +143,43 @@ def test_build_messages_trims_history():
     hist = [{"role": "user", "content": "n%d" % i} for i in range(20)]
     m = build_messages("hi", C3, K, hist)
     assert len(m) == 1 + 6 + 1          # 系统 + 最近 6 条 + 本轮
+
+
+# ---------------- 一句话多件事（steps / 场景） ----------------
+def test_steps_keeps_valid_multistep():
+    out = validate({"action": "steps", "steps": [
+        {"action": "toggle", "target": "fan", "value": True},
+        {"action": "query", "target": "temperature"}], "reply": "已打开风扇"}, C3, K)
+    assert out["action"] == "steps" and len(out["steps"]) == 2
+    assert out["steps"][0] == {"action": "toggle", "target": "fan", "targets": None, "value": True}
+    assert out["steps"][1]["action"] == "query" and out["steps"][1]["target"] == "temperature"
+
+
+def test_steps_drops_illegal_inner_actions():
+    # reboot / chat / steps 套 steps 都不允许出现在 steps 里
+    out = validate({"action": "steps", "steps": [
+        {"action": "toggle", "target": "fan", "value": True},
+        {"action": "reboot"},
+        {"action": "chat", "reply": "hi"},
+        {"action": "steps", "steps": []}]}, C3, K)
+    assert out["action"] == "toggle" and out["target"] == "fan"      # 只剩一步 → 回落
+
+
+def test_steps_drops_hallucinated_target_step():
+    out = validate({"action": "steps", "steps": [
+        {"action": "toggle", "target": "led9", "value": True},
+        {"action": "query", "target": "temperature"}]}, C3, K)
+    assert out["action"] == "query" and out["target"] == "temperature"
+
+
+def test_steps_all_invalid_becomes_unknown():
+    out = validate({"action": "steps", "steps": [{"action": "reboot"}, {"action": "nope"}]}, C3, K)
+    assert out["action"] == "unknown"
+    assert validate({"action": "steps", "steps": "nope"}, C3, K)["action"] == "unknown"
+    assert validate({"action": "steps"}, C3, K)["action"] == "unknown"
+
+
+def test_steps_capped():
+    many = [{"action": "toggle", "target": "led1", "value": True} for _ in range(9)]
+    out = validate({"action": "steps", "steps": many}, C3, K)
+    assert len(out["steps"]) == 3

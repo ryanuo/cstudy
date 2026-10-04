@@ -337,3 +337,40 @@ test('一次动作做完就不再自动听（避免自说自话）', async () =>
   await new Promise(res => setTimeout(res, 120));
   assert.equal(env.srStarts, 1, '执行成功不该再自动开麦');
 });
+
+
+test('steps：开风扇 + 报温度，合成一句播报（含度数）', async () => {
+  const env = makeEnv({ withSR: true });
+  env.fetchReply = async () => ({ ok: true, status: 200, json: async () => ({ intent: {
+    action: 'steps', target: null, targets: null, value: null, reply: '已打开风扇',
+    steps: [{ action: 'toggle', target: 'fan', value: true },
+            { action: 'query', target: 'temperature' }] } }) });
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  const sets = [];
+  let refreshed = 0;
+  globalThis.__panel = {
+    controls: [{ key: 'fan', name: '风扇' }],
+    cards: [{ id: 'temperature', name: '温度', unit: '℃' }],
+    isOnline: () => true,
+    set: async (k, v) => { sets.push(k + ':' + v); return true; },
+    setMany: async (keys, value) => { keys.forEach(k => sets.push(k + ':' + value)); return { ok: true, changed: keys.length, names: ['风扇'] }; },
+    get: (id) => (id === 'temperature' ? 26.7 : null),
+    refresh: async () => { refreshed++; },
+    armReboot: () => false
+  };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r = [[{ transcript: '太热了' }]]; r[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r });
+  await new Promise(res => setTimeout(res, 60));
+
+  assert.deepEqual(sets, ['fan:true'], '应该开风扇');
+  assert.equal(refreshed, 1, '查询步要先刷新再读');
+  const spoken = env.calls.speak.join(' | ');
+  assert.match(spoken, /已打开 风扇/, '播报要包含动作');
+  assert.match(spoken, /温度/, '播报要包含温度');
+  assert.match(spoken, /26\.7/, '播报要带具体数值');
+  assert.match(spoken, /度/, '℃ 要念成"度"');
+  assert.equal(env.srStarts, 1, '场景执行完不自动续听');
+});
