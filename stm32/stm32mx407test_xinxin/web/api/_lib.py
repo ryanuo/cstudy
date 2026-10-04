@@ -264,84 +264,115 @@ def onenet_call(op, params=None, body=None):
         return {"code": 598, "msg": "bad json from onenet"}, 502
 
 
-# ----------------------------- 火山 TTS（免费音色，V1 HTTP 一次性）-----------------------------
-# 只实现官方 V1 HTTP 接口：一句话合成一次，回 mp3 的 base64。请求形状严格照官方示例抄
-# （连它用 data=json.dumps(...) 发、不额外加 Content-Type 都一样），免得网关挑食。
-# 两个坑：
-#   1) 示例里 "token": "access_token" 是**字面字符串**（文档自带的错），真 token 要同时放进
-#      app.token 和 Authorization: Bearer;<token>（注意是分号，不是空格）。
-#   2) 只有传统"小模型"音色走这个接口；豆包大模型 2.0 的 *_bigtts 音色（Vivi 2.0 那种）不支持 V1。
-# 音色见下面的 VOLC_TTS_VOICE 常量；配置里只需要 appid / token / cluster 三样。
-VOLC_TTS_URL = "https://openspeech.bytedance.com/api/v1/tts"
-VOLC_RATIO_RANGE = (0.2, 3.0)          # 官方 speed_ratio / volume_ratio / pitch_ratio 的取值区间
+# ----------------------------- 火山 TTS（豆包语音合成大模型 2.0，HTTP Chunked 单向流式）-------------
+# 这条是**实时**用的：文本一次给，音频分块流回来，响应体是一串 JSON 对象
+# （每块形如 {"code":0,"message":"OK","data":"<base64 音频>",…}），纯 HTTP + JSON，不用二进制帧。
+# 同族还有两条，别选错：
+#   · /api/v3/tts/submit + /query（异步长文本）：文档自述"专为长文本、非实时场景"，走集群排队，
+#     同类接口通常数十分钟才返回 —— 给面板念一句话不能用它。
+#   · wss://…/api/v3/tts/unidirectional/stream（WebSocket）：能力相同，但要手搓二进制帧，没必要。
+# 计费：大模型 2.0 按**合成字符数**计费（资源 seed-tts-2.0），需在控制台开通；
+# 鉴权：新版控制台用 X-Api-Key；旧版控制台用 X-Api-App-Id + X-Api-Access-Key。
+VOLC_TTS_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
+VOLC_TTS_RESOURCE = os.environ.get("VOLC_TTS_RESOURCE", "seed-tts-2.0")
 
-# 朗读音色写死在代码里（配置里就不用管它了）。换音色＝改这一行。
-# 21 款免费音色（传统/小模型，V1 HTTP 能用的就是这些）：
-#   通用场景   BV700_streaming 灿灿 | BV001_streaming 通用女声 | BV002_streaming 通用男声
-#   有声阅读   BV701_streaming 擎苍 | BV119_streaming 通用赘婿 | BV102_streaming 儒雅青年
-#              BV113_streaming 甜宠少御 | BV115_streaming 古风少御
-#   助手/配音/教育  BV007_streaming 亲切女声 | BV056_streaming 阳光男声 | BV005_streaming 活泼女声
-#              BV051_streaming 奶气萌娃 | BV034_streaming 知性姐姐-双语 | BV033_streaming 温柔小哥
-#   方言       BV021_streaming 东北老铁 | BV019_streaming 重庆小伙 | BV213_streaming 广西表哥
-#   英语       BV503_streaming Ariana | BV504_streaming Jackson
-#   日语       BV522_streaming 气质女生 | BV524_streaming 日语男声
-VOLC_TTS_VOICE = "BV700_streaming"
+# 音色写死在代码里（配置里不用管）。换音色＝改这一行；可选音色在控制台 > 音色库（*_bigtts 那批）。
+# 这里用的是文档示例同款：豆包语音合成模型 2.0 的 Vivi 2.0（中/日/印尼/西语 + 30 多语种 + 方言）。
+VOLC_TTS_VOICE = "zh_female_vv_uranus_bigtts"
 
 
-def _ratio(v):
-    """面板滑条值 → 火山要的倍率：缺省 1.0，越界夹回区间。"""
+def _v3_headers():
+    """X-Api-Resource-Id 必选；X-Api-Request-Id 也必选（uuid）。凭据优先用新版 API Key。"""
+    h = {"X-Api-Resource-Id": VOLC_TTS_RESOURCE, "X-Api-Request-Id": uuid.uuid4().hex,
+         "Content-Type": "application/json"}
+    key = os.environ.get("VOLC_TTS_API_KEY", "")
+    if key:
+        h["X-Api-Key"] = key
+        return h
+    appid = os.environ.get("VOLC_TTS_APPID", "")
+    akey = os.environ.get("VOLC_TTS_ACCESS_KEY") or os.environ.get("VOLC_TTS_TOKEN") or ""
+    if appid and akey:                       # 旧版控制台鉴权（Access Key 老名字叫 access_token）
+        h["X-Api-App-Id"] = appid
+        h["X-Api-Access-Key"] = akey
+        return h
+    return None
+
+
+def _offset(v, scale=100, lo=-50, hi=100):
+    """面板滑条倍率（1.0 = 正常）→ 接口整数：语速/音量 0 正常、100 是 2 倍；音调 0 正常、±12 顶格。"""
     try:
-        f = float(v)
+        n = int(round((float(v) - 1.0) * scale))
     except (TypeError, ValueError):
-        return 1.0
-    return round(min(max(f, VOLC_RATIO_RANGE[0]), VOLC_RATIO_RANGE[1]), 2)
+        return 0
+    return min(max(n, lo), hi)
 
 
-def _swap_voice_suffix(v):
-    """音色 id 两种写法都有人用（BV700 与 BV700_streaming）：报错时换一种再试一次。"""
-    return v[:-10] if v.endswith("_streaming") else v + "_streaming"
+def _stream_objs(chunks):
+    """Chunked 流里是一串 JSON 对象：可能被拆包/粘连，也可能带 `data:` 前缀。
 
-
-def _volc_post(payload, token):
-    r = requests.post(VOLC_TTS_URL, json.dumps(payload),          # 照示例：body 是 JSON 字符串
-                      headers={"Authorization": "Bearer;" + token}, timeout=20)
-    return r.json()
+    所以累积成 buffer 后逐个 raw_decode —— 别假设"一块就是一条完整 JSON"。
+    """
+    dec = json.JSONDecoder()
+    buf = ""
+    for raw in chunks:
+        if not raw:
+            continue
+        buf += raw.decode("utf-8", "ignore")
+        while True:
+            k = buf.find("{")
+            if k < 0:
+                buf = ""
+                break
+            buf = buf[k:]
+            try:
+                obj, end = dec.raw_decode(buf)
+            except ValueError:
+                break                        # 还没收全，等下一块
+            buf = buf[end:]
+            yield obj
 
 
 def tts(text, speed=None, pitch=None, volume=None):
-    """一句话 → mp3 字节。失败返回 (None, 原因)，调用方据此回退/提示。"""
-    appid = os.environ.get("VOLC_TTS_APPID", "")
-    token = os.environ.get("VOLC_TTS_TOKEN", "")
-    if not (appid and token):
-        return None, "后端没配 VOLC_TTS_APPID / VOLC_TTS_TOKEN"
-    voice = VOLC_TTS_VOICE
-    payload = {
-        "app": {"appid": appid, "token": token,
-                "cluster": os.environ.get("VOLC_TTS_CLUSTER", "volcano_tts")},
-        "user": {"uid": "onenet-panel"},
-        "audio": {"voice_type": voice, "encoding": "mp3",
-                  "speed_ratio": _ratio(speed), "volume_ratio": _ratio(volume),
-                  "pitch_ratio": _ratio(pitch)},
-        "request": {"reqid": uuid.uuid4().hex, "text": text, "text_type": "plain",
-                    "operation": "query", "with_frontend": 1, "frontend_type": "unitTson"},
-    }
+    """一句话 → mp3 字节。失败返回 (None, 原因)。"""
+    headers = _v3_headers()
+    if not headers:
+        return None, "后端没配 VOLC_TTS_API_KEY（新版控制台）或 VOLC_TTS_APPID+VOLC_TTS_ACCESS_KEY（旧版）"
+    payload = {"req_params": {
+        "text": text,
+        "speaker": VOLC_TTS_VOICE,
+        "audio_params": {"format": "mp3", "sample_rate": 24000,
+                         "speech_rate": _offset(speed),             # 语速：0=正常，100=2 倍
+                         "loudness_rate": _offset(volume)},         # 音量：同上
+        "post_process": {"pitch": _offset(pitch, 12, -12, 12)},     # 音调：-12~12
+    }}
     try:
-        js = _volc_post(payload, token)
-        if js.get("code") != 3000 and re.search(r"voice|speaker|音色|resource",
-                                                str(js.get("message") or ""), re.I):
-            payload["audio"]["voice_type"] = _swap_voice_suffix(voice)   # 换种 id 写法再试一次
-            js = _volc_post(payload, token)
+        r = requests.post(VOLC_TTS_URL, json=payload, headers=headers, stream=True, timeout=(10, 90))
+        if r.status_code != 200:
+            # 错误体也是 JSON（形如 {"header":{"code":45000010,"message":"load grant: …"}}）：
+            # 只把 code/message 提出来，别把整坨 JSON 糊给用户（实测 401 就是"凭据没映射到已开通的服务"）
+            body = (r.text or "").strip()
+            try:
+                h = (json.loads(body) or {}).get("header") or {}
+                if h.get("code") is not None:
+                    return None, "火山 HTTP %s：%s %s（音色 %s）" % (
+                        r.status_code, h.get("code"), h.get("message") or "", VOLC_TTS_VOICE)
+            except Exception:
+                pass
+            return None, "火山 HTTP %s：%s" % (r.status_code, body[:200])
+        audio = bytearray()
+        for obj in _stream_objs(r.iter_content(chunk_size=8192)):
+            code = obj.get("code")
+            if code not in (0, None):            # 流里带错就立刻停：别把半截音频当成功
+                return None, "火山返回 %s：%s（音色 %s）" % (code, obj.get("message") or "无说明", VOLC_TTS_VOICE)
+            d = obj.get("data")
+            if d:
+                try:
+                    audio += base64.b64decode(d)
+                except Exception:
+                    return None, "火山返回的音频不是合法 base64"
     except Exception as e:
         return None, "连不上火山 TTS：%s" % e
-    if js.get("code") != 3000:
-        return None, "火山返回 %s：%s（音色 %s）" % (js.get("code"),
-                                                js.get("message") or js.get("msg") or "无说明",
-                                                payload["audio"]["voice_type"])
-    try:
-        audio = base64.b64decode(js.get("data") or "")
-    except Exception:
-        return None, "火山返回的音频不是合法 base64"
-    return (audio, None) if audio else (None, "火山返回了空音频")
+    return (bytes(audio), None) if audio else (None, "火山没返回音频（音色 %s）" % VOLC_TTS_VOICE)
 
 
 # ----------------------------- LLM -----------------------------
