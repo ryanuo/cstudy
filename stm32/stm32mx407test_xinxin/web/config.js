@@ -8,7 +8,8 @@ window.PANEL_CONFIG = {
   productId: 'WW0f6843I6',
   deviceName: 'humi_temp',
   apiBase: '/api/onenet',
-  chatUrl: '/api/chat'
+  chatUrl: '/api/chat',
+  ttsUrl: '/api/tts'
   /* 口令不在这里：统一由 PanelAPI.key() 现取（localStorage） */
 };
 
@@ -66,6 +67,29 @@ window.PanelAPI = {
     box.querySelector('#keyGateOk').addEventListener('click', save);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
     input.focus();
+  },
+
+  /* 火山 TTS：GET 问能力/音色清单，POST 拿音频 */
+  async ttsInfo() {
+    try {
+      const res = await fetch(window.PANEL_CONFIG.ttsUrl, { headers: { 'X-Panel-Key': this.key() } });
+      if (!res.ok) return { configured: false, voices: [] };
+      return (await res.json()) || { configured: false, voices: [] };
+    } catch (e) { return { configured: false, voices: [] }; }
+  },
+
+  async tts(text, voice, speed, pitch, volume) {
+    const res = await fetch(window.PANEL_CONFIG.ttsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Panel-Key': this.key() },
+      body: JSON.stringify({ text, voice, speed, pitch, volume })
+    });
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const j = await res.json(); if (j && j.msg) msg = j.msg; } catch (e) {}
+      throw new Error(msg);
+    }
+    return await res.blob();
   },
 
   async chat(text, controls, cards, history, pending) {

@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT / "api"))   # api/_lib.py 等
 from chat import app as chat_app          # noqa: E402
 from health import app as health_app      # noqa: E402
 from onenet import app as onenet_app      # noqa: E402
+from tts import app as tts_app            # noqa: E402
 
 
 def static_app(environ, start_response):
@@ -58,6 +59,8 @@ def app(environ, start_response):
         return chat_app(environ, start_response)
     if path.startswith("/api/onenet") or path == "/onenet":
         return onenet_app(environ, start_response)
+    if path.startswith("/api/tts") or path == "/tts":
+        return tts_app(environ, start_response)
     return static_app(environ, start_response)
 
 

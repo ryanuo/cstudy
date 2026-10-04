@@ -55,7 +55,7 @@
      所以先挑一次 + 监听 voiceschanged 再挑，尽量拿到中文音色。 */
   /* 朗读参数：音色 / 语速 / 音调 / 音量 —— 存本机 localStorage，可在面板里调 */
   const VCFG_KEY = 'panelVoice';
-  const vcfg = Object.assign({ name: '', rate: 1.05, pitch: 1, volume: 1 },
+  const vcfg = Object.assign({ source: 'browser', volcVoice: '', name: '', rate: 1.05, pitch: 1, volume: 1 },
     (function () { try { return JSON.parse(localStorage.getItem(VCFG_KEY) || '{}') || {}; } catch (e) { return {}; } })());
   function saveVcfg() { try { localStorage.setItem(VCFG_KEY, JSON.stringify(vcfg)); } catch (e) {} }
 
@@ -77,8 +77,48 @@
     fillVoiceCfg();
   }
 
-  /* 播报；onEnd 在"念完"后回调（没有 TTS 时用时长估算兜底），只触发一次 */
+  let curAudio = null;
+  function hintOnce(msg) {
+    console.warn('[语音]', msg);
+    const hint = $('voiceHint');
+    if (hint) hint.textContent = msg;
+  }
+
+  /* 播报总入口：按 vcfg.source 选浏览器自带 or 火山引擎；火山失败/未配置自动回退浏览器 */
   function speak(msg, onEnd) {
+    let done = false;
+    const fire = () => { if (!done) { done = true; if (onEnd) onEnd(); } };
+    const text = String(msg == null ? '' : msg);
+    if (!text) { fire(); return; }
+
+    if (vcfg.source === 'volc') {
+      const guard = setTimeout(fire, Math.min(12000, text.length * 260 + 2000));   // 兜底
+      const finish = () => { clearTimeout(guard); fire(); };
+      PanelAPI.tts(text, vcfg.volcVoice || '', vcfg.rate, vcfg.pitch, vcfg.volume)
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          if (curAudio) { try { curAudio.pause(); } catch (e) {} }
+          const a = new Audio(url);
+          a.volume = Math.max(0, Math.min(1, Number(vcfg.volume) >= 0 ? Number(vcfg.volume) : 1));
+          a.onended = () => { try { URL.revokeObjectURL(url); } catch (e) {} finish(); };
+          a.onerror = () => { hintOnce('火山音频播放失败，已回退浏览器朗读'); browserSpeak(text, fire); };
+          curAudio = a;
+          a.play().catch(err => {
+            hintOnce('浏览器拦了自动播放（' + err.message + '），已回退浏览器朗读');
+            browserSpeak(text, fire);
+          });
+        })
+        .catch(err => {
+          hintOnce('火山 TTS 失败：' + err.message + '（已回退浏览器朗读）');
+          browserSpeak(text, fire);
+        });
+      return;
+    }
+    browserSpeak(text, onEnd);
+  }
+
+  /* 浏览器自带朗读（免费、离线） */
+  function browserSpeak(msg, onEnd) {
     let done = false;
     const fire = () => { if (!done) { done = true; if (onEnd) onEnd(); } };
     if (!msg || !window.speechSynthesis) {
@@ -125,8 +165,50 @@
     });
   }
   /* ---------- 语音设置面板 ---------- */
+  let volcInfo = null;          // GET /api/tts 的缓存
+  function fillVolcVoices() {
+    const sel = $('voiceVolcSel'), hint = $('voiceHint');
+    if (!sel) return;
+    if (volcInfo && volcInfo.voices && volcInfo.voices.length) {
+      const cur = vcfg.volcVoice || '';
+      const opt = v => '<option value="' + String(v.id).replace(/"/g, '&quot;') + '"' +
+        (v.id === cur ? ' selected' : '') + ' title="' + String(v.id) + '">' + (v.name || v.id) + '</option>';
+      const groups = [];                                  // 按场景分组（optgroup）
+      volcInfo.voices.forEach(v => {
+        const g = v.group || '';
+        let bucket = groups.find(x => x.name === g);
+        if (!bucket) { bucket = { name: g, items: [] }; groups.push(bucket); }
+        bucket.items.push(v);
+      });
+      sel.innerHTML = groups.map(g => g.name
+        ? '<optgroup label="' + g.name + '">' + g.items.map(opt).join('') + '</optgroup>'
+        : g.items.map(opt).join('')).join('');
+      if (!vcfg.volcVoice) vcfg.volcVoice = volcInfo.voices[0].id;
+    } else {
+      sel.innerHTML = '<option value="">（后端还没配火山 TTS）</option>';
+    }
+    if (hint && vcfg.source === 'volc') {
+      hint.textContent = volcInfo && volcInfo.configured
+        ? '火山音色来自后端 VOLC_TTS_VOICES；改音色只影响朗读，不影响识别'
+        : '后端缺 VOLC_TTS_APPID / VOLC_TTS_TOKEN：先在 Vercel 环境变量里补上（本地放 web/.env.local）';
+    }
+  }
+
+  function applySourceRow() {
+    const src = $('voiceSource'), rowB = $('voiceRowBrowser'), rowV = $('voiceRowVolc');
+    if (src) src.value = vcfg.source;
+    if (rowB) rowB.hidden = vcfg.source === 'volc';
+    if (rowV) rowV.hidden = vcfg.source !== 'volc';
+  }
+
   function fillVoiceCfg() {
     const sel = $('voiceSel'), hint = $('voiceHint');
+    applySourceRow();
+    if (vcfg.source === 'volc' && !volcInfo) {
+      PanelAPI.ttsInfo().then(info => { volcInfo = info; fillVolcVoices(); });
+    } else if (vcfg.source === 'volc') {
+      fillVolcVoices();
+    }
     if (!sel) return;
     const vs = zhVoices();
     const cur = (zhVoice && zhVoice.name) || vcfg.name || '';
@@ -147,7 +229,7 @@
     if (r) { r.value = vcfg.rate; $('voiceRateVal').textContent = Number(vcfg.rate).toFixed(2); }
     if (p) { p.value = vcfg.pitch; $('voicePitchVal').textContent = Number(vcfg.pitch).toFixed(2); }
     if (vo) { vo.value = vcfg.volume; $('voiceVolVal').textContent = Number(vcfg.volume).toFixed(2); }
-    if (hint) {
+    if (hint && vcfg.source !== 'volc') {
       hint.textContent = vs.length
         ? '音色来自系统；要更多（如「婷婷/美佳」）去系统设置里下载中文语音'
         : '系统没装中文语音：macOS 系统设置 → 辅助功能 → 朗读内容 → 系统声音 → 管理声音';
@@ -171,6 +253,24 @@
       vcfg.name = sel.value;
       saveVcfg();
       pickVoice();
+      speak('音色已切换');
+    });
+    const src = $('voiceSource');
+    if (src) src.addEventListener('change', () => {
+      vcfg.source = src.value === 'volc' ? 'volc' : 'browser';
+      saveVcfg();
+      applySourceRow();
+      if (vcfg.source === 'volc') {
+        PanelAPI.ttsInfo().then(info => { volcInfo = info; fillVoiceCfg(); speak('已切换到火山引擎音色'); });
+      } else {
+        pickVoice();
+        speak('已切换到浏览器朗读');
+      }
+    });
+    const vsel = $('voiceVolcSel');
+    if (vsel) vsel.addEventListener('change', () => {
+      vcfg.volcVoice = vsel.value;
+      saveVcfg();
       speak('音色已切换');
     });
     onRange($('voiceRate'), 'rate');

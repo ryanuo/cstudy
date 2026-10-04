@@ -34,6 +34,10 @@ function makeEnv({ withSR = false } = {}) {
     voiceCfgBtn: new El('voiceCfgBtn'),
     voiceCfg: new El('voiceCfg'),
     voiceSel: new El('voiceSel'),
+    voiceSource: new El('voiceSource'),
+    voiceRowBrowser: new El('voiceRowBrowser'),
+    voiceRowVolc: new El('voiceRowVolc'),
+    voiceVolcSel: new El('voiceVolcSel'),
     voiceRate: new El('voiceRate'),
     voicePitch: new El('voicePitch'),
     voiceVol: new El('voiceVol'),
@@ -44,6 +48,7 @@ function makeEnv({ withSR = false } = {}) {
     voiceHint: new El('voiceHint')
   };
   els.voiceCfg.hidden = true;
+  els.voiceRowVolc.hidden = true;
   els.voiceBar.hidden = true;
   const doc = {
     listeners: {},
@@ -53,7 +58,7 @@ function makeEnv({ withSR = false } = {}) {
     readyState: 'complete'
   };
   const store = {};
-  const calls = { fetch: [], set: [], speak: [], utterances: [] };
+  const calls = { fetch: [], set: [], speak: [], utterances: [], audio: [], revoked: [] };
 
   globalThis.window = globalThis;
   globalThis.document = doc;
@@ -81,6 +86,14 @@ function makeEnv({ withSR = false } = {}) {
     return el;
   };
   globalThis.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; this.rate = 0; this.pitch = 0; this.volume = 0; this.voice = null; this.lang = ''; } };
+
+  // 火山走 <audio> 播放：桩掉 Audio 与 blob URL
+  globalThis.URL = { createObjectURL: () => 'blob:fake-' + (calls.audio.length + 1), revokeObjectURL: (u) => { calls.revoked.push(u); } };
+  globalThis.Audio = class {
+    constructor(src) { this.src = src; this.volume = 1; calls.audio.push(this); }
+    play() { this.played = true; if (this.onended) setTimeout(this.onended, 0); return Promise.resolve(); }
+    pause() {}
+  };
 
   if (withSR) {
     class FakeSR {
@@ -493,3 +506,78 @@ test('下拉框标签变短（名字 · 语言），完整名字放 title', asyn
 });
 
 
+
+
+/* ---------------- 火山引擎 TTS（朗读来源可切） ---------------- */
+
+test('来源选火山时：走 /api/tts 拿音频并用 <audio> 播放（不再用浏览器朗读）', async () => {
+  const env = makeEnv({ withSR: true });
+  env.store.panelVoice = JSON.stringify({ source: 'volc', volcVoice: 'BV001_streaming', rate: 1.2, pitch: 0.9, volume: 0.7 });
+  env.fetchReply = async (url) => {
+    if (url === '/api/tts') return { ok: true, status: 200, blob: async () => 'MP3' };
+    return { ok: true, status: 200, json: async () => ({ intent: { action: 'chat', reply: '你好呀' } }) };
+  };
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  globalThis.__panel = { controls: [], cards: [], isOnline: () => true, set: async () => true,
+    setMany: async () => ({ ok: true }), get: () => null, refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r = [[{ transcript: '你好' }]]; r[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r });
+  await new Promise(res => setTimeout(res, 60));
+
+  const ttsCall = env.calls.fetch.find(c => c.url === '/api/tts' && c.opts && c.opts.method === 'POST');
+  assert.ok(ttsCall, '应该请求 /api/tts');
+  const body = JSON.parse(ttsCall.opts.body);
+  assert.equal(body.text, '你好呀');
+  assert.equal(body.voice, 'BV001_streaming');
+  assert.deepEqual([body.speed, body.pitch, body.volume], [1.2, 0.9, 0.7], '语速/音调/音量要带给火山');
+  assert.equal(env.calls.audio.length, 1, '应该用 Audio 播放');
+  assert.equal(env.calls.audio[0].played, true);
+  assert.equal(env.calls.audio[0].volume, 0.7);
+  assert.equal(env.calls.speak.length, 0, '这条不该再走浏览器朗读');
+});
+
+test('火山失败时自动回退浏览器朗读，并把原因显示在设置面板', async () => {
+  const env = makeEnv({ withSR: true });
+  env.store.panelVoice = JSON.stringify({ source: 'volc', volcVoice: 'BV001_streaming' });
+  env.fetchReply = async (url) => {
+    if (url === '/api/tts') return { ok: false, status: 500, json: async () => ({ code: 500, msg: '后端没配 VOLC_TTS_APPID' }) };
+    return { ok: true, status: 200, json: async () => ({ intent: { action: 'chat', reply: '你好呀' } }) };
+  };
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  globalThis.__panel = { controls: [], cards: [], isOnline: () => true, set: async () => true,
+    setMany: async () => ({ ok: true }), get: () => null, refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const r = [[{ transcript: '你好' }]]; r[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results: r });
+  await new Promise(res => setTimeout(res, 80));
+
+  assert.equal(env.calls.audio.length, 0, '不该有音频');
+  assert.ok(env.calls.speak.some(x => /你好呀/.test(x)), '应回退到浏览器朗读');
+  assert.match(env.els.voiceHint.textContent, /VOLC_TTS_APPID/, '要把后端给的原因显示出来');
+});
+
+test('设置面板：来源下拉切换会持久化，并显示/隐藏对应音色行', async () => {
+  const env = makeEnv();
+  env.fetchReply = async () => ({ ok: true, status: 200, json: async () => ({ configured: true,
+    voices: [{ id: 'BV001_streaming', name: '通用女声', group: '通用场景' },
+             { id: 'BV021_streaming', name: '东北老铁', group: '方言' }] }) });
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceCfgBtn }));   // 打开设置 → 绑定
+  assert.equal(env.els.voiceRowVolc.hidden, true, '默认浏览器朗读，火山行隐藏');
+
+  env.els.voiceSource.value = 'volc';
+  env.els.voiceSource.fire('change', {});
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(JSON.parse(env.store.panelVoice).source, 'volc', '来源要持久化');
+  assert.equal(env.els.voiceRowVolc.hidden, false, '火山音色行应显示');
+  assert.match(env.els.voiceVolcSel.innerHTML, /通用女声/, '应从后端拿到音色清单');
+  assert.match(env.els.voiceVolcSel.innerHTML, /<optgroup label="方言">/, '应按场景分组');
+  assert.ok(!/BV001_streaming<\/option>/.test(env.els.voiceVolcSel.innerHTML), '下拉里显示名字而不是 id');
+});

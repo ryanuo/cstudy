@@ -262,6 +262,118 @@ def onenet_call(op, params=None, body=None):
         return {"code": 598, "msg": "bad json from onenet"}, 502
 
 
+# ----------------------------- 火山引擎 TTS（可选，云端音色） -----------------------------
+# 走官方 v1 HTTP 接口：POST /api/v1/tts，Authorization: Bearer;<token>，
+# body 里 app(appid/token/cluster) + audio(voice_type/encoding/speed_ratio...) + request(text/reqid)。
+# 返回 {"code":3000,"data":"<base64 mp3>"}。字段如有出入，只改这里的环境变量/这一段。
+VOLC_TTS_URL_DEFAULT = "https://openspeech.bytedance.com/api/v1/tts"
+
+# 火山引擎**免费**的 21 款音色（用户从控制台抄的清单，按场景分组）。
+# id 用官方 TTS 接口常见的 "_streaming" 写法；不同接口/账号可能要短名（BV700），
+# 所以 tts_volc() 里带了自动重试（见下面 _toggle_streaming_suffix）。
+# 要改/加音色，直接给 VOLC_TTS_VOICES 环境变量（JSON 数组，可带 group）。
+VOLC_VOICES_DEFAULT = [
+    # 通用场景（3）
+    {"id": "BV700_streaming", "name": "灿灿", "group": "通用场景"},
+    {"id": "BV001_streaming", "name": "通用女声", "group": "通用场景"},
+    {"id": "BV002_streaming", "name": "通用男声", "group": "通用场景"},
+    # 有声阅读（5）
+    {"id": "BV701_streaming", "name": "擎苍", "group": "有声阅读"},
+    {"id": "BV119_streaming", "name": "通用赘婿", "group": "有声阅读"},
+    {"id": "BV102_streaming", "name": "儒雅青年", "group": "有声阅读"},
+    {"id": "BV113_streaming", "name": "甜宠少御", "group": "有声阅读"},
+    {"id": "BV115_streaming", "name": "古风少御", "group": "有声阅读"},
+    # 智能助手 / 视频配音 / 特色 / 教育（6）
+    {"id": "BV007_streaming", "name": "亲切女声", "group": "助手·配音·教育"},
+    {"id": "BV056_streaming", "name": "阳光男声", "group": "助手·配音·教育"},
+    {"id": "BV005_streaming", "name": "活泼女声", "group": "助手·配音·教育"},
+    {"id": "BV051_streaming", "name": "奶气萌娃", "group": "助手·配音·教育"},
+    {"id": "BV034_streaming", "name": "知性姐姐（双语）", "group": "助手·配音·教育"},
+    {"id": "BV033_streaming", "name": "温柔小哥", "group": "助手·配音·教育"},
+    # 方言（3）
+    {"id": "BV021_streaming", "name": "东北老铁", "group": "方言"},
+    {"id": "BV019_streaming", "name": "重庆小伙", "group": "方言"},
+    {"id": "BV213_streaming", "name": "广西表哥", "group": "方言"},
+    # 英语（2）
+    {"id": "BV503_streaming", "name": "活力女声 Ariana", "group": "英语"},
+    {"id": "BV504_streaming", "name": "活力男声 Jackson", "group": "英语"},
+    # 日语（2）
+    {"id": "BV522_streaming", "name": "气质女生", "group": "日语"},
+    {"id": "BV524_streaming", "name": "日语男声", "group": "日语"},
+]
+
+
+def volc_voices():
+    raw = os.environ.get("VOLC_TTS_VOICES")
+    if raw:
+        try:
+            v = json.loads(raw)
+            if isinstance(v, list) and v:
+                return [{"id": str(x.get("id")), "name": str(x.get("name") or x.get("id")),
+                         "group": str(x.get("group") or "")}
+                        for x in v if isinstance(x, dict) and x.get("id")]
+        except Exception:
+            pass
+    return VOLC_VOICES_DEFAULT
+
+
+def volc_tts_ready():
+    return bool(os.environ.get("VOLC_TTS_APPID") and os.environ.get("VOLC_TTS_TOKEN"))
+
+
+def tts_volc(text, voice=None, speed=None, pitch=None, volume=None):
+    """返回 (mp3 bytes, None) 或 (None, 错误说明)。错误原样带出去，方便在设置面板直接看到。"""
+    import base64
+    import uuid
+
+    appid = os.environ.get("VOLC_TTS_APPID", "")
+    token = os.environ.get("VOLC_TTS_TOKEN", "")
+    if not appid or not token:
+        return None, "后端没配 VOLC_TTS_APPID / VOLC_TTS_TOKEN"
+    payload = {
+        "app": {"appid": appid, "token": token,
+                "cluster": os.environ.get("VOLC_TTS_CLUSTER", "volcano_tts")},
+        "user": {"uid": os.environ.get("VOLC_TTS_UID", "onenet-panel")},
+        "audio": {
+            "voice_type": voice or os.environ.get("VOLC_TTS_VOICE", "BV001_streaming"),
+            "encoding": os.environ.get("VOLC_TTS_ENCODING", "mp3"),
+            "speed_ratio": float(speed or 1.0),
+            "volume_ratio": float(volume or 1.0),
+            "pitch_ratio": float(pitch or 1.0),
+        },
+        "request": {"reqid": uuid.uuid4().hex, "text": text,
+                    "text_type": "plain", "operation": "query"},
+    }
+    def _call(p):
+        return requests.post(os.environ.get("VOLC_TTS_URL", VOLC_TTS_URL_DEFAULT),
+                             json=p, timeout=20,
+                             headers={"Authorization": "Bearer;" + token})
+
+    try:
+        r = _call(payload)
+        j = r.json()
+        # 音色不存在时换一种 id 写法重试一次：有的接口要 BV700，有的要 BV700_streaming
+        msg = str(j.get("message", ""))
+        if j.get("code") != 3000 and ("voice" in msg.lower() or "音色" in msg):
+            vid = payload["audio"]["voice_type"]
+            alt = vid[:-len("_streaming")] if vid.endswith("_streaming") else vid + "_streaming"
+            payload["audio"]["voice_type"] = alt
+            r = _call(payload)
+            j = r.json()
+    except Exception as e:
+        return None, "连不上火山 TTS：%s" % e
+    try:
+        j = r.json()
+    except Exception:
+        return None, "火山返回的不是 JSON（HTTP %s）：%s" % (r.status_code, r.text[:200])
+    if j.get("code") != 3000:
+        return None, "火山报错 code=%s message=%s" % (j.get("code"), j.get("message"))
+    try:
+        return base64.b64decode(j["data"]), None
+    except Exception as e:
+        return None, "音频解码失败：%s" % e
+
+
 # ----------------------------- LLM -----------------------------
 def build_messages(text, controls, cards, history=None, pending=None):
     """系统提示 + 最近几轮对话 + 本轮用户话。

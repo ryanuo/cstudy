@@ -168,8 +168,19 @@
     <div id="voiceCfg" class="voice-cfg" hidden>
       <div class="voice-cfg-head">语音设置</div>
       <div class="voice-cfg-row">
+        <label for="voiceSource">来源</label>
+        <select id="voiceSource">
+          <option value="browser">浏览器自带（免费 · 离线）</option>
+          <option value="volc">火山引擎（云端音色）</option>
+        </select>
+      </div>
+      <div class="voice-cfg-row" id="voiceRowBrowser">
         <label for="voiceSel">音色</label>
         <select id="voiceSel"></select>
+      </div>
+      <div class="voice-cfg-row" id="voiceRowVolc" hidden>
+        <label for="voiceVolcSel">火山音色</label>
+        <select id="voiceVolcSel"></select>
       </div>
       <div class="voice-cfg-row">
         <label for="voiceRate">语速</label>
