@@ -25,10 +25,12 @@
 #define APP_DHT11_PERIOD_MS 2000U     /* DHT11 采样周期（bsp_dht11.c 内部节流用） */
 
 /* ---------------- 物模型 ----------------
- * ★ 三个灯要在 OneNET 控制台里加好属性，否则页面点击会被平台拒绝
- *   （code 10411 identifier not exist）：
- *   产品 → 物模型 → 添加功能 → 属性 → 标识符 LED1 / LED2 / LED3，布尔，读写
- *   （buzzer / fan / temperature / humidity 已存在）*/
+ * 与 OneNET 控制台里的定义必须逐字一致（否则平台回 10411 identifier not exist）：
+ *   led1 / led2 / led3   string(8)  取值 "on" / "off"（★ 小写，不是 LED1）
+ *   buzzer / fan         bool       true / false
+ *   temperature / humidity  number   DHT11 读数
+ *   服务 reboot          ——         面板按钮触发，设备先回应答再复位
+ * 详见工程根 README.md 的「物模型」一节。*/
 /* 1 = 上报全部执行器（灯 1/2/3 + 蜂鸣器 + 风扇）
  * 物模型里这五个属性都已存在（led1/led2/led3 是 string，buzzer/fan 是 bool），
  * 所以可以全量上报；上电连上 OneNET 后与每 5 秒的周期上报都会带上它们的真实状态。*/

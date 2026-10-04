@@ -79,6 +79,7 @@ cstudy/
 | --- | --- | --- |
 | STM32F103 基础工程 | stm32/test1 | HAL 库模板（GPIO / UART / OLED / 按键 / 风扇等） |
 | STM32F407 综合工程 | stm32/test407 | HAL 库综合（多外设 + App 分层） |
+| STM32F407 物联网节点 | [stm32/stm32mx407test_xinxin](stm32/stm32mx407test_xinxin/README.md) | OneNET Studio 物模型 MQTT（ESP8266 AT）：温湿度 / 三路灯 / 蜂鸣器 / 风扇 + Web 面板（口令 · 历史曲线 · 语音控制 · 重启服务） |
 
 ## 独立项目
 
