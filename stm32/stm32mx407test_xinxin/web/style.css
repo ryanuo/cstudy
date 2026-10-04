@@ -431,7 +431,7 @@ body{
 /* 语音设置面板：浮在按钮上方 */
 .voice-cfg{
   position:absolute; left:50%; bottom:3.75rem; transform:translate(-50%, 6px);
-  width:min(92vw, 20rem);
+  width:min(92vw, 22rem);
   padding:.85rem .9rem; border-radius:12px;
   background:hsl(var(--card)); border:1px solid hsl(var(--border));
   box-shadow:0 14px 34px rgb(0 0 0 / .14), 0 3px 8px rgb(0 0 0 / .06);
@@ -441,13 +441,27 @@ body{
 .voice-cfg-head{ font-size:.8125rem; font-weight:600; margin-bottom:.6rem; }
 .voice-cfg-row{ display:flex; align-items:center; gap:.5rem; margin-bottom:.55rem; font-size:.78rem; }
 .voice-cfg-row label{ flex:0 0 2.6rem; color:hsl(var(--muted-foreground)); }
+.voice-cfg-row{ min-width:0; }                 /* flex 子项默认 min-width:auto，长选项会把面板撑破 */
 .voice-cfg-row select{
-  flex:1 1 auto; height:2rem; padding:0 .5rem; font-size:.78rem;
+  flex:1 1 auto; min-width:0; width:100%;     /* ← 关键：允许收缩，配合下面的省略号 */
+  height:2rem; padding:0 1.6rem 0 .5rem; font-size:.78rem;
   border:1px solid #d9d9d9; border-radius:6px; background:hsl(var(--card)); color:inherit;
-  max-width:100%;
+  text-overflow:ellipsis; white-space:nowrap; overflow:hidden;
+  appearance:none; -webkit-appearance:none;
+  background-image:linear-gradient(45deg, transparent 50%, hsl(var(--muted-foreground)) 50%),
+                   linear-gradient(135deg, hsl(var(--muted-foreground)) 50%, transparent 50%);
+  background-position:calc(100% - 14px) 13px, calc(100% - 9px) 13px;
+  background-size:5px 5px, 5px 5px; background-repeat:no-repeat;
 }
 .voice-cfg-row select:focus{ outline:none; border-color:#409eff; }
 .voice-cfg-row input[type=range]{ flex:1 1 auto; accent-color:#409eff; }
 .voice-cfg-val{ flex:0 0 2.4rem; text-align:right; color:hsl(var(--muted-foreground)); font-variant-numeric:tabular-nums; }
 .voice-cfg-foot{ display:flex; align-items:center; gap:.5rem; margin-top:.2rem; }
 .voice-cfg-hint{ font-size:.72rem; color:hsl(var(--muted-foreground)); line-height:1.4; }
+.voice-cfg-tip{ margin-top:.5rem; padding-top:.5rem; border-top:1px solid hsl(var(--border));
+  font-size:.72rem; color:hsl(var(--muted-foreground)); line-height:1.5; }
+.voice-cfg-tip kbd{
+  font-family:ui-monospace,Menlo,monospace; font-size:.7rem;
+  padding:.05rem .3rem; border:1px solid hsl(var(--border)); border-radius:4px;
+  background:hsl(var(--muted)); color:hsl(var(--foreground));
+}

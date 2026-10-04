@@ -437,3 +437,59 @@ test('拖动语速滑块会存入 localStorage，并影响后续播报', async (
   assert.equal(JSON.parse(env.store.panelVoice).rate, 1.5, '应写回本地配置');
   assert.equal(env.els.voiceRateVal.textContent, '1.50', '数值要显示出来');
 });
+
+
+/* ---------------- 快捷键 + 音色标签 ---------------- */
+
+function fireKey(env, ev) { env.doc.listeners.keydown.forEach(f => f(ev)); }
+
+test('⌘/Ctrl+K 开始听，再按一次停止；在输入框里不触发', async () => {
+  const env = makeEnv({ withSR: true });
+  globalThis.__panel = { controls: [], cards: [], isOnline: () => true, set: async () => true,
+    setMany: async () => ({ ok: true }), get: () => null, refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+
+  fireKey(env, { key: 'k', metaKey: true, target: { tagName: 'BODY' }, preventDefault() {} });
+  assert.equal(env.srStarts, 1, '⌘K 应该开始听');
+  fireKey(env, { key: 'k', metaKey: true, target: { tagName: 'BODY' }, preventDefault() {} });
+  assert.equal(env.srStarts, 1, '再按一次应该停止（不再 start）');
+
+  fireKey(env, { key: 'k', ctrlKey: true, target: { tagName: 'INPUT' }, preventDefault() {} });
+  assert.equal(env.srStarts, 1, '在输入框里按不该触发');
+
+  fireKey(env, { key: 'k', ctrlKey: true, target: { tagName: 'BODY' }, preventDefault() {} });
+  assert.equal(env.srStarts, 2, 'Ctrl+K 在 Windows/Linux 也要能用');
+});
+
+test('Esc 停止听', async () => {
+  const env = makeEnv({ withSR: true });
+  globalThis.__panel = { controls: [], cards: [], isOnline: () => true, set: async () => true,
+    setMany: async () => ({ ok: true }), get: () => null, refresh: async () => {}, armReboot: () => false };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  fireKey(env, { key: 'k', metaKey: true, target: { tagName: 'BODY' }, preventDefault() {} });
+  assert.equal(env.srStarts, 1);
+  fireKey(env, { key: 'Escape', target: { tagName: 'BODY' } });
+  assert.match(env.els.voiceLabel.textContent, /语音/, '停止后按钮标签回到"语音"');
+  await new Promise(r => setTimeout(r, 260));            // 浮层是淡出后再收起（170~200ms）
+  assert.equal(env.els.voiceBar.hidden, true, '状态条收起来');
+});
+
+test('下拉框标签变短（名字 · 语言），完整名字放 title', async () => {
+  const env = makeEnv();
+  globalThis.speechSynthesis.getVoices = () => [
+    { name: '婷婷', lang: 'zh-CN' },
+    { name: 'Eddy (中文（中国大陆）)', lang: 'zh-CN' },
+    { name: 'Sin-ji', lang: 'zh-HK' }];
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceCfgBtn }));
+  const html = env.els.voiceSel.innerHTML;
+  assert.match(html, /婷婷 · 普通话/);
+  assert.match(html, /Eddy · 普通话/, '长名字应被截短');
+  assert.match(html, /Sin-ji · 粤语/, '语言应中文化');
+  assert.ok(!/（zh-CN）/.test(html.replace(/title="[^"]*"/g, '')), '可见文本里不该出现 (zh-CN)');
+  assert.match(html, /title="Eddy \(中文（中国大陆）\)（zh-CN）"/, '完整名字要在 title 里');
+});
+
+

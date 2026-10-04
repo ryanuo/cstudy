@@ -20,6 +20,8 @@
 
   const ICON = { 'is-live': 'fa-microphone', 'is-ok': 'fa-check-circle', 'is-err': 'fa-exclamation-circle' };
   let hideTimer = null;
+  let wantVisible = false;      // 用状态判断，而不是查 class：
+                                // 否则淡入的 rAF 回调晚于"关闭"执行时会把 is-show 加回来，浮层卡住不消失
 
   /* 浮层：淡入 → 几秒后自动淡出；识别中(live) 不自动消失 */
   function show(msg, cls) {
@@ -28,10 +30,12 @@
     clearTimeout(hideTimer);
 
     if (!msg) {
+      wantVisible = false;
       bar.classList.remove('is-show');
-      hideTimer = setTimeout(() => { if (!bar.classList.contains('is-show')) bar.hidden = true; }, 200);
+      hideTimer = setTimeout(() => { if (!wantVisible) bar.hidden = true; }, 200);
       return;
     }
+    wantVisible = true;
     const shown = bar.classList.contains('is-show');
     bar.hidden = false;
     bar.className = 'voice-bar' + (cls ? ' ' + cls : '');
@@ -40,7 +44,7 @@
     text.textContent = msg;
     if (!shown) {
       const raf = window.requestAnimationFrame || (f => setTimeout(f, 0));
-      raf(() => bar.classList.add('is-show'));        // 下一帧再加，触发淡入过渡
+      raf(() => { if (wantVisible) bar.classList.add('is-show'); });   // 期间被关掉就别再加回来
     }
 
     if (cls !== 'is-live') {                          // 结果类：8 秒后自己收掉
@@ -127,9 +131,15 @@
     const vs = zhVoices();
     const cur = (zhVoice && zhVoice.name) || vcfg.name || '';
     if (vs.length) {
-      sel.innerHTML = vs.map(v =>
-        '<option value="' + v.name.replace(/"/g, '&quot;') + '"' + (v.name === cur ? ' selected' : '') +
-        '>' + v.name + '（' + v.lang + '）</option>').join('');
+      /* 系统音色名很长（"Eddy (中文（中国大陆）)"），全塞进下拉框会撑破面板：
+         显示成「名字 · 语言」，完整名字放 title 里，其余交给 CSS 省略号 */
+      sel.innerHTML = vs.map(v => {
+        const full = v.name + '（' + v.lang + '）';
+        const label = String(v.name || '').split(/[(（]/)[0].trim() || v.name;
+        const lang = ({ 'zh-CN': '普通话', 'zh-Hans': '普通话', 'zh-TW': '台湾', 'zh-HK': '粤语' })[v.lang] || v.lang;
+        return '<option value="' + v.name.replace(/"/g, '&quot;') + '"' + (v.name === cur ? ' selected' : '') +
+               ' title="' + full.replace(/"/g, '&quot;') + '">' + label + ' · ' + lang + '</option>';
+      }).join('');
     } else {
       sel.innerHTML = '<option value="">（系统还没有可用音色）</option>';
     }
@@ -359,6 +369,21 @@
     rec.onend = () => setLive(false);
     try { rec.start(); } catch (e) { show('启动失败：' + e.message, 'is-err'); }
   }
+
+  /* 快捷键：⌘/Ctrl+K 开始或停止听，Esc 立刻停（在输入框里打字时不触发） */
+  document.addEventListener('keydown', (e) => {
+    const tag = (e.target && e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target && e.target.isContentEditable)) return;
+    if (e.key === 'Escape') {
+      if (listening) { try { rec.stop(); } catch (err) {} show(''); }
+      return;
+    }
+    if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (listening) { try { rec.stop(); } catch (err) {} show(''); }
+      else { relistenGuard = 0; start(); }
+    }
+  });
 
   /* 事件委托：Vue 重建按钮后依然生效 */
   document.addEventListener('click', (e) => {
