@@ -33,12 +33,24 @@
         <span :style="{ color: statusColor }">{{ statusText }}</span>
       </span>
 
+      <button type="button" class="btn btn-outline btn-sm btn-danger"
+              :disabled="!online || rebooting"
+              :title="online ? '重启设备（复位 MCU）' : '设备离线，不可重启'"
+              @click="onRebootClick">
+        <i class="fa" :class="rebooting ? 'fa-spinner fa-spin' : 'fa-power-off'"></i>
+        <span class="hide-xs">{{ rebootArm ? '再点一次确认' : '重启设备' }}</span>
+      </button>
+
       <button type="button" class="btn btn-outline btn-sm" :disabled="refreshing" @click="refreshAll">
         <i class="fa fa-refresh" :class="{ 'fa-spin': refreshing }"></i>
         <span class="hide-xs">刷新</span>
       </button>
     </div>
   </header>
+
+  <p v-if="rebootMsg" class="reboot-note">
+    <i class="fa fa-info-circle"></i> {{ rebootMsg }}
+  </p>
 
   <!-- ============ 属性卡片（温度 / 湿度） ============ -->
   <section class="prop-grid">

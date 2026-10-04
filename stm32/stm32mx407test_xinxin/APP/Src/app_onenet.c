@@ -26,6 +26,8 @@ static char g_rx[ONENET_RX_MAX + 1];
 static const char *const g_sub_suffixes[] = {
     "/thing/property/post/reply",
     "/thing/property/set",
+    /* 物模型"服务"调用：标识符可变，用 + 通配（重启按钮走这条）*/
+    "/thing/service/+",
 };
 
 /* ============================================================
@@ -225,17 +227,26 @@ void OneNET_SetHandlers(const OnenetHandler *table, size_t count) {
  * ============================================================ */
 ONENET_Status_t OneNET_Publish(const char *topic_suffix, const char *payload) {
   char topic[160];
+
+  if (topic_suffix == NULL)
+    return ONENET_ERR_SEND;
+
+  build_topic(topic, sizeof topic, topic_suffix);
+  return OneNET_PublishAbsolute(topic, payload);
+}
+
+/* topic 已经拼好（服务应答这种 topic 带变量的场景） */
+ONENET_Status_t OneNET_PublishAbsolute(const char *topic, const char *payload) {
   char cmd[512];
   int plen, need;
   uint8_t ret;
 
   if (!g_mqtt_connected)
     return ONENET_ERR_NOT_CONNECTED;
-  if (topic_suffix == NULL || payload == NULL)
+  if (topic == NULL || payload == NULL)
     return ONENET_ERR_SEND;
 
   plen = (int)strlen(payload);
-  build_topic(topic, sizeof topic, topic_suffix);
 
   /* 先算真实长度再拼：以前固定放行 512 字节，snprintf 会把 AT 命令悄悄截断，
    * 而报文里声明的长度还是原值 → 上报失败且极难查。 */

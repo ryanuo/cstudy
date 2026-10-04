@@ -68,6 +68,9 @@ void OneNET_SetHandlers(const OnenetHandler *table, size_t count);
 /* 发布到 $sys/<pid>/<did><topic_suffix>，topic_suffix 以 '/' 开头 */
 ONENET_Status_t OneNET_Publish(const char *topic_suffix, const char *payload);
 
+/* 发布到已经拼好的完整 topic（服务应答这类"topic 带变量"的场景用） */
+ONENET_Status_t OneNET_PublishAbsolute(const char *topic, const char *payload);
+
 /* 物模型属性上报：拼 {"id":"<tick>","params":<params_json>} 发到 thing/property/post */
 ONENET_Status_t OneNET_PublishProperty(const char *params_json);
 

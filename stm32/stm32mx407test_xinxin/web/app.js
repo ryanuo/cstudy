@@ -11,7 +11,8 @@ const config = {
     deviceDetail: 'https://iot-api.heclouds.com/device/detail',
     getProperty:  'https://iot-api.heclouds.com/thingmodel/query-device-property',
     setProperty:  'https://iot-api.heclouds.com/thingmodel/set-device-property',
-    getHistory:   'https://iot-api.heclouds.com/thingmodel/query-device-property-history'
+    getHistory:   'https://iot-api.heclouds.com/thingmodel/query-device-property-history',
+    callService:  'https://iot-api.heclouds.com/thingmodel/call-service'
   }
 };
 
@@ -60,6 +61,12 @@ createApp({
     /* ---------- 状态 ---------- */
     const online     = ref(null);
     const refreshing = ref(false);
+
+    // 重启按钮：rebootArm = 已进入确认态；rebooting = 请求中；rebootMsg = 结果提示
+    const rebootArm = ref(false);
+    const rebooting = ref(false);
+    const rebootMsg = ref('');
+    let rebootTimer = null, rebootTipTimer = null;
 
     // “指令已下发” / “下发失败”提示：tip[控制项 key] = true/false
     const tip    = reactive({});
@@ -271,6 +278,67 @@ createApp({
       setTimeout(refreshProperties, 3500);
     }
 
+    /* ---------- 3.5 物模型服务调用（重启按钮走这条） ---------- */
+    async function callService(identifier, params) {
+      try {
+        const res = await fetch(config.api.callService, {
+          method: 'POST',
+          headers: {
+            authorization: config.token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            product_id: config.productId,
+            device_name: config.deviceName,
+            identifier,
+            params: params || {}
+          })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || data.code !== 0) {
+          console.warn('[服务调用] 失败：', identifier, data && (data.msg || data.code));
+          return { ok: false, msg: (data && data.msg) || '' };
+        }
+        return { ok: true };
+      } catch (err) {
+        console.error('[服务调用] 请求异常：', err);
+        return { ok: false, msg: String(err) };
+      }
+    }
+
+    /* 重启：两段式点击（第一次进入确认态，4 秒内再点才真发），避免误触复位板子 */
+    function onRebootClick() {
+      if (!online.value || rebooting.value) return;
+
+      if (!rebootArm.value) {
+        rebootArm.value = true;
+        clearTimeout(rebootTimer);
+        rebootTimer = setTimeout(() => { rebootArm.value = false; }, 4000);
+        return;
+      }
+
+      clearTimeout(rebootTimer);
+      rebootArm.value = false;
+      doReboot();
+    }
+
+    async function doReboot() {
+      rebooting.value = true;
+      rebootMsg.value = '';
+      const r = await callService('reboot', {});
+      rebooting.value = false;
+
+      if (r.ok) {
+        rebootMsg.value = '重启指令已下发，设备约十几秒后重新上线';
+        setTimeout(refreshAll, 12000);
+        setTimeout(refreshAll, 25000);
+      } else {
+        rebootMsg.value = '重启失败：' + (r.msg || '物模型里建 reboot 服务了吗？');
+      }
+      clearTimeout(rebootTipTimer);
+      rebootTipTimer = setTimeout(() => { rebootMsg.value = ''; }, 20000);
+    }
+
     /* ---------- 4. 历史数据 ---------- */
     function handleResize() { if (chart) chart.resize(); }
 
@@ -418,6 +486,8 @@ createApp({
 
     onBeforeUnmount(() => {
       clearInterval(pollTimer);
+      clearTimeout(rebootTimer);
+      clearTimeout(rebootTipTimer);
       Object.values(timers).forEach(t => clearTimeout(t));
       window.removeEventListener('keydown', onKeydown);
       window.removeEventListener('resize', handleResize);
@@ -432,6 +502,8 @@ createApp({
 
       online, statusText, statusColor,
       refreshing, refreshAll,
+
+      rebootArm, rebooting, rebootMsg, onRebootClick,
 
       state, displayValue, hexA,
       controlOn, toggleControl,

@@ -129,6 +129,16 @@ body{
 
 .btn-sm{ height:2rem; padding:0 .75rem; font-size:.8125rem; gap:.4rem; }
 
+/* 危险操作（重启设备）：只在描边和文字上用红，保持整体柔和 */
+.btn-danger{ color:#dc2626; border-color:hsl(0 72% 51% / .35); }
+.btn-danger:hover:not(:disabled){ background:hsl(0 72% 51% / .07); color:#dc2626; }
+
+.reboot-note{
+  margin:-.5rem 0 1.25rem;
+  font-size:.75rem; color:hsl(var(--muted-foreground));
+  display:flex; align-items:center; gap:.35rem;
+}
+
 /* ---------- 属性卡片 ---------- */
 .prop-grid{ display:grid; grid-template-columns:1fr; gap:.875rem; }
 @media (min-width:560px){ .prop-grid{ grid-template-columns:repeat(2,1fr); } }

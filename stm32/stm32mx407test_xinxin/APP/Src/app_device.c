@@ -294,6 +294,46 @@ static void on_property_post_reply(const char *topic, const char *payload,
 }
 
 /* ============================================================
+ *  下行：物模型服务调用（thing/service/<identifier>）
+ *  当前实现 reboot：先把应答发出去，再复位 MCU。
+ *  订阅用 /thing/service/+，所以 "…/reboot/reply" 这种两级后缀不会回到自己。
+ * ============================================================ */
+#define SERVICE_REBOOT_DELAY_MS 300U
+
+static void on_service_invoke(const char *topic, const char *payload, size_t len) {
+  const char *svc = strstr(topic, "/thing/service/");
+  const char *name = svc ? svc + strlen("/thing/service/") : "";
+  char id[24];
+  char resp_topic[192];
+  char resp[160];
+  cJSON *root;
+  const cJSON *jid;
+  uint8_t is_reboot = (strcmp(name, "reboot") == 0);
+
+  root = cJSON_ParseWithLength(payload, len);
+  jid = root ? cJSON_GetObjectItem(root, "id") : NULL;
+  sanitize_id(cJSON_IsString(jid) ? jid->valuestring : NULL, id, sizeof id);
+  if (root)
+    cJSON_Delete(root);
+
+  printf("[DEV] 服务调用：%s（%s）\r\n", name, is_reboot ? "重启" : "不支持");
+
+  snprintf(resp, sizeof resp, "{\"id\":\"%s\",\"code\":%d,\"msg\":\"%s\"}", id,
+           is_reboot ? 200 : 400, is_reboot ? "success" : "unsupported");
+
+  /* 服务应答 topic = 收到的 topic + "/reply" */
+  snprintf(resp_topic, sizeof resp_topic, "%s/reply", topic);
+  if (OneNET_PublishAbsolute(resp_topic, resp) != ONENET_OK)
+    printf("[DEV] 服务应答发送失败\r\n");
+
+  if (is_reboot) {
+    printf("[DEV] rebooting...\r\n");
+    HAL_Delay(SERVICE_REBOOT_DELAY_MS); /* 等应答与 AT 收发收尾 */
+    NVIC_SystemReset();
+  }
+}
+
+/* ============================================================
  *  下行：命令（cmd/request/<id>）—— 需在 OneNET 侧订阅后才有数据
  * ============================================================ */
 static void on_cmd(const char *topic, const char *payload, size_t len) {
@@ -336,6 +376,9 @@ static const OnenetHandler s_handlers[] = {
      .match_anywhere = 0},
     {.topic_suffix = "/thing/property/post/reply",
      .handler = on_property_post_reply, .match_anywhere = 0},
+    /* /thing/service/<identifier> 尾部是变量，用子串匹配 */
+    {.topic_suffix = "/thing/service/", .handler = on_service_invoke,
+     .match_anywhere = 1},
     /* topic 尾部是变量 id，用子串匹配 */
     {.topic_suffix = "/cmd/request/", .handler = on_cmd, .match_anywhere = 1},
 };
