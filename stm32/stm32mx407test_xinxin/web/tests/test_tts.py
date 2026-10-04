@@ -35,7 +35,6 @@ def volc(monkeypatch):
     monkeypatch.setenv("VOLC_TTS_APPID", "APP1")
     monkeypatch.setenv("VOLC_TTS_TOKEN", "TOK456")
     monkeypatch.delenv("VOLC_TTS_CLUSTER", raising=False)
-    monkeypatch.delenv("VOLC_TTS_VOICE", raising=False)
     return calls, replies
 
 
@@ -55,7 +54,7 @@ def test_request_matches_official_sample(volc):
     assert set(b) == {"app", "user", "audio", "request"}
     assert b["app"] == {"appid": "APP1", "token": "TOK456", "cluster": "volcano_tts"}
     assert b["app"]["token"] == "TOK456", "app.token 必须是真 token（示例里写的字面量是文档的坑）"
-    assert b["audio"]["voice_type"] == "BV700_streaming"      # 默认音色
+    assert b["audio"]["voice_type"] == _lib.VOLC_TTS_VOICE    # 音色是代码常量，不是配置项
     assert b["audio"]["encoding"] == "mp3"
     assert (b["audio"]["speed_ratio"], b["audio"]["pitch_ratio"], b["audio"]["volume_ratio"]) == (1.2, 0.9, 0.7)
     assert b["request"]["text"] == "太热了" and b["request"]["operation"] == "query"
@@ -65,13 +64,15 @@ def test_request_matches_official_sample(volc):
     assert "\\u" in c["data"], "中文按示例走默认 ensure_ascii（body 保持纯 ASCII）"
 
 
-def test_voice_and_cluster_from_env(volc, monkeypatch):
+def test_cluster_from_env_voice_from_code(volc, monkeypatch):
+    """cluster 走配置；音色是代码常量（环境变量不该再影响它）"""
     calls, _ = volc
-    monkeypatch.setenv("VOLC_TTS_VOICE", "BV021_streaming")
+    monkeypatch.setenv("VOLC_TTS_VOICE", "BV021_streaming")   # 故意设了也不该生效
     monkeypatch.setenv("VOLC_TTS_CLUSTER", "volcano_mega")
     tts("你好")
     b = json.loads(calls[0]["data"])
-    assert b["audio"]["voice_type"] == "BV021_streaming" and b["app"]["cluster"] == "volcano_mega"
+    assert b["audio"]["voice_type"] == _lib.VOLC_TTS_VOICE, "音色不该再看环境变量"
+    assert b["app"]["cluster"] == "volcano_mega"
 
 
 def test_audio_bytes_and_ratios(volc):
@@ -100,7 +101,7 @@ def test_upstream_error_is_passed_through(volc):
 
 def test_voice_id_suffix_retried_once(volc, monkeypatch):
     calls, replies = volc
-    monkeypatch.setenv("VOLC_TTS_VOICE", "BV700")            # 写法不带后缀
+    monkeypatch.setattr(_lib, "VOLC_TTS_VOICE", "BV700")     # 写法不带后缀（常量，直接改）
     replies.append({"code": 3006, "message": "voice_type invalid"})
     replies.append({"code": 3000, "data": base64.b64encode(b"OK").decode()})
     audio, err = tts("你好")

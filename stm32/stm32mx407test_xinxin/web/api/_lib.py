@@ -271,8 +271,21 @@ def onenet_call(op, params=None, body=None):
 #   1) 示例里 "token": "access_token" 是**字面字符串**（文档自带的错），真 token 要同时放进
 #      app.token 和 Authorization: Bearer;<token>（注意是分号，不是空格）。
 #   2) 只有传统"小模型"音色走这个接口；豆包大模型 2.0 的 *_bigtts 音色（Vivi 2.0 那种）不支持 V1。
+# 音色见下面的 VOLC_TTS_VOICE 常量；配置里只需要 appid / token / cluster 三样。
 VOLC_TTS_URL = "https://openspeech.bytedance.com/api/v1/tts"
 VOLC_RATIO_RANGE = (0.2, 3.0)          # 官方 speed_ratio / volume_ratio / pitch_ratio 的取值区间
+
+# 朗读音色写死在代码里（配置里就不用管它了）。换音色＝改这一行。
+# 21 款免费音色（传统/小模型，V1 HTTP 能用的就是这些）：
+#   通用场景   BV700_streaming 灿灿 | BV001_streaming 通用女声 | BV002_streaming 通用男声
+#   有声阅读   BV701_streaming 擎苍 | BV119_streaming 通用赘婿 | BV102_streaming 儒雅青年
+#              BV113_streaming 甜宠少御 | BV115_streaming 古风少御
+#   助手/配音/教育  BV007_streaming 亲切女声 | BV056_streaming 阳光男声 | BV005_streaming 活泼女声
+#              BV051_streaming 奶气萌娃 | BV034_streaming 知性姐姐-双语 | BV033_streaming 温柔小哥
+#   方言       BV021_streaming 东北老铁 | BV019_streaming 重庆小伙 | BV213_streaming 广西表哥
+#   英语       BV503_streaming Ariana | BV504_streaming Jackson
+#   日语       BV522_streaming 气质女生 | BV524_streaming 日语男声
+VOLC_TTS_VOICE = "BV700_streaming"
 
 
 def _ratio(v):
@@ -301,7 +314,7 @@ def tts(text, speed=None, pitch=None, volume=None):
     token = os.environ.get("VOLC_TTS_TOKEN", "")
     if not (appid and token):
         return None, "后端没配 VOLC_TTS_APPID / VOLC_TTS_TOKEN"
-    voice = os.environ.get("VOLC_TTS_VOICE", "BV700_streaming")
+    voice = VOLC_TTS_VOICE
     payload = {
         "app": {"appid": appid, "token": token,
                 "cluster": os.environ.get("VOLC_TTS_CLUSTER", "volcano_tts")},
