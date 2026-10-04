@@ -1,7 +1,7 @@
 {
   "outputDirectory": ".",
   "regions": [
-    "sin1"
+    "hkg1"
   ],
   "functions": {
     "api/*.py": {
