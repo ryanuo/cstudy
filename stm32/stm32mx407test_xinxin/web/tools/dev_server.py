@@ -82,12 +82,13 @@ if __name__ == "__main__":
     # 默认只听本机（外面连不上）；要手机/同 WiFi 设备访问就 LAN=1（绑 0.0.0.0）
     lan = os.environ.get("LAN") == "1"
     host = "0.0.0.0" if lan else "127.0.0.1"
+    # flush：被 nohup/重定向时也能立刻看到这段引导（否则缓冲住、进程一停就没了）
     print("panel+api  http://127.0.0.1:%d   (口令 %s)"
-          % (port, "已启用" if os.environ.get("PANEL_PASSWORD") else "未设置=放行"))
+          % (port, "已启用" if os.environ.get("PANEL_PASSWORD") else "未设置=放行"), flush=True)
     if lan:
-        print("           同 WiFi 手机：http://%s:%d" % (lan_ip(), port))
-        print("           ⚠️ http 下浏览器不给用麦克风（安全上下文要求 https/localhost）：")
-        print("              手机上语音用线上 https 站点；纯网页控制不受影响。")
+        print("           同 WiFi 手机：http://%s:%d" % (lan_ip(), port), flush=True)
+        print("           ⚠️ http 下浏览器不给用麦克风（安全上下文要求 https/localhost）：", flush=True)
+        print("              手机上语音用线上 https 站点；纯网页控制不受影响。", flush=True)
     else:
-        print("           只能本机访问；手机要访问：make web LAN=1")
+        print("           只能本机访问；手机要访问：make web LAN=1", flush=True)
     make_server(host, port, app).serve_forever()
