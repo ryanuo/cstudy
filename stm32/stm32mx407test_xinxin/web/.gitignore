@@ -5,3 +5,4 @@
 # 但缓存不要（negation 会把它们一起放回来）
 tests/__pycache__/
 *.pyc
+.pytest_cache/
