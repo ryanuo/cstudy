@@ -577,23 +577,28 @@ test('没有 PanelAPI.tts 时（旧页面/缓存）直接本地朗读，不报�
 test('打开面板问一次 /api/health，把云端音色显出来', async () => {
   const env = makeEnv();
   env.fetchReply = async (url) => (url === '/api/health'
-    ? { ok: true, status: 200, json: async () => ({ ok: true, tts: { voice: 'zh_female_vv_uranus_bigtts', ready: true } }) }
+    ? { ok: true, status: 200, json: async () => ({ ok: true, tts: { ready: true, voice: 'zh_female_vv_uranus_bigtts',
+        voices: [{ id: 'zh_female_vv_uranus_bigtts', name: 'Vivi 2.0' },
+                 { id: 'zh_female_xiaohe_uranus_bigtts', name: '小何 2.0' }] } }) }
     : { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) });
   openPanel(env);
   await new Promise(r => setTimeout(r, 20));
   assert.equal(env.calls.fetch.filter(f => f.url === '/api/health').length, 1, '只问一次');
-  assert.equal(env.els.voiceCloud.textContent, 'zh_female_vv_uranus_bigtts');
+  assert.match(env.els.voiceCloud.innerHTML, /Vivi 2\.0/, '下拉框要有音色名');
+  assert.match(env.els.voiceCloud.innerHTML, /zh_female_vv_uranus_bigtts/, 'value 用 id');
+  assert.match(env.els.voiceCloud.innerHTML, /小何 2\.0/);
   assert.match(env.els.voiceHint.textContent, /优先用云端音色/, '要说清是云端优先');
 });
 
 test('云端缺凭据：标"缺凭据"并说明现在用浏览器音色', async () => {
   const env = makeEnv();
   env.fetchReply = async (url) => (url === '/api/health'
-    ? { ok: true, status: 200, json: async () => ({ tts: { voice: 'zh_female_vv_uranus_bigtts', ready: false } }) }
+    ? { ok: true, status: 200, json: async () => ({ tts: { ready: false, voice: 'zh_female_vv_uranus_bigtts',
+        voices: [{ id: 'zh_female_vv_uranus_bigtts', name: 'Vivi 2.0' }] } }) }
     : { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) });
   openPanel(env);
   await new Promise(r => setTimeout(r, 20));
-  assert.match(env.els.voiceCloud.textContent, /缺凭据/);
+  assert.match(env.els.voiceCloud.innerHTML, /zh_female_vv_uranus_bigtts/);
   assert.match(env.els.voiceHint.textContent, /VOLC_TTS_API_KEY/);
 });
 
@@ -606,5 +611,48 @@ test('/api/health 拿不到也不影响用（面板照旧能设音色）', async
   openPanel(env);
   await new Promise(r => setTimeout(r, 20));
   assert.match(env.els.voiceSel.innerHTML, /Ting-Ting/, '音色列表照旧');
-  assert.equal(env.els.voiceCloud.textContent, '不可用');
+  assert.match(env.els.voiceCloud.innerHTML, /不可用/);
+});
+
+
+test('云端音色可切：下拉框列出清单、选中项持久化、随请求发出去', async () => {
+  const env = makeEnv();
+  stubAudio();
+  const VOICES = [{ id: 'zh_female_vv_uranus_bigtts', name: 'Vivi 2.0' },
+                  { id: 'zh_male_m191_uranus_bigtts', name: '云舟 2.0' },
+                  { id: 'zh_male_taocheng_uranus_bigtts', name: '小天 2.0' }];
+  env.fetchReply = async (url) => {
+    if (url === '/api/health') {
+      return { ok: true, status: 200, json: async () => ({ tts: { ready: true, voice: VOICES[0].id, voices: VOICES } }) };
+    }
+    if (url === '/api/tts') return { ok: true, status: 200, blob: async () => new Blob(['mp3']) };
+    return { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) };
+  };
+  openPanel(env);
+  await new Promise(r => setTimeout(r, 20));
+  assert.match(env.els.voiceCloud.innerHTML, /云舟 2\.0/);
+
+  env.els.voiceCloud.value = 'zh_male_m191_uranus_bigtts';        // 选"云舟 2.0"
+  env.els.voiceCloud.fire('change', {});
+  assert.equal(JSON.parse(env.store.panelVoice).cloudVoice, 'zh_male_m191_uranus_bigtts', '选择要存下来');
+
+  env.els.voiceTest.fire('click', {});
+  await new Promise(r => setTimeout(r, 20));
+  const body = JSON.parse(env.calls.fetch.find(f => f.url === '/api/tts').opts.body);
+  assert.equal(body.voice, 'zh_male_m191_uranus_bigtts', '选中的音色要随请求发出去');
+});
+
+test('重开面板时按存过的音色回显', async () => {
+  const env = makeEnv();
+  globalThis.localStorage.setItem('panelVoice', JSON.stringify({ cloudVoice: 'zh_male_taocheng_uranus_bigtts' }));
+  env.fetchReply = async (url) => (url === '/api/health'
+    ? { ok: true, status: 200, json: async () => ({ tts: { ready: true, voice: 'zh_female_vv_uranus_bigtts', voices: [
+        { id: 'zh_female_vv_uranus_bigtts', name: 'Vivi 2.0' },
+        { id: 'zh_male_taocheng_uranus_bigtts', name: '小天 2.0' }] } }) }
+    : { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) });
+  openPanel(env);
+  await new Promise(r => setTimeout(r, 20));
+  const html = env.els.voiceCloud.innerHTML;
+  const m = html.match(/<option value="zh_male_taocheng_uranus_bigtts" selected/);
+  assert.ok(m, '存过的音色要回显为选中：' + html);
 });

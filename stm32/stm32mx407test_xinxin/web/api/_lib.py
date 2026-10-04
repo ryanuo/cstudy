@@ -276,9 +276,21 @@ def onenet_call(op, params=None, body=None):
 VOLC_TTS_URL = "https://openspeech.bytedance.com/api/v3/tts/unidirectional"
 VOLC_TTS_RESOURCE = os.environ.get("VOLC_TTS_RESOURCE", "seed-tts-2.0")
 
-# 音色写死在代码里（配置里不用管）。换音色＝改这一行；可选音色在控制台 > 音色库（*_bigtts 那批）。
-# 这里用的是文档示例同款：豆包语音合成模型 2.0 的 Vivi 2.0（中/日/印尼/西语 + 30 多语种 + 方言）。
-VOLC_TTS_VOICE = "zh_female_vv_uranus_bigtts"
+# 云端音色清单维护在这里：前端下拉框就按它列，选中的 id 存 localStorage 并随请求发回来。
+# 豆包语音合成模型 2.0 的官方音色（*_uranus_bigtts）；更多在控制台 > 音色库，往下面加一行即可。
+VOLC_TTS_VOICES = [
+    {"id": "zh_female_vv_uranus_bigtts", "name": "Vivi 2.0"},
+    {"id": "zh_female_xiaohe_uranus_bigtts", "name": "小何 2.0"},
+    {"id": "zh_male_m191_uranus_bigtts", "name": "云舟 2.0"},
+    {"id": "zh_male_taocheng_uranus_bigtts", "name": "小天 2.0"},
+]
+VOLC_TTS_VOICE = VOLC_TTS_VOICES[0]["id"]          # 默认音色（清单第一条）
+
+
+def volc_voice(voice=None):
+    """音色 id 走白名单：只认清单里的，认不出就用默认（别把任意 id 直接抛给上游）。"""
+    ids = [v["id"] for v in VOLC_TTS_VOICES]
+    return voice if voice in ids else VOLC_TTS_VOICE
 
 # 成功码有两个：文档在 submit 那页写「20000000 表明请求成功」、unidirectional 这页写「返回 0 则表示成功」，
 # 实测这条接口回的就是 20000000 + message "OK"（拿它当失败会把成功帧误判成错误、丢掉已经收到的音频）。
@@ -336,14 +348,14 @@ def _stream_objs(chunks):
             yield obj
 
 
-def tts(text, speed=None, pitch=None, volume=None):
-    """一句话 → mp3 字节。失败返回 (None, 原因)。"""
+def tts(text, speed=None, pitch=None, volume=None, voice=None):
+    """一句话 → mp3 字节。失败返回 (None, 原因)。voice 走白名单。"""
     headers = _v3_headers()
     if not headers:
         return None, "后端没配 VOLC_TTS_API_KEY（新版控制台）或 VOLC_TTS_APPID+VOLC_TTS_ACCESS_KEY（旧版）"
     payload = {"req_params": {
         "text": text,
-        "speaker": VOLC_TTS_VOICE,
+        "speaker": volc_voice(voice),
         "audio_params": {"format": "mp3", "sample_rate": 24000,
                          "speech_rate": _offset(speed),             # 语速：0=正常，100=2 倍
                          "loudness_rate": _offset(volume)},         # 音量：同上
@@ -368,7 +380,7 @@ def tts(text, speed=None, pitch=None, volume=None):
             code = obj.get("code")
             if code is not None and code not in VOLC_TTS_OK_CODES:
                 # 流里带真错就立刻停（别把半截音频当成功）；缺 code 的帧通常是纯音频块
-                return None, "火山返回 %s：%s（音色 %s）" % (code, obj.get("message") or "无说明", VOLC_TTS_VOICE)
+                return None, "火山返回 %s：%s（音色 %s）" % (code, obj.get("message") or "无说明", payload["req_params"]["speaker"])
             d = obj.get("data")
             if d:
                 try:
@@ -377,7 +389,7 @@ def tts(text, speed=None, pitch=None, volume=None):
                     return None, "火山返回的音频不是合法 base64"
     except Exception as e:
         return None, "连不上火山 TTS：%s" % e
-    return (bytes(audio), None) if audio else (None, "火山没返回音频（音色 %s）" % VOLC_TTS_VOICE)
+    return (bytes(audio), None) if audio else (None, "火山没返回音频（音色 %s）" % payload["req_params"]["speaker"])
 
 
 # ----------------------------- LLM -----------------------------

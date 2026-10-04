@@ -70,13 +70,13 @@ window.PanelAPI = {
     input.focus();
   },
 
-  /* 火山朗读：POST 一句文本 → mp3 Blob。音色在后端 env 里固定，这里只传文本和滑条。
+  /* 火山朗读：POST 一句文本 → mp3 Blob。音色 id 由面板下拉框给出（后端白名单校验）。
      失败会把后端的原话抛出来（调用方据此决定回退还是提示）。 */
-  async tts(text, rate, pitch, volume) {
+  async tts(text, rate, pitch, volume, voice) {
     const res = await fetch(window.PANEL_CONFIG.ttsUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Panel-Key': this.key() },
-      body: JSON.stringify({ text, rate, pitch, volume })
+      body: JSON.stringify({ text, rate, pitch, volume, voice: voice || null })
     });
     if (res.status === 401) {
       this.clearKey();

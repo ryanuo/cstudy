@@ -11,7 +11,7 @@ import sys
 import pytest
 
 import _lib
-from _lib import _offset, _stream_objs, _v3_headers, tts
+from _lib import _offset, _stream_objs, _v3_headers, tts, volc_voice
 
 
 class FakeStream:
@@ -82,6 +82,32 @@ def test_old_console_creds(monkeypatch):
     monkeypatch.delenv("VOLC_TTS_ACCESS_KEY")
     monkeypatch.setenv("VOLC_TTS_TOKEN", "TOK")             # 旧名字（V1 的 access_token）也认
     assert _v3_headers()["X-Api-Access-Key"] == "TOK"
+
+
+def test_voice_list_and_whitelist():
+    """音色清单维护在后端：前端下拉框按它列，请求里的 id 必须过白名单"""
+    v = _lib.VOLC_TTS_VOICES
+    assert len(v) == 4
+    assert [x["id"] for x in v] == ["zh_female_vv_uranus_bigtts", "zh_female_xiaohe_uranus_bigtts",
+                                    "zh_male_m191_uranus_bigtts", "zh_male_taocheng_uranus_bigtts"]
+    assert [x["name"] for x in v] == ["Vivi 2.0", "小何 2.0", "云舟 2.0", "小天 2.0"]
+    assert all(x["id"].endswith("_uranus_bigtts") for x in v), "2.0 音色都是 *_uranus_bigtts"
+    assert _lib.VOLC_TTS_VOICE == v[0]["id"], "默认音色 = 清单第一条"
+
+    assert volc_voice("zh_male_taocheng_uranus_bigtts") == "zh_male_taocheng_uranus_bigtts"
+    for bad in (None, "", "BV700_streaming", "S_cloned_voice", "../../etc"):
+        assert volc_voice(bad) == _lib.VOLC_TTS_VOICE, "不在清单里的一律回落默认"
+
+
+def test_request_uses_selected_voice(volc):
+    calls, replies = volc
+    replies.append(FakeStream([obj(code=20000000, message="OK", data=base64.b64encode(b"A").decode())]))
+    tts("你好", voice="zh_male_m191_uranus_bigtts")
+    assert calls[0]["json"]["req_params"]["speaker"] == "zh_male_m191_uranus_bigtts"
+
+    replies.append(FakeStream([obj(code=20000000, message="OK", data=base64.b64encode(b"B").decode())]))
+    tts("你好", voice="不存在的音色")
+    assert calls[1]["json"]["req_params"]["speaker"] == _lib.VOLC_TTS_VOICE
 
 
 def test_offset_mapping():
@@ -181,8 +207,14 @@ def client(monkeypatch):
 
 
 def test_route_returns_audio(client, monkeypatch):
-    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None: (b"MP3", None))
-    res = client.app.test_client().post("/api/tts", json={"text": "你好", "rate": 1.1})
+    seen = {}
+    def fake(text, r=None, p=None, v=None, voice=None):
+        seen.update(text=text, voice=voice)
+        return (b"MP3", None)
+    monkeypatch.setattr(client, "tts", fake)
+    res = client.app.test_client().post("/api/tts", json={"text": "你好", "rate": 1.1,
+                                                         "voice": "zh_male_191"})
+    assert seen["voice"] == "zh_male_191", "端点要把前端选的音色透传给 tts()"
     assert res.status_code == 200 and res.data == b"MP3"
     assert res.headers["Content-Type"].startswith("audio/mpeg")
 
@@ -191,18 +223,18 @@ def test_route_errors(client, monkeypatch):
     c = client.app.test_client()
     assert c.post("/api/tts", json={}).status_code == 400
 
-    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None: (None, "后端没配 VOLC_TTS_API_KEY（新版控制台）"))
+    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None, voice=None: (None, "后端没配 VOLC_TTS_API_KEY（新版控制台）"))
     res = c.post("/api/tts", json={"text": "你好"})
     assert res.status_code == 500 and "VOLC_TTS_API_KEY" in res.get_json()["msg"]
 
-    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None: (None, "火山返回 45000001：invalid speaker（音色 zh_female_vv_uranus_bigtts）"))
+    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None, voice=None: (None, "火山返回 45000001：invalid speaker（音色 zh_female_vv_uranus_bigtts）"))
     res = c.post("/api/tts", json={"text": "你好"})
     assert res.status_code == 502 and "invalid speaker" in res.get_json()["msg"]
 
 
 def test_route_key_rate_and_truncate(client, monkeypatch):
     monkeypatch.setenv("PANEL_PASSWORD", "PW")
-    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None: (b"X", None))
+    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None, voice=None: (b"X", None))
     c = client.app.test_client()
     assert c.post("/api/tts", json={"text": "你好"}).status_code == 401
     monkeypatch.setattr(client, "rate_ok", lambda req: False)
@@ -210,7 +242,7 @@ def test_route_key_rate_and_truncate(client, monkeypatch):
 
     seen = {}
     monkeypatch.setattr(client, "rate_ok", lambda req: True)
-    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None: (seen.setdefault("t", text), (b"X", None))[1])
+    monkeypatch.setattr(client, "tts", lambda text, r=None, p=None, v=None, voice=None: (seen.setdefault("t", text), (b"X", None))[1])
     c.post("/api/tts", json={"text": "啊" * 500}, headers={"X-Panel-Key": "PW"})
     assert len(seen["t"]) == 300
 
@@ -224,6 +256,7 @@ def test_health_reports_tts_channel(monkeypatch):
     d = health.app.test_client().get("/api/health").get_json()
     assert d["ok"] is True
     assert d["tts"]["voice"] == _lib.VOLC_TTS_VOICE
+    assert [x["id"] for x in d["tts"]["voices"]] == [x["id"] for x in _lib.VOLC_TTS_VOICES], "面板下拉框靠它"
     assert d["tts"]["ready"] is True
 
     monkeypatch.delenv("VOLC_TTS_API_KEY")

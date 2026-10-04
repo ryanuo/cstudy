@@ -27,7 +27,7 @@ def speak_route():
     if not text:
         return jsonify({"code": 400, "msg": "文本为空"}), 400
 
-    audio, err = tts(text, body.get("rate"), body.get("pitch"), body.get("volume"))
+    audio, err = tts(text, body.get("rate"), body.get("pitch"), body.get("volume"), body.get("voice"))
     if err:
         app.logger.warning("TTS 失败：%s", err)
         code = 500 if "没配" in err else 502      # 没配凭据是我们这边的问题，别混进上游错误

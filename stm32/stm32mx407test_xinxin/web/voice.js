@@ -55,7 +55,7 @@
      所以先挑一次 + 监听 voiceschanged 再挑，尽量拿到中文音色。 */
   /* 朗读参数：音色 / 语速 / 音调 / 音量 —— 存本机 localStorage，可在面板里调 */
   const VCFG_KEY = 'panelVoice';
-  const vcfg = Object.assign({ name: '', rate: 1.05, pitch: 1, volume: 1 },
+  const vcfg = Object.assign({ name: '', rate: 1.05, pitch: 1, volume: 1, cloudVoice: '' },
     (function () { try { return JSON.parse(localStorage.getItem(VCFG_KEY) || '{}') || {}; } catch (e) { return {}; } })());
   function saveVcfg() { try { localStorage.setItem(VCFG_KEY, JSON.stringify(vcfg)); } catch (e) {} }
 
@@ -92,7 +92,7 @@
     const text = String(msg || '');
     stopAudio();
     if (!text || !window.PanelAPI || !window.PanelAPI.tts || !window.Audio) return speakLocal(text, fire);
-    PanelAPI.tts(text, vcfg.rate, vcfg.pitch, vcfg.volume).then(blob => {
+    PanelAPI.tts(text, vcfg.rate, vcfg.pitch, vcfg.volume, vcfg.cloudVoice).then(blob => {
       lastTtsErr = '';
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
@@ -189,21 +189,28 @@
       .catch(() => { ttsInfo = {}; paintTtsInfo(); });
   }
   function paintTtsInfo() {
-    const box = $('voiceCloud'), hint = $('voiceHint');
+    const sel = $('voiceCloud'), hint = $('voiceHint');
+    const list = (ttsInfo && ttsInfo.voices) || [];
+    if (sel) {
+      if (!list.length) {
+        sel.innerHTML = '<option value="">' + (ttsInfo === null ? '查询中…' : '不可用') + '</option>';
+      } else {
+        const cur = vcfg.cloudVoice || (ttsInfo && ttsInfo.voice) || list[0].id;
+        sel.innerHTML = list.map(v => '<option value="' + v.id + '"' + (v.id === cur ? ' selected' : '') +
+          ' title="' + v.id + '">' + v.name + (v.id === (ttsInfo && ttsInfo.voice) ? '（默认）' : '') +
+          '</option>').join('');
+        if (!vcfg.cloudVoice) { vcfg.cloudVoice = cur; saveVcfg(); }
+      }
+    }
     if (!hint) return;
     const ready = !!(ttsInfo && ttsInfo.ready);
-    if (box) {
-      box.textContent = ttsInfo === null ? '——'
-        : (ready ? (ttsInfo.voice || '已配置')
-                 : (ttsInfo.voice ? ttsInfo.voice + '（缺凭据）' : '不可用'));
-    }
     if (ttsInfo === null) {                          // 还没问过后端：先按旧文案提示系统音色
       hint.textContent = zhVoices().length
         ? '优先用云端音色（打开面板时查询后端）；云端不可用时用上面的浏览器音色'
         : '系统没装中文语音：macOS 系统设置 → 辅助功能 → 朗读内容 → 系统声音 → 管理声音';
       return;
     }
-    if (ready) hint.textContent = '优先用云端音色；失败会自动回退上面的浏览器音色';
+    if (ready) hint.textContent = '优先用云端音色（可切）；失败会自动回退上面的浏览器音色';
     else if (!zhVoices().length) hint.textContent = '云端没配凭据 + 系统没装中文语音：先在系统设置里加中文语音';
     else hint.textContent = '云端没配凭据（后端补 VOLC_TTS_API_KEY 即启用），现在用浏览器音色';
   }
@@ -230,6 +237,13 @@
     onRange($('voiceRate'), 'rate');
     onRange($('voicePitch'), 'pitch');
     onRange($('voiceVol'), 'volume');
+    const csel = $('voiceCloud');
+    if (csel) csel.addEventListener('change', () => {
+      vcfg.cloudVoice = csel.value;
+      saveVcfg();
+      const hint = $('voiceHint');
+      if (hint) hint.textContent = '已切换云端音色；点「试听」听听效果';
+    });
     const test = $('voiceTest');
     if (test) test.addEventListener('click', () => {
       const hint = $('voiceHint');
