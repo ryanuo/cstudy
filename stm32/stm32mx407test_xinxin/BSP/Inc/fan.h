@@ -12,4 +12,7 @@ void FAN_off(void);
 /* 物模型要的开关语义：on != 0 正转，否则停 */
 void FAN_Set(uint8_t on);
 
+/* 读回方向线电平（1 = 正在转） */
+uint8_t FAN_IsOn(void);
+
 #endif

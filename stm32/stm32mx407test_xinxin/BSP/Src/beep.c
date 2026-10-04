@@ -20,3 +20,8 @@ void BEEP_Set(uint8_t on) {
   else
     BEEP_off();
 }
+
+uint8_t BEEP_IsOn(void) {
+  GPIO_PinState st = HAL_GPIO_ReadPin(BEEP_PORT, BEEP_PIN);
+  return (BOARD_BEEP_ON_LEVEL ? (st == GPIO_PIN_SET) : (st == GPIO_PIN_RESET)) ? 1 : 0;
+}

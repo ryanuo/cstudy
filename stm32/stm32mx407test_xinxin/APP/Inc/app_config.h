@@ -24,6 +24,16 @@
 #define APP_REPORT_PERIOD_MS 5000U    /* 属性上报周期 */
 #define APP_DHT11_PERIOD_MS 2000U     /* DHT11 采样周期（bsp_dht11.c 内部节流用） */
 
+/* ---------------- 物模型 ----------------
+ * ★ 三个灯要在 OneNET 控制台里加好属性，否则页面点击会被平台拒绝
+ *   （code 10411 identifier not exist）：
+ *   产品 → 物模型 → 添加功能 → 属性 → 标识符 LED1 / LED2 / LED3，布尔，读写
+ *   （buzzer / fan / temperature / humidity 已存在）*/
+/* 1 = 上报全部执行器（灯 1/2/3 + 蜂鸣器 + 风扇）
+ * 物模型里这五个属性都已存在（led1/led2/led3 是 string，buzzer/fan 是 bool），
+ * 所以可以全量上报；上电连上 OneNET 后与每 5 秒的周期上报都会带上它们的真实状态。*/
+#define APP_REPORT_ACTUATOR_STATE 1
+
 /* ---------------- 调试开关 ---------------- */
 #define APP_ONENET_DEBUG 0 /* 1 = 每条 AT 后把 ESP 原始缓冲 printf 出来（同步阻塞，很慢）*/
 

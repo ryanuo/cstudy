@@ -11,4 +11,7 @@ void BEEP_off(void);
 /* 按有效电平统一入口：on != 0 响 */
 void BEEP_Set(uint8_t on);
 
+/* 读回引脚真实电平（1 = 正在响） */
+uint8_t BEEP_IsOn(void);
+
 #endif

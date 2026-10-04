@@ -159,6 +159,7 @@ int main(void) {
   }
   printf("[MAIN] OneNET 在线\r\n");
   UI_OnenetOk(APP_ONENET_DEVICE_ID);
+  Device_ReportActuatorState(); /* 上报灯/蜂鸣器/风扇的真实状态（物模型有才发）*/
 
   /* USER CODE END 2 */
 
@@ -167,6 +168,7 @@ int main(void) {
   while (1) {
     /* ---- 解析云端下行（LED / 蜂鸣器 / 风扇） ---- */
     OneNET_Poll();
+
 
     /* ---- DHT11 每 2 秒读一次（bsp_dht11 内部节流） ---- */
     DHT11_Task();

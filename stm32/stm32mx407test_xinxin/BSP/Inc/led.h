@@ -13,4 +13,7 @@ void LED_Toggle(uint8_t number);
 /* 按有效电平统一入口：on != 0 点亮 */
 void LED_Set(uint8_t number, uint8_t on);
 
+/* 读回引脚真实电平（1 = 亮）：上电上报真实状态时用 */
+uint8_t LED_IsOn(uint8_t number);
+
 #endif

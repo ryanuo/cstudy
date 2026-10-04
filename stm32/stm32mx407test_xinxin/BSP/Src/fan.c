@@ -31,3 +31,8 @@ void FAN_Set(uint8_t on) {
   else
     FAN_off();
 }
+
+uint8_t FAN_IsOn(void) {
+  GPIO_PinState st = HAL_GPIO_ReadPin(FAN_PORT, FAN_PIN0);
+  return (BOARD_FAN_ON_LEVEL ? (st == GPIO_PIN_SET) : (st == GPIO_PIN_RESET)) ? 1 : 0;
+}

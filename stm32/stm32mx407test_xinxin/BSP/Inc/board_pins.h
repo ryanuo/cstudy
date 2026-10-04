@@ -17,7 +17,8 @@
 /* ---------------- LED（低电平点亮） ----------------
  * 来源：BSP/Src/led.c 原定义（PE3 / PE4 / PG9，均为 .ioc 里已配的推挽输出）*/
 #define BOARD_LED_COUNT 3
-#define BOARD_LED_PORT GPIOE
+#define BOARD_LED_PORT_E GPIOE
+#define BOARD_LED_PORT_G GPIOG
 #define BOARD_LED0_PIN GPIO_PIN_3
 #define BOARD_LED1_PIN GPIO_PIN_4
 #define BOARD_LED2_PIN GPIO_PIN_9
@@ -45,7 +46,7 @@
 #define BOARD_DHT11_PIN DHT11_DATA_Pin
 
 /* ---------------- 物模型映射 ----------------
- * 云端属性 "LED"(字符串) 去控制 led.c 里的第几路 LED（0..BOARD_LED_COUNT-1）*/
-#define BOARD_APP_LED_INDEX 0
+ * 「灯 1/2/3」→ led.c 的 LED0/LED1/LED2 的对应关系在 APP/Src/app_device.c 的
+ * s_actuators 表里（那是业务映射，不是板级引脚信息）。*/
 
 #endif /* __BOARD_PINS_H */

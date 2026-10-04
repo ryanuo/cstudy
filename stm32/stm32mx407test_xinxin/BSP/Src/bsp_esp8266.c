@@ -206,11 +206,15 @@ uint8_t BSP_ESP8266_SendAT_WaitThenData(const char *cmd, const char *prompt,
                                        const uint8_t *data, uint16_t len,
                                        const char *expect, uint32_t prompt_timeout,
                                        uint32_t ack_timeout) {
+  uint8_t ret;
+
   BSP_ESP8266_ClearBuffer();
   BSP_ESP8266_SendAT(cmd);
 
-  if (BSP_ESP8266_WaitFor(prompt, "ERROR", "FAIL", prompt_timeout) != ESP_OK)
-    return ESP_ERR_FAIL;
+  /* 把真实错误码带回去：超时(1) 和模块报错(2) 的下一步排查完全不同 */
+  ret = BSP_ESP8266_WaitFor(prompt, "ERROR", "FAIL", prompt_timeout);
+  if (ret != ESP_OK)
+    return ret;
 
   BSP_ESP8266_SendData(data, len);
 

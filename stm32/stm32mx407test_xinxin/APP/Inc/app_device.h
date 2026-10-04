@@ -17,4 +17,8 @@ void Device_Init(void);
 /* 读 DHT11 当前值并按物模型格式上报 */
 void Device_ReportTempHumi(void);
 
+/* 把执行器（灯/蜂鸣器/风扇）当前状态回报给平台，面板才能显示真实状态。
+ * 只上报「收到过下发」的项（= 物模型里确实存在），所以可以放心调用。*/
+void Device_ReportActuatorState(void);
+
 #endif /* __APP_DEVICE_H */

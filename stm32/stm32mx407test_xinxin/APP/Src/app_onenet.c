@@ -109,7 +109,7 @@ static uint8_t dispatch(const char *topic, const char *payload, size_t len) {
       return 1;
     }
   }
-  printf("[ONENET] 未处理的下行 topic=%s\r\n", topic);
+  printf("[ONENET] 未处理的下行 topic=%s payload=%s\r\n", topic, payload);
   return 0;
 }
 
@@ -256,8 +256,9 @@ ONENET_Status_t OneNET_Publish(const char *topic_suffix, const char *payload) {
   ret = BSP_ESP8266_SendAT_WaitThenData(cmd, ">", (const uint8_t *)payload,
                                         (uint16_t)plen, "OK", 3000, 5000);
   if (ret != ESP_OK) {
-    printf("[ONENET] 发布失败 ret=%d payload=%s\r\n", ret, payload);
-    dump_esp("PUB");
+    /* 失败路径始终打印原文：ret=1 超时 / ret=2 模块回了 ERROR 或 FAIL */
+    printf("[ONENET] 发布失败 ret=%d payload=%s\r\n[ONENET] ESP raw: %s\r\n",
+           ret, payload, BSP_ESP8266_GetBuffer());
     return ONENET_ERR_SEND;
   }
 
