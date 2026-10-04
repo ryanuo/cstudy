@@ -77,12 +77,39 @@
     fillVoiceCfg();
   }
 
-  /* 播报：浏览器自带朗读（免费、离线）；onEnd 在念完后回调，只触发一次 */
+  /* 播报：优先火山免费音色（后端 /api/tts 拿 mp3），任何一步失败都静默退回浏览器朗读，
+     保证"不管后端配没配、网通不通，朗读总是在"；onEnd 只触发一次（念完/失败/超时兜底都算）。 */
+  let curAudio = null, lastTtsErr = '';
+  function stopAudio() {
+    if (!curAudio) return;
+    const a = curAudio; curAudio = null;
+    try { a.pause(); } catch (e) {}
+    try { URL.revokeObjectURL(a.src); } catch (e) {}
+  }
   function speak(msg, onEnd) {
     let done = false;
     const fire = () => { if (!done) { done = true; if (onEnd) onEnd(); } };
+    const text = String(msg || '');
+    stopAudio();
+    if (!text || !window.PanelAPI || !window.PanelAPI.tts || !window.Audio) return speakLocal(text, fire);
+    PanelAPI.tts(text, vcfg.rate, vcfg.pitch, vcfg.volume).then(blob => {
+      lastTtsErr = '';
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      curAudio = a;
+      a.onended = () => { stopAudio(); fire(); };
+      a.onerror = () => { stopAudio(); speakLocal(text, fire); };
+      a.play().catch(() => { stopAudio(); speakLocal(text, fire); });   // 被拦自动播放 → 本地朗读有手势，不会被拦
+    }).catch(e => {
+      lastTtsErr = e && e.message ? e.message : '云端合成失败';
+      console.warn('[tts] 云端合成不可用，改用浏览器朗读：', lastTtsErr);
+      speakLocal(text, fire);
+    });
+  }
+  /* 浏览器自带朗读（免费、离线） */
+  function speakLocal(msg, fire) {
     if (!msg || !window.speechSynthesis) {
-      if (onEnd) setTimeout(fire, Math.min(4000, String(msg || '').length * 120 + 400));
+      setTimeout(fire, Math.min(4000, String(msg || '').length * 120 + 400));
       return;
     }
     try {
@@ -177,7 +204,13 @@
     onRange($('voicePitch'), 'pitch');
     onRange($('voiceVol'), 'volume');
     const test = $('voiceTest');
-    if (test) test.addEventListener('click', () => speak('已打开 风扇，温度 26.7 度'));
+    if (test) test.addEventListener('click', () => {
+      const hint = $('voiceHint');
+      if (hint) hint.textContent = '合成中…';
+      speak('已打开 风扇，温度 26.7 度', () => {
+        if (hint) hint.textContent = lastTtsErr ? '云端合成失败，已用浏览器朗读：' + lastTtsErr : '';
+      });
+    });
   }
 
   function toggleVoiceCfg() {

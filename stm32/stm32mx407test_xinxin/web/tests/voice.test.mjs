@@ -492,3 +492,80 @@ test('下拉框标签变短（名字 · 语言），完整名字放 title', asyn
   assert.ok(!/（zh-CN）/.test(html.replace(/title="[^"]*"/g, '')), '可见文本里不该出现 (zh-CN)');
   assert.match(html, /title="Eddy \(中文（中国大陆）\)（zh-CN）"/, '完整名字要在 title 里');
 });
+
+/* ---------------- 火山朗读（后端 /api/tts 一句话一合成） ---------------- */
+
+function stubAudio() {
+  const played = [];
+  globalThis.URL.createObjectURL = () => 'blob:fake';
+  globalThis.URL.revokeObjectURL = () => {};
+  globalThis.Audio = class {
+    constructor(src) { this.src = src; this.volume = 1; played.push(this); }
+    play() { this.played = true; if (this.onended) setTimeout(this.onended, 0); return Promise.resolve(); }
+    pause() {}
+  };
+  return played;
+}
+
+function openPanel(env) {
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceCfgBtn }));   // 打开 = 绑定
+}
+
+test('朗读优先走火山：POST /api/tts 拿 mp3 用 <audio> 播，不再用浏览器朗读', async () => {
+  const env = makeEnv();
+  const played = stubAudio();
+  env.fetchReply = async (url) => {
+    if (url === '/api/tts') return { ok: true, status: 200, blob: async () => new Blob(['mp3'], { type: 'audio/mpeg' }) };
+    return { ok: true, status: 200, json: async () => ({ intent: { action: 'chat', reply: '嗯' } }) };
+  };
+  globalThis.localStorage.setItem('panelVoice', JSON.stringify({ rate: 1.2, pitch: 0.9, volume: 0.8 }));
+  openPanel(env);          // 注意先写 localStorage 再加载脚本（vcfg 在加载时读一次）
+
+  env.els.voiceTest.fire('click', {});                 // 试听
+  await new Promise(r => setTimeout(r, 30));
+
+  const ttsCall = env.calls.fetch.find(f => f.url === '/api/tts');
+  assert.ok(ttsCall, '应请求 /api/tts');
+  const body = JSON.parse(ttsCall.opts.body);
+  assert.equal(body.text, '已打开 风扇，温度 26.7 度');
+  assert.deepEqual([body.rate, body.pitch, body.volume], [1.2, 0.9, 0.8], '滑条参数要带上');
+  assert.equal(ttsCall.opts.headers['X-Panel-Key'], '', '带口令头（这里是空口令）');
+  assert.equal(played.length, 1, '用 <audio> 播放');
+  assert.equal(played[0].played, true);
+  assert.equal(env.calls.speak.length, 0, '成功时不走浏览器朗读');
+  assert.equal(env.els.voiceHint.textContent, '', '成功不留提示');
+});
+
+test('云端失败：静默回退浏览器朗读，试听按钮上显示原因', async () => {
+  const env = makeEnv();
+  stubAudio();
+  env.fetchReply = async (url) => {
+    if (url === '/api/tts') {
+      return { ok: false, status: 500, json: async () => ({ code: 500, msg: '后端没配 VOLC_TTS_APPID / VOLC_TTS_TOKEN' }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) };
+  };
+  openPanel(env);
+  env.els.voiceTest.fire('click', {});
+  await new Promise(r => setTimeout(r, 30));
+
+  assert.equal(env.calls.speak.length, 1, '回退到浏览器朗读');
+  assert.match(env.els.voiceHint.textContent, /VOLC_TTS_APPID/, '把后端给的原因显示出来（只在用户点了试听时）');
+});
+
+test('没有 PanelAPI.tts 时（旧页面/缓存）直接本地朗读，不报错', async () => {
+  const env = makeEnv();
+  env.fetchReply = async () => ({ ok: true, status: 200, json: async () => ({ intent: { action: 'unknown', reply: 'x' } }) });
+  openPanel(env);
+  const saved = globalThis.PanelAPI;
+  delete globalThis.PanelAPI.tts;
+  try {
+    env.els.voiceTest.fire('click', {});
+    await new Promise(r => setTimeout(r, 10));
+    assert.equal(env.calls.speak.length, 1, '没有云端能力也要能朗读');
+    assert.equal(env.calls.fetch.filter(f => f.url === '/api/tts').length, 0);
+  } finally {
+    globalThis.PanelAPI = saved;
+  }
+});

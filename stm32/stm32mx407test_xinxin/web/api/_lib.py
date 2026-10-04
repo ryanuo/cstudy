@@ -5,10 +5,12 @@
 - 所有密钥只从环境变量读（本地 `vercel dev` / 线上 Vercel 环境变量 / 本地 .env.local）。
 - 兼容 Python 3.9（本地系统解释器），别用 3.10+ 语法。
 """
+import base64
 import json
 import os
 import re
 import time
+import uuid
 
 import requests
 
@@ -260,6 +262,73 @@ def onenet_call(op, params=None, body=None):
         return r.json(), r.status_code
     except Exception:
         return {"code": 598, "msg": "bad json from onenet"}, 502
+
+
+# ----------------------------- 火山 TTS（免费音色，V1 HTTP 一次性）-----------------------------
+# 只实现官方 V1 HTTP 接口：一句话合成一次，回 mp3 的 base64。请求形状严格照官方示例抄
+# （连它用 data=json.dumps(...) 发、不额外加 Content-Type 都一样），免得网关挑食。
+# 两个坑：
+#   1) 示例里 "token": "access_token" 是**字面字符串**（文档自带的错），真 token 要同时放进
+#      app.token 和 Authorization: Bearer;<token>（注意是分号，不是空格）。
+#   2) 只有传统"小模型"音色走这个接口；豆包大模型 2.0 的 *_bigtts 音色（Vivi 2.0 那种）不支持 V1。
+VOLC_TTS_URL = "https://openspeech.bytedance.com/api/v1/tts"
+VOLC_RATIO_RANGE = (0.2, 3.0)          # 官方 speed_ratio / volume_ratio / pitch_ratio 的取值区间
+
+
+def _ratio(v):
+    """面板滑条值 → 火山要的倍率：缺省 1.0，越界夹回区间。"""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 1.0
+    return round(min(max(f, VOLC_RATIO_RANGE[0]), VOLC_RATIO_RANGE[1]), 2)
+
+
+def _swap_voice_suffix(v):
+    """音色 id 两种写法都有人用（BV700 与 BV700_streaming）：报错时换一种再试一次。"""
+    return v[:-10] if v.endswith("_streaming") else v + "_streaming"
+
+
+def _volc_post(payload, token):
+    r = requests.post(VOLC_TTS_URL, json.dumps(payload),          # 照示例：body 是 JSON 字符串
+                      headers={"Authorization": "Bearer;" + token}, timeout=20)
+    return r.json()
+
+
+def tts(text, speed=None, pitch=None, volume=None):
+    """一句话 → mp3 字节。失败返回 (None, 原因)，调用方据此回退/提示。"""
+    appid = os.environ.get("VOLC_TTS_APPID", "")
+    token = os.environ.get("VOLC_TTS_TOKEN", "")
+    if not (appid and token):
+        return None, "后端没配 VOLC_TTS_APPID / VOLC_TTS_TOKEN"
+    voice = os.environ.get("VOLC_TTS_VOICE", "BV700_streaming")
+    payload = {
+        "app": {"appid": appid, "token": token,
+                "cluster": os.environ.get("VOLC_TTS_CLUSTER", "volcano_tts")},
+        "user": {"uid": "onenet-panel"},
+        "audio": {"voice_type": voice, "encoding": "mp3",
+                  "speed_ratio": _ratio(speed), "volume_ratio": _ratio(volume),
+                  "pitch_ratio": _ratio(pitch)},
+        "request": {"reqid": uuid.uuid4().hex, "text": text, "text_type": "plain",
+                    "operation": "query", "with_frontend": 1, "frontend_type": "unitTson"},
+    }
+    try:
+        js = _volc_post(payload, token)
+        if js.get("code") != 3000 and re.search(r"voice|speaker|音色|resource",
+                                                str(js.get("message") or ""), re.I):
+            payload["audio"]["voice_type"] = _swap_voice_suffix(voice)   # 换种 id 写法再试一次
+            js = _volc_post(payload, token)
+    except Exception as e:
+        return None, "连不上火山 TTS：%s" % e
+    if js.get("code") != 3000:
+        return None, "火山返回 %s：%s（音色 %s）" % (js.get("code"),
+                                                js.get("message") or js.get("msg") or "无说明",
+                                                payload["audio"]["voice_type"])
+    try:
+        audio = base64.b64decode(js.get("data") or "")
+    except Exception:
+        return None, "火山返回的音频不是合法 base64"
+    return (audio, None) if audio else (None, "火山返回了空音频")
 
 
 # ----------------------------- LLM -----------------------------

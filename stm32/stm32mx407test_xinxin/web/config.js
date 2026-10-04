@@ -8,7 +8,8 @@ window.PANEL_CONFIG = {
   productId: 'WW0f6843I6',
   deviceName: 'humi_temp',
   apiBase: '/api/onenet',
-  chatUrl: '/api/chat'
+  chatUrl: '/api/chat',
+  ttsUrl: '/api/tts'
   /* 口令不在这里：统一由 PanelAPI.key() 现取（localStorage） */
 };
 
@@ -66,6 +67,27 @@ window.PanelAPI = {
     box.querySelector('#keyGateOk').addEventListener('click', save);
     input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
     input.focus();
+  },
+
+  /* 火山朗读：POST 一句文本 → mp3 Blob。音色在后端 env 里固定，这里只传文本和滑条。
+     失败会把后端的原话抛出来（调用方据此决定回退还是提示）。 */
+  async tts(text, rate, pitch, volume) {
+    const res = await fetch(window.PANEL_CONFIG.ttsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Panel-Key': this.key() },
+      body: JSON.stringify({ text, rate, pitch, volume })
+    });
+    if (res.status === 401) {
+      this.clearKey();
+      const err = new Error('口令错误或已失效');
+      err.needKey = true;
+      throw err;
+    }
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      throw new Error((d && d.msg) || ('合成失败（' + res.status + '）'));
+    }
+    return await res.blob();
   },
 
   async chat(text, controls, cards, history, pending) {

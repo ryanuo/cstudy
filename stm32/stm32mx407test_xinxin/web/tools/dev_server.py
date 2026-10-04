@@ -1,4 +1,4 @@
-"""本地开发服务器：把 api/*.py 三个 Flask 应用 + web/ 静态文件挂在同一个端口上。
+"""本地开发服务器：把 api/*.py 四个 Flask 应用 + web/ 静态文件挂在同一个端口上。
 
 用法：  .venv/bin/python tools/dev_server.py         # http://127.0.0.1:3000
 （线上是 Vercel；`vercel dev` 也能用，但需要登录。这个脚本纯本地、无需登录。）
@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT / "api"))   # api/_lib.py 等
 from chat import app as chat_app          # noqa: E402
 from health import app as health_app      # noqa: E402
 from onenet import app as onenet_app      # noqa: E402
+from tts import app as tts_app            # noqa: E402
 
 
 def static_app(environ, start_response):
@@ -58,6 +59,8 @@ def app(environ, start_response):
         return chat_app(environ, start_response)
     if path.startswith("/api/onenet") or path == "/onenet":
         return onenet_app(environ, start_response)
+    if path.startswith("/api/tts") or path == "/tts":
+        return tts_app(environ, start_response)
     return static_app(environ, start_response)
 
 
