@@ -265,6 +265,35 @@ static void on_property_set(const char *topic, const char *payload, size_t len) 
 }
 
 /* ============================================================
+ *  下行：属性上报的回执（thing/property/post/reply）
+ *  每 5 秒一条，成功(code=200)必须静默，否则日志被刷满、
+ *  真正的失败（如 2402 格式错）反而被淹。
+ * ============================================================ */
+static void on_property_post_reply(const char *topic, const char *payload,
+                                   size_t len) {
+  const cJSON *code, *msg;
+  cJSON *root;
+
+  (void)topic;
+
+  root = cJSON_ParseWithLength(payload, len);
+  if (root == NULL) {
+    printf("[DEV] 上报回执不是合法 JSON：%s\r\n", payload);
+    return;
+  }
+
+  code = cJSON_GetObjectItem(root, "code");
+  if (!cJSON_IsNumber(code) || code->valueint != 200) {
+    msg = cJSON_GetObjectItem(root, "msg");
+    printf("[DEV] 上报被平台拒绝：code=%d msg=%s\r\n",
+           cJSON_IsNumber(code) ? code->valueint : -1,
+           (msg && cJSON_IsString(msg)) ? msg->valuestring : "?");
+  }
+
+  cJSON_Delete(root);
+}
+
+/* ============================================================
  *  下行：命令（cmd/request/<id>）—— 需在 OneNET 侧订阅后才有数据
  * ============================================================ */
 static void on_cmd(const char *topic, const char *payload, size_t len) {
@@ -305,6 +334,8 @@ static void on_cmd(const char *topic, const char *payload, size_t len) {
 static const OnenetHandler s_handlers[] = {
     {.topic_suffix = "/thing/property/set", .handler = on_property_set,
      .match_anywhere = 0},
+    {.topic_suffix = "/thing/property/post/reply",
+     .handler = on_property_post_reply, .match_anywhere = 0},
     /* topic 尾部是变量 id，用子串匹配 */
     {.topic_suffix = "/cmd/request/", .handler = on_cmd, .match_anywhere = 1},
 };

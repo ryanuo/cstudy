@@ -35,8 +35,8 @@
  * ★ 待确认：当前值取自 BSP/Src/fan.c（PC6/PC7），与 app_onenet.c 里写的
  *   PD0（= FSMC_D2，LCD 数据线！）冲突。真值查到后在 CubeMX 里把这两个脚
  *   配成推挽输出（初始电平低），本文件跟着改成实际端口/引脚即可。*/
-#define BOARD_FAN_PORT GPIOC
-#define BOARD_FAN_PIN0 GPIO_PIN_6
+#define BOARD_FAN_PORT GPIOA
+#define BOARD_FAN_PIN0 GPIO_PIN_5
 #define BOARD_FAN_PIN1 GPIO_PIN_7
 #define BOARD_FAN_ON_LEVEL 1
 
