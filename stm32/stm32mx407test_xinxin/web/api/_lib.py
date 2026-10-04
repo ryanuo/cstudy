@@ -355,7 +355,10 @@ def tts_volc_v1_http(text, voice=None, speed=None, pitch=None, volume=None):
             "pitch_ratio": float(pitch or 1.0),
         },
         "request": {"reqid": uuid.uuid4().hex, "text": text,
-                    "text_type": "plain", "operation": "query"},
+                    "text_type": "plain", "operation": "query",
+                    # 官方示例里的这两个字段：交给它的前端做文本规范化（数字/单位/符号读法），
+                    # 对我们有用（要念"26.7 度""%RH"这种）。缺了也能跑，加上更稳。
+                    "with_frontend": 1, "frontend_type": "unitTson"},
     }
     def _call(p):
         return requests.post(os.environ.get("VOLC_TTS_URL", VOLC_TTS_URL_DEFAULT),

@@ -43,6 +43,11 @@ def test_payload_and_auth_header(monkeypatch):
     assert (b["audio"]["speed_ratio"], b["audio"]["volume_ratio"], b["audio"]["pitch_ratio"]) == (1.2, 0.8, 0.9)
     assert b["request"]["text"] == "太热了" and b["request"]["operation"] == "query"
     assert b["request"]["reqid"]
+    # 与官方示例逐字段对齐（示例里 token 写成了字面量 "access_token"，那是文档的坑，我们要真值）
+    assert b["request"]["text_type"] == "plain"
+    assert b["request"]["with_frontend"] == 1 and b["request"]["frontend_type"] == "unitTson"
+    assert b["app"]["token"] == "TOK456", "app.token 必须是真 token（不能是字符串 access_token）"
+    assert cap["kw"]["headers"]["Authorization"] == "Bearer;TOK456"
 
 
 def test_default_voice_and_cluster_from_env(monkeypatch):
