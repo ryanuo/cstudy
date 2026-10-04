@@ -296,19 +296,35 @@ static void on_property_post_reply(const char *topic, const char *payload,
 /* ============================================================
  *  下行：物模型服务调用（thing/service/<identifier>）
  *  当前实现 reboot：先把应答发出去，再复位 MCU。
- *  订阅用 /thing/service/+，所以 "…/reboot/reply" 这种两级后缀不会回到自己。
+ *  下行 topic 实测为 …/thing/service/<identifier>/invoke，应答 …/invoke_reply。
  * ============================================================ */
 #define SERVICE_REBOOT_DELAY_MS 300U
 
 static void on_service_invoke(const char *topic, const char *payload, size_t len) {
   const char *svc = strstr(topic, "/thing/service/");
-  const char *name = svc ? svc + strlen("/thing/service/") : "";
+  const char *end;
+  char name[32];
   char id[24];
   char resp_topic[192];
-  char resp[160];
+  char resp[192];
   cJSON *root;
   const cJSON *jid;
-  uint8_t is_reboot = (strcmp(name, "reboot") == 0);
+  uint8_t is_reboot;
+  size_t n;
+
+  /* topic 形如 …/thing/service/<identifier>/invoke，标识符取 /invoke 之前那段 */
+  if (svc != NULL) {
+    svc += strlen("/thing/service/");
+    end = strstr(svc, "/invoke");
+    n = (end != NULL) ? (size_t)(end - svc) : strlen(svc);
+    if (n >= sizeof name)
+      n = sizeof name - 1;
+    memcpy(name, svc, n);
+    name[n] = '\0';
+  } else {
+    name[0] = '\0';
+  }
+  is_reboot = (strcmp(name, "reboot") == 0);
 
   root = cJSON_ParseWithLength(payload, len);
   jid = root ? cJSON_GetObjectItem(root, "id") : NULL;
@@ -318,11 +334,14 @@ static void on_service_invoke(const char *topic, const char *payload, size_t len
 
   printf("[DEV] 服务调用：%s（%s）\r\n", name, is_reboot ? "重启" : "不支持");
 
-  snprintf(resp, sizeof resp, "{\"id\":\"%s\",\"code\":%d,\"msg\":\"%s\"}", id,
+  /* data 字段必须带，缺了平台判 "response invalid"（实测） */
+  snprintf(resp, sizeof resp,
+           "{\"id\":\"%s\",\"code\":%d,\"msg\":\"%s\",\"data\":{}}", id,
            is_reboot ? 200 : 400, is_reboot ? "success" : "unsupported");
 
-  /* 服务应答 topic = 收到的 topic + "/reply" */
-  snprintf(resp_topic, sizeof resp_topic, "%s/reply", topic);
+  /* 服务应答 topic = 收到的 topic + "_reply"
+   * （…/thing/service/reboot/invoke -> …/reboot/invoke_reply，与属性 set -> set_reply 同规矩）*/
+  snprintf(resp_topic, sizeof resp_topic, "%s_reply", topic);
   if (OneNET_PublishAbsolute(resp_topic, resp) != ONENET_OK)
     printf("[DEV] 服务应答发送失败\r\n");
 

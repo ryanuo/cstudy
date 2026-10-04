@@ -26,8 +26,11 @@ static char g_rx[ONENET_RX_MAX + 1];
 static const char *const g_sub_suffixes[] = {
     "/thing/property/post/reply",
     "/thing/property/set",
-    /* 物模型"服务"调用：标识符可变，用 + 通配（重启按钮走这条）*/
-    "/thing/service/+",
+    /* 服务下行 topic 是 …/thing/service/<identifier>/invoke（实测）。
+     * 平台是**按订阅通配匹配**下发目标的，所以必须订到 /invoke 这一层：
+     * 只订 "/thing/service/+" 或 "/thing/service/reboot" 都会报 10415 dev not subscribed
+     * （+ 只吃一层，少一层 /invoke）。用 +/invoke 一次覆盖所有服务，新增服务不用改这里。*/
+    "/thing/service/+/invoke",
 };
 
 /* ============================================================
