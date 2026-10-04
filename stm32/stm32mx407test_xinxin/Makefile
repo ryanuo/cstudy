@@ -124,7 +124,8 @@ web:
 	@test -x $(WEB_PY) || $(MAKE) web-install
 	@echo ">>> 面板 http://127.0.0.1:$(WEB_PORT)    退出：Ctrl-C"
 	@echo ">>> 口令 = $(WEB_DIR)/.env.local 里的 PANEL_PASSWORD；跳过口令：make web NOPASS=1"
-	@PORT=$(WEB_PORT) $(if $(NOPASS),PANEL_DISABLE_KEY=1,) $(WEB_PY) $(WEB_DIR)/tools/dev_server.py
+	@echo ">>> 手机/同 WiFi 访问：make web LAN=1（会绑 0.0.0.0 并打印局域网地址）"
+	@PORT=$(WEB_PORT) $(if $(NOPASS),PANEL_DISABLE_KEY=1,) $(if $(LAN),LAN=1,) $(WEB_PY) $(WEB_DIR)/tools/dev_server.py
 
 web-test:
 	@test -x $(WEB_PY) || $(MAKE) web-install

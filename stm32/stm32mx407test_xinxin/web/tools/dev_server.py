@@ -7,6 +7,7 @@
 """
 import mimetypes
 import os
+import socket
 import pathlib
 import sys
 from wsgiref.simple_server import make_server
@@ -64,8 +65,29 @@ def app(environ, start_response):
     return static_app(environ, start_response)
 
 
+def lan_ip():
+    """拿本机在局域网里的地址（不真发包，只是让内核挑出口网卡）。"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "3000"))
+    # 默认只听本机（外面连不上）；要手机/同 WiFi 设备访问就 LAN=1（绑 0.0.0.0）
+    lan = os.environ.get("LAN") == "1"
+    host = "0.0.0.0" if lan else "127.0.0.1"
     print("panel+api  http://127.0.0.1:%d   (口令 %s)"
           % (port, "已启用" if os.environ.get("PANEL_PASSWORD") else "未设置=放行"))
-    make_server("127.0.0.1", port, app).serve_forever()
+    if lan:
+        print("           同 WiFi 手机：http://%s:%d" % (lan_ip(), port))
+        print("           ⚠️ http 下浏览器不给用麦克风（安全上下文要求 https/localhost）：")
+        print("              手机上语音用线上 https 站点；纯网页控制不受影响。")
+    else:
+        print("           只能本机访问；手机要访问：make web LAN=1")
+    make_server(host, port, app).serve_forever()
