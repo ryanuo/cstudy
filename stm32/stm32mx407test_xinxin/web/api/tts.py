@@ -1,9 +1,15 @@
 """POST /api/tts：面板朗读用的语音合成（火山免费音色）。
 
 成功直接回 audio/mpeg（前端 <audio> 一放就响）；失败回 JSON，前端自动退回浏览器朗读。
-音色在后端环境变量 VOLC_TTS_VOICE 里固定，前端不参与，面板里没有音色清单。
+音色在 _lib.VOLC_TTS_VOICES 清单里维护、面板可切（白名单校验），默认第一条。
 """
 import os
+import sys
+
+# Vercel 把 api/*.py 各当一个独立函数打包，运行时 sys.path 里**没有** api/ 这一层，
+# 直接 `from _lib import …` 会 ModuleNotFoundError（本地 dev_server 手动加了才没暴露）。
+# 一行把函数自己的目录加进去，本地/线上都成立。
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify, request
 
