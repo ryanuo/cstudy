@@ -250,6 +250,24 @@ def _post_payload(op, body, product_id, device_name):
     return payload
 
 
+def _log_slow(dt, method, path, extra, threshold=2.0):
+    """跨境偶发 15s+（Vercel 出口到国内 OneNET）：超过阈值就打印一段可判读的诊断。
+
+    DNS 单独再解一次并列出解析到的所有 IP —— 日志里一眼能看出卡在解析还是连接。
+    """
+    if dt <= threshold:
+        return
+    try:
+        t1 = time.perf_counter()
+        ais = socket.getaddrinfo(ONENET_BASE.split("//")[-1], 443, proto=socket.IPPROTO_TCP)
+        dns = time.perf_counter() - t1
+        ips = sorted({a[4][0] for a in ais})
+    except Exception as e:
+        dns, ips = -1.0, [str(e)]
+    print("[onenet] 慢 %.1fs（DNS 重解 %.2fs，IP %s）%s %s  %s"
+          % (dt, dns, ",".join(ips), method, path, extra), flush=True)
+
+
 def onenet_call(op, params=None, body=None):
     """只放行 OP_MAP 里的 op；token 由后端加，前端永远看不到。"""
     if op not in OP_MAP:
@@ -269,19 +287,9 @@ def onenet_call(op, params=None, body=None):
     try:
         r = requests.request(method, "%s/%s" % (ONENET_BASE, path), **kwargs)
     except Exception as e:
+        _log_slow(time.perf_counter() - t0, method, path, "失败：%s: %s" % (type(e).__name__, e))
         return {"code": 599, "msg": "onenet unreachable: %s" % e}, 502
-    dt = time.perf_counter() - t0
-    if dt > 2.0:
-        # 慢调用要能一眼看出卡在哪：DNS 单独再解一次（Vercel 日志里能看到 print 输出），
-        # 并把解析到的 IP 都列出来（含 IPv6 就说明可能是 IPv6 回退问题）
-        try:
-            t1 = time.perf_counter()
-            ais = socket.getaddrinfo(ONENET_BASE.split("//")[-1], 443, proto=socket.IPPROTO_TCP)
-            dns = time.perf_counter() - t1
-            ips = sorted({a[4][0] for a in ais})
-        except Exception as e:
-            dns, ips = -1.0, [str(e)]
-        print("[onenet] 慢 %.1fs（DNS 重解 %.2fs，IP %s）%s %s" % (dt, dns, ",".join(ips), method, path), flush=True)
+    _log_slow(time.perf_counter() - t0, method, path, "HTTP %s" % r.status_code)
     try:
         return r.json(), r.status_code
     except Exception:
