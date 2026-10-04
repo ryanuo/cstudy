@@ -469,12 +469,40 @@ createApp({
       return true;
     }
 
+    /* 多目标：合成**一条** setProperty（固件 on_property_set 会遍历所有匹配项），
+       不要循环发多条 —— ESP8266 背靠背发 MQTTPUBRAW 会回 ERROR（踩过）。 */
+    async function setControls(keys, value) {
+      const list = (keys || [])
+        .map(k => CONTROLS.find(c => c.key === k))
+        .filter(c => c && controlOn.value[c.key] !== !!value);   // 已经是这个状态的跳过
+      if (!online.value) return { ok: false, changed: 0, msg: '设备离线' };
+      if (!list.length) return { ok: true, changed: 0 };
+
+      const params = {};
+      list.forEach(c => {
+        params[c.id] = value ? c.on : c.off;
+        local[c.id]   = params[c.id];
+        localAt[c.id] = Date.now();
+      });
+
+      const ok = await sendProperty(params, list.map(c => c.name).join('/'));
+      if (!ok) {
+        list.forEach(c => { delete local[c.id]; delete localAt[c.id]; flashErr(c.key); });
+        return { ok: false, changed: 0 };
+      }
+      list.forEach(c => flashTip(c.key));
+      setTimeout(refreshProperties, 1200);
+      setTimeout(refreshProperties, 3500);
+      return { ok: true, changed: list.length, names: list.map(c => c.name) };
+    }
+
     const panelBridge = {
       controls: CONTROLS.map(c => ({ key: c.key, name: c.name })),
       cards:    CARDS.map(c => ({ id: c.id, name: c.name, unit: c.unit })),
       isOnline: () => online.value === true,
       get:      (key) => currentValue(key),
       set:      setControl,          // 返回值：true 成功 / false 失败
+      setMany:  setControls,         // 一次多条：{ok, changed, names}
       refresh:  refreshAll,
       /* 重启这类破坏性动作：只把面板按钮推到"再点一次确认"状态，真正的执行仍要人工点第二下 */
       armReboot() { if (!rebootArm.value && online.value) onRebootClick(); return rebootArm.value; }

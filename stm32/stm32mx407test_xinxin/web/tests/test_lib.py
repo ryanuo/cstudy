@@ -57,20 +57,46 @@ def test_onenet_call_get_uses_query(monkeypatch):
     assert "json" not in seen["kw"]
 
 
-def test_onenet_call_post_sends_body(monkeypatch):
+def test_onenet_call_post_injects_product_and_device(monkeypatch):
+    """★ 回归：POST 必须自己补 product_id/device_name，漏了平台只回 10001 parameter error"""
     seen = {}
 
     def fake_request(method, url, **kw):
-        seen.update(method=method, kw=kw)
+        seen.update(method=method, url=url, kw=kw)
         class R:
             status_code = 200
             def json(self):
                 return {"code": 0}
         return R()
 
+    monkeypatch.setenv("ONENET_PRODUCT_ID", "PID")
+    monkeypatch.setenv("ONENET_DEVICE_NAME", "DID")
     monkeypatch.setattr("_lib.requests.request", fake_request)
-    onenet_call("callService", None, {"identifier": "reboot", "params": {}})
-    assert seen["method"] == "POST" and seen["kw"]["json"]["identifier"] == "reboot"
+
+    # ① 前端只给属性表 -> 必须被塞进 params（平台要 {product_id,device_name,params:{…}}）
+    onenet_call("setProperty", None, {"led1": "off", "led2": "off"})
+    body = seen["kw"]["json"]
+    assert seen["method"] == "POST"
+    assert body["product_id"] == "PID" and body["device_name"] == "DID"
+    assert body["params"] == {"led1": "off", "led2": "off"}
+    assert "led1" not in body               # 不能平铺在顶层（平台回 10001 Params required）
+
+    # ② 调用方已经包好 params 也不重复包
+    seen.clear()
+    onenet_call("setProperty", None, {"params": {"fan": True}})
+    assert seen["kw"]["json"]["params"] == {"fan": True}
+
+    # ③ callService：顶层字段 + params 默认空对象
+    seen.clear()
+    onenet_call("callService", None, {"identifier": "reboot"})
+    body = seen["kw"]["json"]
+    assert body["identifier"] == "reboot" and body["params"] == {}
+    assert body["product_id"] == "PID" and body["device_name"] == "DID"
+
+    # ④ 调用方自己传了 product_id 就不覆盖
+    seen.clear()
+    onenet_call("setProperty", None, {"product_id": "OTHER", "params": {"led1": "on"}})
+    assert seen["kw"]["json"]["product_id"] == "OTHER"
 
 
 def test_op_map_is_the_whitelist():

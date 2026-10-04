@@ -15,7 +15,9 @@ import requests
 ONENET_BASE = "https://iot-api.heclouds.com"
 DASHSCOPE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 
-ALLOWED_ACTIONS = {"toggle", "query", "refresh", "reboot", "chat", "unknown"}
+ALLOWED_ACTIONS = {"toggle", "toggle_many", "query", "refresh", "reboot", "chat", "unknown"}
+
+MAX_TARGETS = 8   # 一次最多动几个：防模型抽风列一大串
 
 # op -> (HTTP 方法, OneNET 路径)：只放行这里列出的，前端不能自己拼路径
 OP_MAP = {
@@ -37,10 +39,12 @@ def build_prompt(controls, cards):
         "可用开关（target 只能取这些 key）：\n%s\n"
         "可查询属性（target 只能取这些 id）：\n%s\n"
         "只输出 JSON，不要 markdown，不要解释：\n"
-        '{"action":"toggle|query|refresh|reboot|chat|unknown","target":"上面的 key/id 或 null",'
-        '"value":true|false|null,"reply":"15字内中文"}\n'
+        '{"action":"toggle|toggle_many|query|refresh|reboot|chat|unknown","target":"上面的 key/id 或 null",'
+        '"targets":["一次要动多个时列在这里，否则 null"],"value":true|false|null,"reply":"15字内中文"}\n'
         "规则：打开/开启/启动→toggle value=true；关闭/关掉/停止→toggle value=false；"
         "问某个数值→query；刷新/更新数据→refresh；重启/复位设备→reboot；打招呼/闲聊/没听懂→chat 或 unknown。\n"
+        '一次要动多个（"把灯都关了""全部关掉""蜂鸣器和风扇都关"）→ action=toggle_many，'
+        'targets 填涉及的 key 列表、value 填 true/false、target 填 null。\n'
         '没指明是哪一路（例如只说"开灯"）→ {"action":"toggle","target":null,"value":null,"reply":"要开哪一路？"}'
         % (ctrl, card)
     )
@@ -65,7 +69,8 @@ def parse_json_loose(content):
 
 def validate(intent, controls, cards):
     """LLM 输出不可信：动作、标识符、取值一律按白名单收口。"""
-    fallback = {"action": "unknown", "target": None, "value": None, "reply": "没听懂，再说一次"}
+    fallback = {"action": "unknown", "target": None, "targets": None,
+                "value": None, "reply": "没听懂，再说一次"}
     if not isinstance(intent, dict):
         return dict(fallback)
 
@@ -81,6 +86,23 @@ def validate(intent, controls, cards):
     if target not in keys:          # 幻觉出的标识符（led4/relay）一律丢掉
         target = None
 
+    if action == "toggle_many":
+        raw = intent.get("targets")
+        targets = []
+        if isinstance(raw, list):
+            for t in raw:                      # 逐个过白名单 + 去重，幻觉出来的直接丢
+                if t in keys and t not in targets:
+                    targets.append(t)
+        targets = targets[:MAX_TARGETS]
+        if not targets or value not in (True, False):
+            return {"action": "unknown", "target": None, "targets": None, "value": None,
+                    "reply": reply or "要动哪几个？开还是关？"}
+        if len(targets) == 1:                  # 只剩一个就退回单目标，前端少一条分支
+            return {"action": "toggle", "target": targets[0], "targets": None,
+                    "value": value, "reply": reply}
+        return {"action": "toggle_many", "target": None, "targets": targets,
+                "value": value, "reply": reply}
+
     if action == "toggle":
         if target is None or value not in (True, False):
             return {"action": "unknown", "target": None, "value": None,
@@ -92,7 +114,8 @@ def validate(intent, controls, cards):
         return {"action": "unknown", "target": None, "value": None,
                 "reply": reply or "要查哪一项？"}
 
-    return {"action": action, "target": target, "value": value, "reply": reply}
+    return {"action": action, "target": target, "targets": None,
+            "value": value, "reply": reply}
 
 
 # ----------------------------- 口令 / 限流 -----------------------------
@@ -150,6 +173,26 @@ def rate_ok(request, per_min=None, daily=None):
 
 
 # ----------------------------- OneNET 转发 -----------------------------
+def _post_payload(op, body, product_id, device_name):
+    """POST 两个 op 的报文形状不一样，统一在这里补齐（前端不该知道这些）：
+
+    - setProperty: {"product_id","device_name","params":{标识符:值}}
+      调用方直接传属性表也行，会被塞进 params（漏了平台回 10001 Params required）
+    - callService: {"product_id","device_name","identifier","params":{…}}
+    """
+    payload = dict(body or {})
+    if op == "setProperty":
+        inner = payload.pop("params", None)
+        if inner is None:
+            inner, payload = payload, {}
+        payload["params"] = inner
+    else:
+        payload.setdefault("params", {})
+    payload.setdefault("product_id", product_id)
+    payload.setdefault("device_name", device_name)
+    return payload
+
+
 def onenet_call(op, params=None, body=None):
     """只放行 OP_MAP 里的 op；token 由后端加，前端永远看不到。"""
     if op not in OP_MAP:
@@ -164,7 +207,7 @@ def onenet_call(op, params=None, body=None):
     if method == "GET":
         kwargs["params"] = q
     else:
-        kwargs["json"] = body or {}
+        kwargs["json"] = _post_payload(op, body, q["product_id"], q["device_name"])
     try:
         r = requests.request(method, "%s/%s" % (ONENET_BASE, path), **kwargs)
     except Exception as e:

@@ -190,3 +190,29 @@ test('toggle 缺少目标时不下发，只提示', async () => {
   await new Promise(r => setTimeout(r, 30));
   assert.match(env.els.voiceText.textContent, /要开哪一路？/);
 });
+
+
+test('toggle_many：一条下发多个目标（走 panel.setMany）', async () => {
+  const env = makeEnv({ withSR: true });
+  env.fetchReply = async () => ({ ok: true, status: 200,
+    json: async () => ({ intent: { action: 'toggle_many', target: null, targets: ['led1', 'led2', 'led3'], value: false, reply: '关闭三路灯' } }) });
+  globalThis.fetch = async (url, opts) => { env.calls.fetch.push({ url, opts }); return env.fetchReply(url, opts); };
+  const calls = [];
+  globalThis.__panel = {
+    controls: [{ key: 'led1', name: '灯 1' }, { key: 'led2', name: '灯 2' }, { key: 'led3', name: '灯 3' }],
+    cards: [], isOnline: () => true,
+    set: async () => { throw new Error('多目标不该走单目标 set'); },
+    setMany: async (keys, value) => { calls.push(keys.join('+') + ':' + value); return { ok: true, changed: keys.length, names: ['灯 1', '灯 2', '灯 3'] }; },
+    get: () => null, refresh: async () => {}, armReboot: () => false
+  };
+  env.store.panelKey = 'test-key';
+  loadScripts();
+  env.doc.listeners.click.forEach(f => f({ target: env.els.voiceBtn }));
+  const results = [[{ transcript: '把灯都关了吧' }]];
+  results[0].isFinal = true;
+  env.lastSR.onresult({ resultIndex: 0, results });
+  await new Promise(r => setTimeout(r, 30));
+
+  assert.deepEqual(calls, ['led1+led2+led3:false'], '应一条下发三个目标');
+  assert.match(env.els.voiceText.textContent, /已关闭|关闭/);
+});

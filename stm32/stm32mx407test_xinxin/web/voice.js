@@ -51,6 +51,18 @@
         speak(msg);
         return;
       }
+      case 'toggle_many': {
+        const keys = intent.targets || [];
+        if (!panel.isOnline()) { show('设备离线，不能下发', 'is-err'); speak('设备离线'); return; }
+        const r = await panel.setMany(keys, value);
+        const names = (r.names || keys.map(k => (panel.controls.find(c => c.key === k) || {}).name || k)).join('、');
+        const msg = r.ok
+          ? (r.changed ? (reply || ((value ? '已打开' : '已关闭') + names)) : '这些已经是' + (value ? '打开' : '关闭') + '状态了')
+          : ('下发失败：' + names);
+        show(msg, r.ok ? 'is-ok' : 'is-err');
+        speak(msg);
+        return;
+      }
       case 'query': {
         if (target === null) { show(reply || '要查哪一项？', 'is-err'); speak(reply || '要查哪一项？'); return; }
         await panel.refresh();

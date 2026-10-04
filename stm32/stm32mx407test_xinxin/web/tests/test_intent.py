@@ -47,3 +47,46 @@ def test_parse_json_loose():
 def test_prompt_lists_allowed_keys_only():
     p = build_prompt(C, K)
     assert "led1" in p and "temperature" in p and "只能取" in p
+
+
+# ---------------- 多目标（toggle_many） ----------------
+C3 = [{"key": "led1", "name": "灯 1"}, {"key": "led2", "name": "灯 2"},
+      {"key": "led3", "name": "灯 3"}, {"key": "fan", "name": "风扇"}]
+
+
+def test_toggle_many_keeps_all_valid_targets():
+    out = validate({"action": "toggle_many", "targets": ["led1", "led2", "led3"], "value": False,
+                    "reply": "关闭三路灯"}, C3, K)
+    assert out["action"] == "toggle_many"
+    assert out["targets"] == ["led1", "led2", "led3"]
+    assert out["value"] is False and out["target"] is None
+
+
+def test_toggle_many_drops_hallucinated_and_dupes():
+    # led9 是幻觉、led1 重复 -> 只留 led1+led2（保持出现顺序，仍是多目标）
+    out = validate({"action": "toggle_many", "targets": ["led1", "led9", "led2", "led1"], "value": True}, C3, K)
+    assert out["action"] == "toggle_many" and out["targets"] == ["led1", "led2"]
+
+
+def test_toggle_many_single_target_falls_back_to_toggle():
+    out = validate({"action": "toggle_many", "targets": ["fan", "nope"], "value": True}, C3, K)
+    assert out["action"] == "toggle" and out["target"] == "fan"
+
+
+def test_toggle_many_requires_bool_and_targets():
+    assert validate({"action": "toggle_many", "targets": ["led1"], "value": "off"}, C3, K)["action"] == "unknown"
+    assert validate({"action": "toggle_many", "targets": [], "value": True}, C3, K)["action"] == "unknown"
+    assert validate({"action": "toggle_many", "targets": "led1", "value": True}, C3, K)["action"] == "unknown"
+    assert validate({"action": "toggle_many", "targets": ["zzz"], "value": True}, C3, K)["action"] == "unknown"
+
+
+def test_toggle_many_capped():
+    many = [{"key": "k%d" % i} for i in range(20)]
+    out = validate({"action": "toggle_many", "targets": [c["key"] for c in many], "value": True}, many, [])
+    assert len(out["targets"]) == 8
+
+
+def test_all_actions_have_full_schema():
+    for it in [{"action": "chat", "reply": "hi"}, {"action": "refresh"}, {"action": "query", "target": "temperature"}]:
+        out = validate(it, C3, K)
+        assert set(out) >= {"action", "target", "targets", "value", "reply"}
