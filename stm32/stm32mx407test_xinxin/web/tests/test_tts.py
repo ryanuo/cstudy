@@ -78,17 +78,18 @@ def test_network_error_is_caught(monkeypatch):
 
 def test_default_voice_list_is_the_21_free_ones():
     v = volc_voices()
-    assert len(v) == 21, "免费音色应有 21 款"
+    assert len(v) == 22, "21 款免费音色 + 豆包 2.0 的 Vivi 2.0"
     ids = {x["id"] for x in v}
     assert {"BV700_streaming", "BV001_streaming", "BV021_streaming", "BV503_streaming"} <= ids
-    assert {x["group"] for x in v} == {"通用场景", "有声阅读", "助手·配音·教育", "方言", "英语", "日语"}
+    assert {x["group"] for x in v} == {"通用场景", "有声阅读", "助手·配音·教育", "方言", "英语", "日语",
+                                      "豆包 2.0（大模型）"}
 
 
 def test_voice_list_can_be_overridden_by_env(monkeypatch):
     monkeypatch.setenv("VOLC_TTS_VOICES", json.dumps([{"id": "BV005_streaming", "name": "测试音色", "group": "自定义"}]))
     assert volc_voices() == [{"id": "BV005_streaming", "name": "测试音色", "group": "自定义"}]
     monkeypatch.setenv("VOLC_TTS_VOICES", "{坏 JSON")
-    assert len(volc_voices()) == 21        # 解析失败退回默认，不要炸
+    assert len(volc_voices()) == 22        # 解析失败退回默认，不要炸
 
 
 def test_voice_id_suffix_fallback(monkeypatch):

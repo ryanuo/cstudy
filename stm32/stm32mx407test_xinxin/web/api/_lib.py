@@ -300,6 +300,8 @@ VOLC_VOICES_DEFAULT = [
     # 日语（2）
     {"id": "BV522_streaming", "name": "气质女生", "group": "日语"},
     {"id": "BV524_streaming", "name": "日语男声", "group": "日语"},
+    # 豆包语音合成 2.0（大模型音色，走 V3 WebSocket，计费项 seed-tts-2.0，需在控制台开通）
+    {"id": "zh_female_vv_uranus_bigtts", "name": "Vivi 2.0（多语种/方言）", "group": "豆包 2.0（大模型）"},
 ]
 
 
@@ -317,11 +319,22 @@ def volc_voices():
     return VOLC_VOICES_DEFAULT
 
 
-def volc_tts_ready():
-    return bool(os.environ.get("VOLC_TTS_APPID") and os.environ.get("VOLC_TTS_TOKEN"))
+def volc_tts_ready(voice=None):
+    """两条通道凭据不同：V1 要 appid+token，V3（豆包 2.0）要 API Key。
+    只配了一种时，另一种音色不该被"误判为可用"。"""
+    mode = os.environ.get("VOLC_TTS_API", "auto").lower()
+    has_v1 = bool(os.environ.get("VOLC_TTS_APPID") and os.environ.get("VOLC_TTS_TOKEN"))
+    has_v3 = _v3_headers() is not None
+    if mode == "v1":
+        return has_v1
+    if mode == "v3":
+        return has_v3
+    if voice is not None:
+        return has_v3 if _is_v3_voice(voice) else has_v1
+    return has_v1 or has_v3
 
 
-def tts_volc(text, voice=None, speed=None, pitch=None, volume=None):
+def tts_volc_v1_http(text, voice=None, speed=None, pitch=None, volume=None):
     """返回 (mp3 bytes, None) 或 (None, 错误说明)。错误原样带出去，方便在设置面板直接看到。"""
     import base64
     import uuid
@@ -372,6 +385,152 @@ def tts_volc(text, voice=None, speed=None, pitch=None, volume=None):
         return base64.b64decode(j["data"]), None
     except Exception as e:
         return None, "音频解码失败：%s" % e
+
+
+# ---------- 火山 V3（豆包语音合成 2.0 / Vivi 2.0 这类 bigtts 音色必须走这条） ----------
+# 协议：单向流式 WebSocket，二进制帧 = 4 字节 header (+4 字节 event) + 4 字节 payload 长度 + payload（大端）。
+# 关键点：**浏览器原生 WebSocket 不能带自定义请求头**，带 key 连接只能在服务端做，
+# 所以这里由后端当 WS 客户端把音频攒齐，再按普通 HTTP 返回 mp3（前端无感）。
+VOLC_TTS_V3_URL_DEFAULT = "wss://openspeech.bytedance.com/api/v3/tts/unidirectional/stream"
+VOLC_V3_RESOURCE_DEFAULT = "seed-tts-2.0"          # 豆包语音合成 2.0 的计费项
+
+
+def _v3_headers():
+    """新版控制台用 X-Api-Key；旧版用 X-Api-App-Id + X-Api-Access-Key。"""
+    key = os.environ.get("VOLC_TTS_API_KEY")
+    if key:
+        return {"X-Api-Key": key}
+    appid, token = os.environ.get("VOLC_TTS_APPID"), os.environ.get("VOLC_TTS_TOKEN")
+    if appid and token:
+        return {"X-Api-App-Id": appid, "X-Api-Access-Key": token}
+    return None
+
+
+def _u32(n):
+    import struct
+    return struct.pack(">I", n)
+
+
+def v3_send_text_frame(payload_obj):
+    """SendText：header 0x11 0x10 0x10 0x00 + 长度(4) + JSON"""
+    import json as _json
+    body = _json.dumps(payload_obj, ensure_ascii=False).encode("utf-8")
+    return b"\x11\x10\x10\x00" + _u32(len(body)) + body
+
+
+def v3_finish_frame():
+    """FinishConnection：header 0x11 0x14 0x10 0x00 + event=2 + 长度(4) + {}"""
+    body = b"{}"
+    return b"\x11\x14\x10\x00" + _u32(2) + _u32(len(body)) + body
+
+
+def v3_parse_frame(buf):
+    """解析服务端帧：音频 / JSON / 错误。event: 352=TTSResponse 152=SessionFinished 52=ConnectionFinished"""
+    import struct
+    if len(buf) < 4:
+        return {"type": "unknown"}
+    b1 = buf[1]
+    msg_type = (b1 >> 4) & 0x0F
+    has_event = (b1 & 0x0F & 0x04) != 0
+    off = 4
+    event = None
+    if has_event:
+        if len(buf) < off + 4:
+            return {"type": "unknown"}
+        event = struct.unpack(">I", buf[off:off + 4])[0]
+        off += 4
+    if msg_type == 0b1111:                          # 错误帧
+        return {"type": "error", "code": struct.unpack(">I", buf[4:8])[0] if len(buf) >= 8 else -1}
+    if msg_type == 0b1011:                          # 音频帧：sid_len(4)+sid+audio_len(4)+audio
+        sid_len = struct.unpack(">I", buf[off:off + 4])[0]
+        off += 4 + sid_len
+        audio_len = struct.unpack(">I", buf[off:off + 4])[0]
+        off += 4
+        return {"type": "audio", "event": event, "data": buf[off:off + audio_len]}
+    if msg_type == 0b1001:                          # JSON 帧：len(4)+json
+        payload_len = struct.unpack(">I", buf[off:off + 4])[0]
+        off += 4
+        return {"type": "meta", "event": event, "json": buf[off:off + payload_len].decode("utf-8", "replace")}
+    return {"type": "unknown"}
+
+
+def _is_v3_voice(voice):
+    """豆包 2.0/大模型音色命名：含 bigtts 或 zh_/en_/ja_/multi_ 前缀；其余（BVxxx）走 V1 HTTP。"""
+    v = (voice or "").lower()
+    return ("bigtts" in v) or v.startswith(("zh_", "en_", "ja_", "multi_", "cn_"))
+
+
+def tts_volc_v3_ws(text, voice=None, speed=None, pitch=None, volume=None, timeout=25):
+    """返回 (mp3 bytes, None) 或 (None, 错误说明)。pitch 在 V3 没有对应参数，忽略。"""
+    import uuid
+    headers = _v3_headers()
+    if not headers:
+        return None, "后端没配 VOLC_TTS_API_KEY（新版控制台）或 VOLC_TTS_APPID+VOLC_TTS_TOKEN（旧版）"
+    try:
+        import websocket                                  # websocket-client
+    except Exception:
+        return None, "后端缺依赖：websocket-client（requirements.txt 里加）"
+
+    voice = voice or os.environ.get("VOLC_TTS_VOICE", "zh_female_vv_uranus_bigtts")
+    h = dict(headers)
+    h["X-Api-Resource-Id"] = os.environ.get("VOLC_TTS_V3_RESOURCE", VOLC_V3_RESOURCE_DEFAULT)
+    h["X-Api-Connect-Id"] = uuid.uuid4().hex
+    params = {"text": text, "speaker": voice,
+              "audio_params": {"format": "mp3", "sample_rate": 24000}}
+    if speed is not None:
+        params["audio_params"]["speech_rate"] = int(round((float(speed) - 1) * 100))   # -50~100
+    if volume is not None:
+        params["audio_params"]["loudness_rate"] = int(round((float(volume) - 1) * 100))
+    payload = {"user": {"uid": os.environ.get("VOLC_TTS_UID", "onenet-panel")}, "req_params": params}
+
+    try:
+        ws = websocket.create_connection(os.environ.get("VOLC_TTS_V3_URL", VOLC_TTS_V3_URL_DEFAULT),
+                                        header=h, timeout=timeout)
+    except Exception as e:
+        return None, "连不上火山 V3：%s" % e
+    try:
+        ws.send_binary(v3_send_text_frame(payload))
+        chunks = []
+        while True:
+            raw = ws.recv()
+            if not raw:
+                break
+            f = v3_parse_frame(raw)
+            if f["type"] == "audio":
+                chunks.append(f["data"])
+            elif f["type"] == "meta":
+                if f.get("event") == 152:                 # SessionFinished → 收尾
+                    ws.send_binary(v3_finish_frame())
+                elif f.get("event") == 52:                # ConnectionFinished → 结束
+                    break
+            elif f["type"] == "error":
+                return None, "火山 V3 报错 code=%s" % f.get("code")
+        if not chunks:
+            return None, "火山 V3 没返回音频（音色 id、资源 id 或权限可能不对）"
+        return b"".join(chunks), None
+    except Exception as e:
+        return None, "火山 V3 会话异常：%s" % e
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+
+def tts_volc(text, voice=None, speed=None, pitch=None, volume=None):
+    """按音色自动选通道：bigtts/大模型音色 → V3 WS；BVxxx 普通音色 → V1 HTTP。
+    也可用 VOLC_TTS_API=v1|v3 强制指定。"""
+    voice = voice or os.environ.get("VOLC_TTS_VOICE", "BV001_streaming")
+    mode = os.environ.get("VOLC_TTS_API", "auto").lower()
+    use_v3 = (mode == "v3") or (mode == "auto" and _is_v3_voice(voice))
+    if use_v3:
+        audio, err = tts_volc_v3_ws(text, voice, speed, pitch, volume)
+        if err is None:
+            return audio, None
+        if _is_v3_voice(voice):
+            return None, err                       # 2.0 音色在 V1 必然失败，别掩盖真原因
+        return tts_volc_v1_http(text, voice, speed, pitch, volume)
+    return tts_volc_v1_http(text, voice, speed, pitch, volume)
 
 
 # ----------------------------- LLM -----------------------------

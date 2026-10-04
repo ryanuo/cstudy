@@ -10,7 +10,8 @@ app = Flask(__name__)
 @app.get("/tts")
 def tts_info():
     """前端打开设置面板时问一次：能用吗、有哪些音色。"""
-    return jsonify({"configured": volc_tts_ready(), "voices": volc_voices()})
+    v = volc_voices()
+    return jsonify({"configured": volc_tts_ready(v[0]["id"] if v else None), "voices": v})
 
 
 @app.post("/api/tts")
@@ -25,11 +26,11 @@ def tts():
     text = (d.get("text") or "").strip()[:300]
     if not text:
         return jsonify({"code": 400, "msg": "text 为空"}), 400
-    if not volc_tts_ready():
-        return jsonify({"code": 500, "msg": "后端没配 VOLC_TTS_APPID / VOLC_TTS_TOKEN"}), 500
-
+    # 不再在这里预判"配没配"：两条通道凭据不同（V1 要 appid+token、V3 要 API Key），
+    # 让 tts_volc 按音色选通道并给出精确原因，避免把 V3 音色误杀成"缺 appid/token"
     audio, err = tts_volc(text, d.get("voice"), d.get("speed"), d.get("pitch"), d.get("volume"))
     if err:
         app.logger.warning("火山 TTS 失败: %s", err)
-        return jsonify({"code": 502, "msg": err}), 502
+        code = 500 if "没配" in err else 502
+        return jsonify({"code": code, "msg": err}), code
     return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
