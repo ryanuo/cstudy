@@ -15,7 +15,11 @@
 export PATH := $(HOME)/dev/toolchains/bin:$(PATH)
 
 # ---------- 配置 ----------
-BUILD_TYPE ?= Debug          # Debug | Release（Release 用 -O3，体积/速度都更好）
+# BUILD_TYPE: Debug | Release（Release 用 -O3，体积/速度都更好）
+# 注意：这一行**不能写行内注释** —— make 会把 `#` 前的空格并进变量值，
+# 于是 BUILD_DIR 变成 "build/Debug   "，ELF/HEX/BIN 全被空格拆成两个参数
+# （症状：make bin/hex/flash/size 报 objcopy 用法，或烧进旧文件）。
+BUILD_TYPE ?= Debug
 BUILD_DIR ?= build/$(BUILD_TYPE)
 PROJECT   ?= stm32mx407test_xinxin
 ELF       := $(BUILD_DIR)/$(PROJECT).elf
@@ -24,7 +28,8 @@ BIN       := $(BUILD_DIR)/$(PROJECT).bin
 
 # 烧录工具：openocd（当前接的是 ST-Link）| st-flash | STM32_Programmer_CLI | pyocd
 FLASH_TOOL     ?= openocd
-OPENOCD_IF     ?= interface/stlink.cfg   # 换 J-Link 改成 interface/jlink.cfg（并加 -c "transport select swd"）
+# 换 J-Link 改成 interface/jlink.cfg（并加 -c "transport select swd"）
+OPENOCD_IF     ?= interface/stlink.cfg
 OPENOCD_TARGET ?= target/stm32f4x.cfg
 
 # printf 走 UART5 = PC12(TX)/PD2(RX)；CH340 USB-TTL 就是下面这个口
