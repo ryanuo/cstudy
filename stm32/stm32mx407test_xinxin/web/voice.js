@@ -185,12 +185,13 @@
         : g.items.map(opt).join('')).join('');
       if (!vcfg.volcVoice) vcfg.volcVoice = volcInfo.voices[0].id;
     } else {
-      sel.innerHTML = '<option value="">（后端还没配火山 TTS）</option>';
+      sel.innerHTML = '<option value="">（后端没配音色清单）</option>';
     }
     if (hint && vcfg.source === 'volc') {
-      hint.textContent = volcInfo && volcInfo.configured
-        ? '火山音色来自后端 VOLC_TTS_VOICES；改音色只影响朗读，不影响识别'
-        : '后端缺 VOLC_TTS_APPID / VOLC_TTS_TOKEN：先在 Vercel 环境变量里补上（本地放 web/.env.local）';
+      const hasList = !!(volcInfo && volcInfo.voices && volcInfo.voices.length);
+      if (!hasList) hint.textContent = '后端没配 VOLC_TTS_VOICES：把 web/.env.example 里那行清单粘到 Vercel 环境变量（本地放 web/.env.local）';
+      else if (!volcInfo.configured) hint.textContent = '音色清单有了，但还缺凭据：V3 用 VOLC_TTS_API_KEY，V1 用 VOLC_TTS_APPID+TOKEN';
+      else hint.textContent = '音色清单来自后端 VOLC_TTS_VOICES；改音色只影响朗读，不影响识别';
     }
   }
 

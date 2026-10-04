@@ -268,55 +268,30 @@ def onenet_call(op, params=None, body=None):
 # 返回 {"code":3000,"data":"<base64 mp3>"}。字段如有出入，只改这里的环境变量/这一段。
 VOLC_TTS_URL_DEFAULT = "https://openspeech.bytedance.com/api/v1/tts"
 
-# 火山引擎**免费**的 21 款音色（用户从控制台抄的清单，按场景分组）。
-# id 用官方 TTS 接口常见的 "_streaming" 写法；不同接口/账号可能要短名（BV700），
-# 所以 tts_volc() 里带了自动重试（见下面 _toggle_streaming_suffix）。
-# 要改/加音色，直接给 VOLC_TTS_VOICES 环境变量（JSON 数组，可带 group）。
-VOLC_VOICES_DEFAULT = [
-    # 通用场景（3）
-    {"id": "BV700_streaming", "name": "灿灿", "group": "通用场景"},
-    {"id": "BV001_streaming", "name": "通用女声", "group": "通用场景"},
-    {"id": "BV002_streaming", "name": "通用男声", "group": "通用场景"},
-    # 有声阅读（5）
-    {"id": "BV701_streaming", "name": "擎苍", "group": "有声阅读"},
-    {"id": "BV119_streaming", "name": "通用赘婿", "group": "有声阅读"},
-    {"id": "BV102_streaming", "name": "儒雅青年", "group": "有声阅读"},
-    {"id": "BV113_streaming", "name": "甜宠少御", "group": "有声阅读"},
-    {"id": "BV115_streaming", "name": "古风少御", "group": "有声阅读"},
-    # 智能助手 / 视频配音 / 特色 / 教育（6）
-    {"id": "BV007_streaming", "name": "亲切女声", "group": "助手·配音·教育"},
-    {"id": "BV056_streaming", "name": "阳光男声", "group": "助手·配音·教育"},
-    {"id": "BV005_streaming", "name": "活泼女声", "group": "助手·配音·教育"},
-    {"id": "BV051_streaming", "name": "奶气萌娃", "group": "助手·配音·教育"},
-    {"id": "BV034_streaming", "name": "知性姐姐（双语）", "group": "助手·配音·教育"},
-    {"id": "BV033_streaming", "name": "温柔小哥", "group": "助手·配音·教育"},
-    # 方言（3）
-    {"id": "BV021_streaming", "name": "东北老铁", "group": "方言"},
-    {"id": "BV019_streaming", "name": "重庆小伙", "group": "方言"},
-    {"id": "BV213_streaming", "name": "广西表哥", "group": "方言"},
-    # 英语（2）
-    {"id": "BV503_streaming", "name": "活力女声 Ariana", "group": "英语"},
-    {"id": "BV504_streaming", "name": "活力男声 Jackson", "group": "英语"},
-    # 日语（2）
-    {"id": "BV522_streaming", "name": "气质女生", "group": "日语"},
-    {"id": "BV524_streaming", "name": "日语男声", "group": "日语"},
-    # 豆包语音合成 2.0（大模型音色，走 V3 WebSocket，计费项 seed-tts-2.0，需在控制台开通）
-    {"id": "zh_female_vv_uranus_bigtts", "name": "Vivi 2.0（多语种/方言）", "group": "豆包 2.0（大模型）"},
-]
+# 音色清单不放代码里：由 VOLC_TTS_VOICES（JSON 数组）提供，web/.env.example 里有现成可粘的一份。
+# 形态：[{"id":"BV700_streaming","name":"灿灿","group":"通用场景"}, …]
+
+
 
 
 def volc_voices():
+    """音色清单只来自 VOLC_TTS_VOICES（JSON 数组，可带 group）。
+
+    没配就返回空列表 —— 前端会提示"后端没配音色清单"，提示文案里写明去哪抄。
+    这样代码里不留硬编码清单，音色增减完全是配置的事。
+    """
     raw = os.environ.get("VOLC_TTS_VOICES")
-    if raw:
-        try:
-            v = json.loads(raw)
-            if isinstance(v, list) and v:
-                return [{"id": str(x.get("id")), "name": str(x.get("name") or x.get("id")),
-                         "group": str(x.get("group") or "")}
-                        for x in v if isinstance(x, dict) and x.get("id")]
-        except Exception:
-            pass
-    return VOLC_VOICES_DEFAULT
+    if not raw:
+        return []
+    try:
+        v = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(v, list):
+        return []
+    return [{"id": str(x.get("id")), "name": str(x.get("name") or x.get("id")),
+             "group": str(x.get("group") or "")}
+            for x in v if isinstance(x, dict) and x.get("id")]
 
 
 def volc_tts_ready(voice=None):

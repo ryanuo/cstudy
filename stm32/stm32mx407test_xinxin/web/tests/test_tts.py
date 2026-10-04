@@ -81,11 +81,25 @@ def test_network_error_is_caught(monkeypatch):
     assert audio is None and "连不上火山" in err
 
 
-def test_default_voice_list_is_the_21_free_ones():
-    v = volc_voices()
-    assert len(v) == 22, "21 款免费音色 + 豆包 2.0 的 Vivi 2.0"
+def test_no_hardcoded_list_in_code(monkeypatch):
+    """代码里不留硬编码音色清单：没配 VOLC_TTS_VOICES 就是空"""
+    monkeypatch.delenv("VOLC_TTS_VOICES", raising=False)
+    assert volc_voices() == []
+
+
+def test_env_example_ships_a_valid_22_voice_list():
+    """清单挪到了 .env.example：那行必须能解析，且包含 21 款免费音色 + Vivi 2.0"""
+    import json as _json
+    import pathlib as _pathlib
+    env_example = _pathlib.Path(__file__).resolve().parents[1] / ".env.example"
+    line = [l for l in env_example.read_text(encoding="utf-8").splitlines()
+            if l.startswith("VOLC_TTS_VOICES=")]
+    assert line, ".env.example 里应有 VOLC_TTS_VOICES 一行"
+    v = _json.loads(line[0].split("=", 1)[1])
+    assert len(v) == 22, "21 款免费 + Vivi 2.0"
     ids = {x["id"] for x in v}
-    assert {"BV700_streaming", "BV001_streaming", "BV021_streaming", "BV503_streaming"} <= ids
+    assert {"BV700_streaming", "BV001_streaming", "BV021_streaming", "BV503_streaming",
+            "zh_female_vv_uranus_bigtts"} <= ids
     assert {x["group"] for x in v} == {"通用场景", "有声阅读", "助手·配音·教育", "方言", "英语", "日语",
                                       "豆包 2.0（大模型）"}
 
@@ -94,7 +108,9 @@ def test_voice_list_can_be_overridden_by_env(monkeypatch):
     monkeypatch.setenv("VOLC_TTS_VOICES", json.dumps([{"id": "BV005_streaming", "name": "测试音色", "group": "自定义"}]))
     assert volc_voices() == [{"id": "BV005_streaming", "name": "测试音色", "group": "自定义"}]
     monkeypatch.setenv("VOLC_TTS_VOICES", "{坏 JSON")
-    assert len(volc_voices()) == 22        # 解析失败退回默认，不要炸
+    assert volc_voices() == []             # 解析失败就是空，不要炸
+    monkeypatch.setenv("VOLC_TTS_VOICES", '{"not": "list"}')
+    assert volc_voices() == []
 
 
 def test_voice_id_suffix_fallback(monkeypatch):
