@@ -11,12 +11,34 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null, listening = false, busy = false;
 
+  const ICON = { 'is-live': 'fa-microphone', 'is-ok': 'fa-check-circle', 'is-err': 'fa-exclamation-circle' };
+  let hideTimer = null;
+
+  /* 浮层：淡入 → 几秒后自动淡出；识别中(live) 不自动消失 */
   function show(msg, cls) {
-    const bar = $('voiceBar'), text = $('voiceText');
+    const bar = $('voiceBar'), text = $('voiceText'), icon = $('voiceIcon');
     if (!bar || !text) return;
-    bar.hidden = !msg;
+    clearTimeout(hideTimer);
+
+    if (!msg) {
+      bar.classList.remove('is-show');
+      hideTimer = setTimeout(() => { if (!bar.classList.contains('is-show')) bar.hidden = true; }, 200);
+      return;
+    }
+    const shown = bar.classList.contains('is-show');
+    bar.hidden = false;
     bar.className = 'voice-bar' + (cls ? ' ' + cls : '');
-    text.textContent = msg || '';
+    if (shown) bar.classList.add('is-show');          // 已在显示：保持住，别每次 interim 都重放淡入
+    if (icon) icon.className = 'fa ' + (ICON[cls] || 'fa-microphone');
+    text.textContent = msg;
+    if (!shown) {
+      const raf = window.requestAnimationFrame || (f => setTimeout(f, 0));
+      raf(() => bar.classList.add('is-show'));        // 下一帧再加，触发淡入过渡
+    }
+
+    if (cls !== 'is-live') {                          // 结果类：8 秒后自己收掉
+      hideTimer = setTimeout(() => show(''), 8000);
+    }
   }
   function speak(msg) {
     if (!msg || !window.speechSynthesis) return;

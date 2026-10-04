@@ -55,8 +55,8 @@
     </div>
   </header>
 
-  <p id="voiceBar" class="voice-bar" hidden>
-    <i class="fa fa-microphone"></i><span id="voiceText"></span>
+  <p id="voiceBar" class="voice-bar" role="status" aria-live="polite" hidden>
+    <i class="fa fa-microphone" id="voiceIcon"></i><span id="voiceText"></span>
   </p>
 
   <p v-if="rebootMsg" class="reboot-note">
