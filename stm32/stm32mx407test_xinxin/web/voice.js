@@ -46,7 +46,7 @@
         if (!panel.isOnline()) { show('设备离线，不能下发', 'is-err'); speak('设备离线'); return; }
         const ok = await panel.set(target, value);
         const name = (panel.controls.find(c => c.key === target) || {}).name || target;
-        const msg = ok ? (reply || ((value ? '已打开' : '已关闭') + name)) : ('下发失败：' + name);
+        const msg = ok ? ((value ? '已打开 ' : '已关闭 ') + name) : ('下发失败：' + name);
         show(msg, ok ? 'is-ok' : 'is-err');
         speak(msg);
         return;
@@ -57,7 +57,7 @@
         const r = await panel.setMany(keys, value);
         const names = (r.names || keys.map(k => (panel.controls.find(c => c.key === k) || {}).name || k)).join('、');
         const msg = r.ok
-          ? (r.changed ? (reply || ((value ? '已打开' : '已关闭') + names)) : '这些已经是' + (value ? '打开' : '关闭') + '状态了')
+          ? (r.changed ? ((value ? '已打开 ' : '已关闭 ') + names) : ('这些已经是' + (value ? '打开' : '关闭') + '状态了'))
           : ('下发失败：' + names);
         show(msg, r.ok ? 'is-ok' : 'is-err');
         speak(msg);
@@ -70,7 +70,7 @@
         const card = panel.cards.find(c => c.id === target) || {};
         const val = (v === null || v === undefined || v === '') ? '暂时没有数据'
                   : (Number(v).toFixed ? Number(v).toFixed(1) + (card.unit || '') : String(v));
-        const msg = (reply ? reply + '，' : '') + card.name + ' ' + val;
+        const msg = card.name + ' ' + val;      // 自己拼，别让模型的口径掺进来
         show(msg, 'is-ok');
         speak(msg);
         return;

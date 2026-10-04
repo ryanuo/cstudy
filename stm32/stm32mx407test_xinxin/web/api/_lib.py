@@ -226,8 +226,13 @@ def ask_qwen(text, controls, cards):
         "messages": [{"role": "system", "content": build_prompt(controls, cards)},
                      {"role": "user", "content": text}],
         "temperature": 0.1,
-        "max_tokens": 200,
+        "max_tokens": 300,
     }
+    # 思考型模型（qwen3.x 这类）会先吐一大段 reasoning_content：实测 8.7s / 1.3 万 token，
+    # 而我们只要一句 JSON。QWEN_THINKING=0 关掉它；非思考模型会忽略这个字段（qwen-flash 实测无副作用）。
+    thinking = os.environ.get("QWEN_THINKING")
+    if thinking in ("0", "1"):
+        payload["enable_thinking"] = (thinking == "1")
     r = requests.post(DASHSCOPE_URL, json=payload, timeout=15,
                       headers={"Authorization": "Bearer " + key,
                                "Content-Type": "application/json"})
