@@ -1,0 +1,3 @@
+# 仓库根的 .gitignore 忽略了所有 tests/ 目录，这里显式把面板后端的测试放回来
+!tests/
+!tests/**

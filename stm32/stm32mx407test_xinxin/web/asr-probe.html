@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>浏览器 ASR 通行性探针</title>
+<style>
+  body{font-family:-apple-system,"PingFang SC",sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#222}
+  h1{font-size:18px}.hint{color:#666;font-size:13px;line-height:1.7}
+  #out{margin-top:16px;padding:14px;background:#f6f7f9;border-radius:8px;min-height:60px;font-size:15px;white-space:pre-wrap}
+  button{margin:6px 8px 6px 0;padding:9px 16px;font-size:14px;border:1px solid #d9d9d9;border-radius:6px;background:#fff;cursor:pointer}
+  button:hover{border-color:#409eff;color:#409eff}
+  #log{margin-top:14px;font-size:12px;color:#888;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace}
+  .ok{color:#16a34a}.bad{color:#dc2626}
+</style>
+</head>
+<body>
+<h1>浏览器语音识别通行性探针</h1>
+<p class="hint">
+  用途：确认这台机器的浏览器能不能免费用 Web Speech API 出字。<b>国内网络下 Chrome 走 Google 服务，常见结果是报 <code>network</code> 或一直不出字</b>。<br>
+  必须用 <code>http://localhost:8080</code> 打开（麦克风要求安全上下文，file:// 不行）；首次点按钮会要麦克风权限。
+</p>
+<button id="start">🎤 开始识别（中文）</button>
+<button id="stop">停止</button>
+<button id="clear">清空日志</button>
+<div id="out">（识别结果出现在这里）</div>
+<div id="log"></div>
+
+<script>
+const out = document.getElementById('out'), log = document.getElementById('log');
+function L(msg, cls) {
+  const t = new Date().toLocaleTimeString();
+  log.innerHTML += `<div class="${cls || ''}">[${t}] ${msg}</div>`;
+}
+(function env() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  L('安全上下文(secure context)：' + (window.isSecureContext ? '是 ✓' : '否 ✗（麦克风会被拒）'));
+  L('浏览器：' + navigator.userAgent.replace(/^Mozilla\/5\.0\s*/, '').slice(0, 90));
+  L('SpeechRecognition 支持：' + (SR ? '有 ✓' : '没有 ✗（Firefox 就是不支持）'), SR ? 'ok' : 'bad');
+  if (!SR) out.textContent = '这个浏览器不支持 Web Speech API —— 结论已经有了：换 Chrome/Edge 再试，或直接上 whisper / 云 ASR。';
+})();
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, t0 = 0, interim = '';
+
+document.getElementById('start').onclick = () => {
+  if (!SR) return;
+  if (rec) { try { rec.stop(); } catch (e) {} }
+  rec = new SR();
+  rec.lang = 'zh-CN';
+  rec.continuous = true;        // 连续模式：验证是不是只能出一句就断
+  rec.interimResults = true;    // 中间结果：验证是否真的有字进来
+  interim = '';
+  t0 = Date.now();
+  L('start() 已调用，等待音频/结果…');
+
+  rec.onstart = () => L('onstart：识别已启动（能到这里说明麦克风权限 OK）', 'ok');
+  rec.onaudiostart = () => L('onaudiostart：麦克风开始采集音频');
+  rec.onsoundstart = () => L('onsoundstart：检测到声音');
+  rec.onspeechstart = () => L('onspeechstart：检测到人声');
+  rec.onresult = (e) => {
+    let txt = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    interim = txt;
+    out.textContent = txt + '   （' + ((Date.now() - t0) / 1000).toFixed(1) + 's）';
+    L('onresult：' + JSON.stringify(txt));
+  };
+  rec.onerror = (e) => {
+    const hint = {
+      network: '★ 经典症状：浏览器 ASR 连不上（国内走 Google）→ 这套方案得换',
+      'not-allowed': '麦克风被拒/非 HTTPS',
+      'service-not-allowed': '浏览器/系统禁用了语音服务',
+      'no-speech': '没听到说话（正常，再试）',
+      aborted: '被中断（正常）'
+    }[e.error] || '';
+    L('onerror：' + e.error + '  ' + hint, 'bad');
+  };
+  rec.onend = () => {
+    L('onend：本次识别结束。总时长 ' + ((Date.now() - t0) / 1000).toFixed(1) + 's，收到文字：' + (interim ? '有 ✓' : '无 ✗'),
+      interim ? 'ok' : 'bad');
+    if (!interim) out.textContent = '（没出字 —— 看下面日志里的 onerror）';
+  };
+  try { rec.start(); } catch (e) { L('start() 抛异常：' + e.message, 'bad'); }
+};
+document.getElementById('stop').onclick = () => { if (rec) rec.stop(); };
+document.getElementById('clear').onclick = () => { log.innerHTML = ''; out.textContent = '（识别结果出现在这里）'; };
+</script>
+</body>
+</html>

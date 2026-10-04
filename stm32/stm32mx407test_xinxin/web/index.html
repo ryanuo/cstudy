@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
 
 <link rel="stylesheet" href="style.css" />
+<script src="config.js"></script>   <!-- 同源 API 封装（设备 token 在后端） -->
 
 </head>
 
@@ -33,6 +34,12 @@
         <span :style="{ color: statusColor }">{{ statusText }}</span>
       </span>
 
+      <button type="button" id="voiceBtn" class="btn btn-outline btn-sm btn-voice"
+              title="语音控制：说“打开灯 1”“温度多少”“刷新一下”">
+        <i class="fa fa-microphone"></i>
+        <span class="hide-xs" id="voiceLabel">语音</span>
+      </button>
+
       <button type="button" class="btn btn-outline btn-sm btn-danger"
               :disabled="!online || rebooting"
               :title="online ? '重启设备（复位 MCU）' : '设备离线，不可重启'"
@@ -47,6 +54,10 @@
       </button>
     </div>
   </header>
+
+  <p id="voiceBar" class="voice-bar" hidden>
+    <i class="fa fa-microphone"></i><span id="voiceText"></span>
+  </p>
 
   <p v-if="rebootMsg" class="reboot-note">
     <i class="fa fa-info-circle"></i> {{ rebootMsg }}
@@ -161,6 +172,7 @@
 </div>
 
 <script src="app.js"></script>
+<script src="voice.js"></script>   <!-- 浏览器 ASR + 后端意图解析 -->
 
 </body>
 </html>

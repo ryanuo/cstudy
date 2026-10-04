@@ -3,18 +3,9 @@ const { createApp, ref, reactive, computed, nextTick, onMounted, onBeforeUnmount
 /* =========================================================
    配置（已适配你的设备）
    ========================================================= */
-const config = {
-  token: 'version=2018-10-31&res=products%2FWW0f6843I6%2Fdevices%2Fhumi_temp&et=1822562760&method=sha1&sign=o3KQXG0XbEBbJZBHkyfXDpzSIHQ%3D',
-  productId: 'WW0f6843I6',
-  deviceName: 'humi_temp',
-  api: {
-    deviceDetail: 'https://iot-api.heclouds.com/device/detail',
-    getProperty:  'https://iot-api.heclouds.com/thingmodel/query-device-property',
-    setProperty:  'https://iot-api.heclouds.com/thingmodel/set-device-property',
-    getHistory:   'https://iot-api.heclouds.com/thingmodel/query-device-property-history',
-    callService:  'https://iot-api.heclouds.com/thingmodel/call-service'
-  }
-};
+/* 配置来自 config.js（同源后端代理，前端不再持有设备 token）*/
+const config = window.PANEL_CONFIG;
+const API   = window.PanelAPI;
 
 /* ---------------------------------------------------------
    属性下发时的取值约定（如与实际物模型不符，只改这里）
@@ -127,9 +118,14 @@ createApp({
       return `rgba(${r},${g},${b},${a})`;
     }
 
-    async function fetchJson(url, options) {
-      const res = await fetch(url, options);
-      return await res.json();
+    /* 所有 OneNET 调用都走后端 op 白名单；前端不再拼 URL、不带 token */
+    async function api(op, params, body) {
+      try {
+        return await API.post(op, params, body);
+      } catch (err) {
+        if (err.needKey && API.ensureKey()) return await API.post(op, params, body);
+        throw err;
+      }
     }
 
     function fmtTime(ts) {
@@ -141,10 +137,7 @@ createApp({
     /* ---------- 1. 设备在线状态 ---------- */
     async function refreshStatus() {
       try {
-        const data = await fetchJson(
-          `${config.api.deviceDetail}?product_id=${config.productId}&device_name=${config.deviceName}`,
-          { headers: { authorization: config.token } }
-        );
+        const data = await api('deviceDetail');
         if (data && data.code === 0 && data.data) {
           online.value = Number(data.data.status) === 1;
         } else {
@@ -160,10 +153,7 @@ createApp({
     /* ---------- 2. 拉取属性值 ---------- */
     async function refreshProperties() {
       try {
-        const data = await fetchJson(
-          `${config.api.getProperty}?product_id=${config.productId}&device_name=${config.deviceName}`,
-          { headers: { authorization: config.token } }
-        );
+        const data = await api('getProperty');
         if (!data || data.code !== 0) {
           console.warn('[属性]', data && data.msg);
           return;
@@ -211,20 +201,8 @@ createApp({
         console.warn('[下发指令] 设备离线，已阻止下发');
         return Promise.resolve(false);
       }
-      return fetch(config.api.setProperty, {
-        method: 'POST',
-        headers: {
-          authorization: config.token,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          product_id: config.productId,
-          device_name: config.deviceName,
-          params
-        })
-      }).then(async res => {
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data || data.code !== 0) {
+      return api('setProperty', null, params).then(data => {
+        if (!data || data.code !== 0) {
           console.warn('[下发指令] 平台拒绝：', label, data && (data.msg || ('code=' + data.code)));
           return false;
         }
@@ -281,21 +259,8 @@ createApp({
     /* ---------- 3.5 物模型服务调用（重启按钮走这条） ---------- */
     async function callService(identifier, params) {
       try {
-        const res = await fetch(config.api.callService, {
-          method: 'POST',
-          headers: {
-            authorization: config.token,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            product_id: config.productId,
-            device_name: config.deviceName,
-            identifier,
-            params: params || {}
-          })
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data || data.code !== 0) {
+        const data = await api('callService', null, { identifier, params: params || {} });
+        if (!data || data.code !== 0) {
           console.warn('[服务调用] 失败：', identifier, data && (data.msg || data.code));
           return { ok: false, msg: (data && data.msg) || '' };
         }
@@ -367,12 +332,14 @@ createApp({
       try {
         const end   = Date.now();
         const start = end - 24 * 60 * 60 * 1000;
-        const url = `${config.api.getHistory}?product_id=${config.productId}`
-                  + `&device_name=${config.deviceName}`
-                  + `&identifier=${encodeURIComponent(card.id)}`
-                  + `&start_time=${start}&end_time=${end}&limit=100`;
+        const params = {
+          identifier: card.id,
+          start_time: start,
+          end_time: end,
+          limit: 100
+        };
 
-        const data = await fetchJson(url, { headers: { authorization: config.token } });
+        const data = await api('getHistory', params);
         if (my !== reqId) return;
 
         if (!data || data.code !== 0) {
@@ -477,6 +444,43 @@ createApp({
       if (e.key === 'Escape' && hist.open) closeHistory();
     }
 
+    /* ---------- 4.5 面板桥：给语音层用（复用同一套乐观更新/回读/两段确认） ---------- */
+    async function setControl(key, value) {
+      const c = CONTROLS.find(x => x.key === key);
+      if (!c || !online.value) return false;
+
+      const want = !!value;
+      if (controlOn.value[c.key] === want) return true;   // 已经是要的状态，不重复下发
+
+      const v = want ? c.on : c.off;
+      local[c.id]   = v;
+      localAt[c.id] = Date.now();
+
+      const ok = await sendProperty({ [c.id]: v }, c.name);
+      if (!ok) {
+        delete local[c.id];
+        delete localAt[c.id];
+        flashErr(c.key);
+        return false;
+      }
+      flashTip(c.key);
+      setTimeout(refreshProperties, 1200);
+      setTimeout(refreshProperties, 3500);
+      return true;
+    }
+
+    const panelBridge = {
+      controls: CONTROLS.map(c => ({ key: c.key, name: c.name })),
+      cards:    CARDS.map(c => ({ id: c.id, name: c.name, unit: c.unit })),
+      isOnline: () => online.value === true,
+      get:      (key) => currentValue(key),
+      set:      setControl,          // 返回值：true 成功 / false 失败
+      refresh:  refreshAll,
+      /* 重启这类破坏性动作：只把面板按钮推到"再点一次确认"状态，真正的执行仍要人工点第二下 */
+      armReboot() { if (!rebootArm.value && online.value) onRebootClick(); return rebootArm.value; }
+    };
+    window.__panel = panelBridge;
+
     /* ---------- 生命周期 ---------- */
     onMounted(() => {
       refreshAll();
@@ -492,6 +496,7 @@ createApp({
       window.removeEventListener('keydown', onKeydown);
       window.removeEventListener('resize', handleResize);
       if (chart) { chart.dispose(); chart = null; }
+      if (window.__panel === panelBridge) delete window.__panel;
     });
 
     return {
