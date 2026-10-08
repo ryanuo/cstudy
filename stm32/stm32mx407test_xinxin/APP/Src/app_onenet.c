@@ -146,6 +146,17 @@ ONENET_Status_t OneNET_MqttInit(const char *product_id, const char *device_id,
 
   /* 清旧连接 / 清状态机：解决"每次要断电 ESP8266"。
    * 注意：这些 AT 与 WiFi 无关的前提是 WIFI_Init/WIFI_Connect 已经跑过。 */
+  /* ---- AT 通道 + 固件版本自检（诊断用，可删）----
+     全 ERROR 的时候先确认：AT 本身通不通、MQTT 命令集/长度上限由固件版本决定 */
+  {
+    uint8_t r_at = BSP_ESP8266_SendAT_Wait("AT", "OK", 1000);
+    printf("[ONENET] AT ret=%d\r\n", r_at);
+    dump_esp("AT");
+    BSP_ESP8266_SendAT_Wait("AT+GMR", "OK", 2000);
+    printf("[ONENET] AT+GMR（AT 固件版本）:\r\n");
+    dump_esp("GMR");
+  }
+
   ret = BSP_ESP8266_SendAT_Wait("AT+MQTTDISCONN=0", "OK", 2000);
   printf("[ONENET] MQTTDISCONN ret=%d\r\n", ret);
   dump_esp("MQTTDISCONN");
@@ -161,8 +172,23 @@ ONENET_Status_t OneNET_MqttInit(const char *product_id, const char *device_id,
   ret = BSP_ESP8266_SendAT_Wait(cmd, "OK", 5000);
   printf("[ONENET] MQTTUSERCFG ret=%d\r\n", ret);
   dump_esp("MQTTUSERCFG");
-  if (ret != ESP_OK)
+
+  if (ret != ESP_OK) {
+    /* ---- 二分自检（诊断用，可删）----
+       用"短密码"再发一次：成功 => 是 Token(长度/字符) 的问题；
+       仍 ERROR => 模块 MQTT 状态坏了（断电/AT+RST 才能恢复），跟 Token 无关。 */
+    uint8_t r2;
+    printf("[ONENET] 诊断：用短密码 \"1\" 再试一次 USERCFG\r\n");
+    BSP_ESP8266_SendAT_Wait("AT+MQTTCLEAN=0", "OK", 2000);
+    r2 = BSP_ESP8266_SendAT_Wait(
+        "AT+MQTTUSERCFG=0,1,\"test\",\"test\",\"1\",0,0,\"\"", "OK", 3000);
+    printf("[ONENET] USERCFG(短密码) ret=%d  => %s\r\n", r2,
+           (r2 == ESP_OK) ? "模块命令集正常，问题在 Token（长度/字符）"
+                          : "模块 MQTT 状态卡死，需 AT+RST 或给模块断电重启");
+    dump_esp("USERCFG(short)");
+    BSP_ESP8266_SendAT_Wait("AT+MQTTCLEAN=0", "OK", 2000); /* 清掉测试 client */
     return map_esp_result(ret);
+  }
 
   return ONENET_OK;
 }

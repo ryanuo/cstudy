@@ -14,9 +14,7 @@
  *    - 业务处理器在 APP/Src/app_device.c 里注册（OneNET_SetHandlers）
  * ============================================================ */
 
-/* OneNET Studio（新版）用带 s 的地址；实测 mqtt.heclouds.com 返回 CONNACK 4 */
-#define ONENET_MQTT_SERVER "mqtts.heclouds.com"
-#define ONENET_MQTT_PORT 1883
+#include "app_config.h"
 
 /* 单条下行 payload 上限（超过直接丢弃并打日志） */
 #define ONENET_RX_MAX 512

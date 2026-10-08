@@ -101,11 +101,12 @@ int main(void) {
   MX_CAN1_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-  // OLED_Init();
+  OLED_Init();
   // BSP_ESP8266_Init(&huart3);
   // WIFI_TestAndShow("YQ-shixun5", "88888888");
   // uint32_t last_count = 0xFFFFFFFF;
   // CountSensor_Init();
+  OLED_ShowString(0,0, "Hello, World!", OLED_8X16);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,7 +120,7 @@ int main(void) {
       LED_Toggle(2);
     }
 
-    // OLED_Update();
+    OLED_Update();
 
     /* USER CODE END WHILE */
 
